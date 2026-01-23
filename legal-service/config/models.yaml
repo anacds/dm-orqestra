@@ -1,0 +1,20 @@
+models:
+  llm:
+    name: "sabiazinho-4"        
+    base_url: "https://chat.maritaca.ai/api"  
+    fallback_model_name: "gpt-5-nano"         
+    temperature: 0.0
+    max_tokens: 12000
+    timeout: 60
+    max_retries: 2
+
+  embeddings:
+    provider: "openai"                 
+    model: "text-embedding-3-small"    
+
+  retrieval:
+    limit: 20    # chunks buscados inicialmente
+    alpha: 0.5  # hybrid search
+    rerank_enabled: true  
+    rerank_property: "text"
+    rerank_top_k: 5  # chunks retornados após reranking  

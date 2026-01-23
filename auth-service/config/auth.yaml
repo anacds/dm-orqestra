@@ -1,0 +1,12 @@
+auth:
+  # JWT Configuration
+  algorithm: "HS256"  # JWT signing algorithm
+  access_token_expire_minutes: 30  # Access token expiration time
+  refresh_token_expire_days: 7  # Refresh token expiration time
+
+  # Rate Limiting Configuration
+  rate_limit:
+    enabled: true  # Enable/disable rate limiting
+    login_per_minute: 50  # Login attempts per minute
+    register_per_hour: 300  # Registration attempts per hour
+

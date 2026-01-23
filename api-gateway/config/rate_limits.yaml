@@ -1,0 +1,21 @@
+enabled: true
+
+default:
+  requests_per_minute: 100
+
+services:
+  auth:
+    requests_per_minute: 60
+  campaigns:
+    requests_per_minute: 80
+  briefing-enhancer:
+    requests_per_minute: 30
+  content:
+    requests_per_minute: 30
+
+paths:
+  "/api/auth/login":
+    requests_per_minute: 10
+  "/api/auth/register":
+    requests_per_hour: 5
+

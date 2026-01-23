@@ -1,0 +1,17 @@
+models:
+  enhancement:
+    name: "sabiazinho-4"  
+    base_url: "https://chat.maritaca.ai/api"  
+    fallback_model_name: "gpt-5-nano"
+    temperature: 0.3
+    max_tokens: 2000
+    timeout: 20
+    max_retries: 2
+    stream_usage: false
+  
+  moderation:
+    name: "omni-moderation-latest"
+    check_input: true
+    check_output: false
+    exit_behavior: "error"
+    violation_message: "O conteúdo fornecido viola as políticas de uso. Por favor, revise o texto e remova qualquer conteúdo inadequado. Categorias de violação: {categories}"

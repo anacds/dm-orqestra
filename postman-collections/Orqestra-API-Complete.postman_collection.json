@@ -1,0 +1,541 @@
+{
+	"info": {
+		"_postman_id": "orqestra-api-complete",
+		"name": "Orqestra API - Complete",
+		"description": "Complete API collection for all Orqestra microservices",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Auth Service",
+			"item": [
+				{
+					"name": "Register",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"password123\",\n  \"full_name\": \"John Doe\"\n}"
+						},
+						"url": {
+							"raw": "{{api_gateway_url}}/api/auth/register",
+							"host": ["{{api_gateway_url}}"],
+							"path": ["api", "auth", "register"]
+						}
+					}
+				},
+				{
+					"name": "Login",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/x-www-form-urlencoded"
+							}
+						],
+						"body": {
+							"mode": "urlencoded",
+							"urlencoded": [
+								{
+									"key": "username",
+									"value": "ana@email.com",
+									"type": "text"
+								},
+								{
+									"key": "password",
+									"value": "123",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{api_gateway_url}}/api/auth/login",
+							"host": ["{{api_gateway_url}}"],
+							"path": ["api", "auth", "login"]
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const jsonData = pm.response.json();",
+									"    pm.environment.set('access_token', jsonData.access_token);",
+									"    pm.environment.set('refresh_token', jsonData.refresh_token);",
+									"}"
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Refresh Token",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"refresh_token\": \"{{refresh_token}}\"\n}"
+						},
+						"url": {
+							"raw": "{{api_gateway_url}}/api/auth/refresh",
+							"host": ["{{api_gateway_url}}"],
+							"path": ["api", "auth", "refresh"]
+						}
+					}
+				},
+				{
+					"name": "Get Current User",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{api_gateway_url}}/api/auth/me",
+							"host": ["{{api_gateway_url}}"],
+							"path": ["api", "auth", "me"]
+						}
+					}
+				},
+				{
+					"name": "Logout",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"refresh_token\": \"{{refresh_token}}\"\n}"
+						},
+						"url": {
+							"raw": "{{api_gateway_url}}/api/auth/logout",
+							"host": ["{{api_gateway_url}}"],
+							"path": ["api", "auth", "logout"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Campaigns Service",
+			"item": [
+				{
+					"name": "Get All Campaigns",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{api_gateway_url}}/api/campaigns?skip=0&limit=100",
+							"host": ["{{api_gateway_url}}"],
+							"path": ["api", "campaigns"],
+							"query": [
+								{
+									"key": "skip",
+									"value": "0"
+								},
+								{
+									"key": "limit",
+									"value": "100"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Campaign by ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{api_gateway_url}}/api/campaigns/{{campaign_id}}",
+							"host": ["{{api_gateway_url}}"],
+							"path": ["api", "campaigns", "{{campaign_id}}"]
+						}
+					}
+				},
+				{
+					"name": "Create Campaign",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Nova Campanha\",\n  \"category\": \"PROMOTIONAL\",\n  \"businessObjective\": \"Aumentar vendas\",\n  \"expectedResult\": \"10% de aumento\",\n  \"requestingArea\": \"MARKETING\",\n  \"startDate\": \"2024-01-01\",\n  \"endDate\": \"2024-01-31\",\n  \"priority\": \"HIGH\",\n  \"communicationChannels\": [\"SMS\", \"Push\"],\n  \"commercialSpaces\": [\"Home\", \"Produto\"],\n  \"targetAudienceDescription\": \"Clientes ativos\",\n  \"exclusionCriteria\": \"Nenhum\",\n  \"estimatedImpactVolume\": \"10000\",\n  \"communicationTone\": \"Formal\",\n  \"executionModel\": \"AUTOMATED\"\n}"
+						},
+						"url": {
+							"raw": "{{api_gateway_url}}/api/campaigns",
+							"host": ["{{api_gateway_url}}"],
+							"path": ["api", "campaigns"]
+						}
+					}
+				},
+				{
+					"name": "Update Campaign",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Campanha Atualizada\",\n  \"status\": \"CREATIVE_STAGE\"\n}"
+						},
+						"url": {
+							"raw": "{{api_gateway_url}}/api/campaigns/{{campaign_id}}",
+							"host": ["{{api_gateway_url}}"],
+							"path": ["api", "campaigns", "{{campaign_id}}"]
+						}
+					}
+				},
+				{
+					"name": "Delete Campaign",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{api_gateway_url}}/api/campaigns/{{campaign_id}}",
+							"host": ["{{api_gateway_url}}"],
+							"path": ["api", "campaigns", "{{campaign_id}}"]
+						}
+					}
+				},
+				{
+					"name": "Add Comment",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"text\": \"Este é um comentário de teste\"\n}"
+						},
+						"url": {
+							"raw": "{{api_gateway_url}}/api/campaigns/{{campaign_id}}/comments",
+							"host": ["{{api_gateway_url}}"],
+							"path": ["api", "campaigns", "{{campaign_id}}", "comments"]
+						}
+					}
+				},
+				{
+					"name": "Submit Creative Piece (SMS/Push)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"pieceType\": \"SMS\",\n  \"text\": \"Oferta especial para você!\"\n}"
+						},
+						"url": {
+							"raw": "{{api_gateway_url}}/api/campaigns/{{campaign_id}}/creative-pieces",
+							"host": ["{{api_gateway_url}}"],
+							"path": ["api", "campaigns", "{{campaign_id}}", "creative-pieces"]
+						}
+					}
+				},
+				{
+					"name": "Upload App File",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "commercial_space",
+									"value": "Home",
+									"type": "text"
+								},
+								{
+									"key": "file",
+									"type": "file",
+									"src": []
+								}
+							]
+						},
+						"url": {
+							"raw": "{{api_gateway_url}}/api/campaigns/{{campaign_id}}/creative-pieces/upload-app",
+							"host": ["{{api_gateway_url}}"],
+							"path": ["api", "campaigns", "{{campaign_id}}", "creative-pieces", "upload-app"]
+						}
+					}
+				},
+				{
+					"name": "Upload Email File",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "file",
+									"type": "file",
+									"src": []
+								}
+							]
+						},
+						"url": {
+							"raw": "{{api_gateway_url}}/api/campaigns/{{campaign_id}}/creative-pieces/upload-email",
+							"host": ["{{api_gateway_url}}"],
+							"path": ["api", "campaigns", "{{campaign_id}}", "creative-pieces", "upload-email"]
+						}
+					}
+				},
+				{
+					"name": "Delete App File",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{api_gateway_url}}/api/campaigns/{{campaign_id}}/creative-pieces/app/{{commercial_space}}",
+							"host": ["{{api_gateway_url}}"],
+							"path": ["api", "campaigns", "{{campaign_id}}", "creative-pieces", "app", "{{commercial_space}}"]
+						}
+					}
+				},
+				{
+					"name": "Delete Email File",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{api_gateway_url}}/api/campaigns/{{campaign_id}}/creative-pieces/email",
+							"host": ["{{api_gateway_url}}"],
+							"path": ["api", "campaigns", "{{campaign_id}}", "creative-pieces", "email"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Briefing Enhancer Service",
+			"item": [
+				{
+					"name": "Enhance Objective",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"text\": \"Aumentar vendas\",\n  \"field_name\": \"businessObjective\"\n}"
+						},
+						"url": {
+							"raw": "{{api_gateway_url}}/api/enhance-objective",
+							"host": ["{{api_gateway_url}}"],
+							"path": ["api", "enhance-objective"]
+						}
+					}
+				},
+				{
+					"name": "Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{briefing_enhancer_url}}/api/health",
+							"host": ["{{briefing_enhancer_url}}"],
+							"path": ["api", "health"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "AI Studio Service",
+			"item": [
+				{
+					"name": "Analyze Piece",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"campaignId\": \"{{campaign_id}}\",\n  \"channel\": \"SMS\",\n  \"content\": {\n    \"text\": \"Oferta especial para você!\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{api_gateway_url}}/api/ai/analyze-piece",
+							"host": ["{{api_gateway_url}}"],
+							"path": ["api", "ai", "analyze-piece"]
+						}
+					}
+				},
+				{
+					"name": "Get Analysis",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{api_gateway_url}}/api/ai/analyze-piece/{{campaign_id}}/SMS",
+							"host": ["{{api_gateway_url}}"],
+							"path": ["api", "ai", "analyze-piece", "{{campaign_id}}", "SMS"]
+						}
+					}
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "api_gateway_url",
+			"value": "http://localhost:8000",
+			"type": "string"
+		},
+		{
+			"key": "auth_service_url",
+			"value": "http://localhost:8002",
+			"type": "string"
+		},
+		{
+			"key": "campaigns_service_url",
+			"value": "http://localhost:8003",
+			"type": "string"
+		},
+		{
+			"key": "briefing_enhancer_url",
+			"value": "http://localhost:8001",
+			"type": "string"
+		},
+		{
+			"key": "ai_studio_url",
+			"value": "http://localhost:8004",
+			"type": "string"
+		},
+		{
+			"key": "access_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "refresh_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "campaign_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "commercial_space",
+			"value": "Home",
+			"type": "string"
+		}
+	]
+}
+

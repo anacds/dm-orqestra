@@ -1,0 +1,374 @@
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
+from sqlalchemy.orm import Session
+from typing import Dict, Optional
+from uuid import uuid4
+import json
+import logging
+
+from app.core.database import get_db
+from app.dependencies import get_current_user, get_token_from_cookie_or_header
+from app.schemas.campaign import (
+    CampaignCreate,
+    CampaignUpdate,
+    CampaignResponse,
+    CampaignsResponse,
+    CommentCreate,
+    CommentResponse,
+    CreativePieceCreate,
+    CreativePieceResponse,
+)
+from app.models.user_role import UserRole
+from app.models.campaign import Campaign, CampaignStatus
+from app.models.creative_piece import CreativePiece
+from app.core.permissions import require_business_analyst
+from app.services.services import CampaignService
+from app.services.file_upload import upload_app_file, upload_email_file, update_app_file_urls, extract_file_key_from_url
+from app.core.s3_client import normalize_file_url, delete_file
+from app.core.config import settings
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter()
+
+
+def _require_creative_analyst(current_user: Dict) -> None:
+    """Raise 403 if user is not a creative analyst."""
+    if current_user.get("role") != UserRole.CREATIVE_ANALYST.value:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only creative analysts can perform this action"
+        )
+
+
+def _require_campaign_status_for_creative_work(campaign: Campaign) -> None:
+    """Raise 403 if campaign is not in creative stage."""
+    if campaign.status not in [CampaignStatus.CREATIVE_STAGE, CampaignStatus.CONTENT_ADJUSTMENT]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This action is only allowed when campaign is in CREATIVE_STAGE or CONTENT_ADJUSTMENT status"
+        )
+
+
+def _get_campaign_or_404(db: Session, campaign_id: str) -> Campaign:
+    """Get campaign by ID or raise 404."""
+    campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
+    if not campaign:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Campaign not found"
+        )
+    return campaign
+
+
+def normalize_creative_piece_response(piece) -> dict:
+    """Normalize creative piece file URLs for response."""
+    data = {
+        "id": piece.id,
+        "pieceType": piece.piece_type,
+        "text": piece.text,
+        "title": piece.title,
+        "body": piece.body,
+        "createdAt": piece.created_at,
+        "updatedAt": piece.updated_at,
+    }
+    
+    if piece.file_urls:
+        try:
+            file_urls_dict = json.loads(piece.file_urls)
+            normalized_urls = {k: normalize_file_url(v) for k, v in file_urls_dict.items()}
+            data["fileUrls"] = json.dumps(normalized_urls)
+        except json.JSONDecodeError:
+            data["fileUrls"] = piece.file_urls
+    else:
+        data["fileUrls"] = None
+    
+    if piece.html_file_url:
+        data["htmlFileUrl"] = normalize_file_url(piece.html_file_url)
+    else:
+        data["htmlFileUrl"] = None
+    
+    return data
+
+
+@router.get("", response_model=CampaignsResponse)
+async def get_campaigns(
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: Dict = Depends(get_current_user),
+    auth_token: str = Depends(get_token_from_cookie_or_header),
+):
+    return await CampaignService.get_campaigns(db, current_user, auth_token, skip, limit)
+
+
+@router.get("/{campaign_id}", response_model=CampaignResponse)
+async def get_campaign(
+    campaign_id: str,
+    db: Session = Depends(get_db),
+    current_user: Dict = Depends(get_current_user),
+    auth_token: str = Depends(get_token_from_cookie_or_header),
+):
+    return await CampaignService.get_campaign(db, campaign_id, current_user, auth_token)
+
+
+@router.post("", response_model=CampaignResponse, status_code=status.HTTP_201_CREATED)
+async def create_campaign(
+    campaign_data: CampaignCreate,
+    db: Session = Depends(get_db),
+    current_user: Dict = Depends(get_current_user),
+    auth_token: str = Depends(get_token_from_cookie_or_header),
+):
+    require_business_analyst(current_user)
+    return await CampaignService.create_campaign(db, campaign_data, current_user, auth_token)
+
+
+@router.put("/{campaign_id}", response_model=CampaignResponse)
+async def update_campaign(
+    campaign_id: str,
+    campaign_data: CampaignUpdate,
+    db: Session = Depends(get_db),
+    current_user: Dict = Depends(get_current_user),
+    auth_token: str = Depends(get_token_from_cookie_or_header),
+):
+    return await CampaignService.update_campaign(db, campaign_id, campaign_data, current_user, auth_token)
+
+
+@router.delete("/{campaign_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_campaign(
+    campaign_id: str,
+    db: Session = Depends(get_db),
+    current_user: Dict = Depends(get_current_user),
+):
+    CampaignService.delete_campaign(db, campaign_id, current_user)
+    return None
+
+
+@router.post("/{campaign_id}/comments", response_model=CommentResponse, status_code=status.HTTP_201_CREATED)
+async def add_comment(
+    campaign_id: str,
+    comment_data: CommentCreate,
+    db: Session = Depends(get_db),
+    current_user: Dict = Depends(get_current_user),
+):
+    return CampaignService.add_comment(db, campaign_id, comment_data, current_user)
+
+
+@router.post("/{campaign_id}/creative-pieces", response_model=CreativePieceResponse, status_code=status.HTTP_201_CREATED)
+async def submit_creative_piece(
+    campaign_id: str,
+    piece_data: CreativePieceCreate,
+    db: Session = Depends(get_db),
+    current_user: Dict = Depends(get_current_user),
+):
+    _require_creative_analyst(current_user)
+    campaign = _get_campaign_or_404(db, campaign_id)
+    _require_campaign_status_for_creative_work(campaign)
+    return CampaignService.submit_creative_piece(db, campaign_id, piece_data, current_user)
+
+
+@router.post("/{campaign_id}/creative-pieces/upload-app", response_model=CreativePieceResponse, status_code=status.HTTP_201_CREATED)
+async def upload_app_creative_piece(
+    campaign_id: str,
+    commercial_space: str = Form(...),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: Dict = Depends(get_current_user),
+):
+    _require_creative_analyst(current_user)
+    campaign = _get_campaign_or_404(db, campaign_id)
+    _require_campaign_status_for_creative_work(campaign)
+    
+    existing_piece = (
+        db.query(CreativePiece)
+        .filter(
+            CreativePiece.campaign_id == campaign_id,
+            CreativePiece.piece_type == "App"
+        )
+        .first()
+    )
+    
+    if existing_piece and existing_piece.file_urls:
+        try:
+            current_file_urls = json.loads(existing_piece.file_urls)
+            if commercial_space in current_file_urls:
+                old_file_url = current_file_urls[commercial_space]
+                file_key = extract_file_key_from_url(old_file_url, settings.S3_BUCKET_NAME)
+                if file_key:
+                    try:
+                        delete_file(file_key)
+                    except Exception as e:
+                        logger.warning(f"failed to delete old file: {e}")
+        except (json.JSONDecodeError, Exception) as e:
+            logger.warning(f"error processing old file urls: {e}")
+    
+    file_url = await upload_app_file(campaign, commercial_space, file, db)
+    current_file_urls = existing_piece.file_urls if existing_piece else None
+    updated_file_urls = update_app_file_urls(current_file_urls, commercial_space, file_url)
+    
+    if existing_piece:
+        existing_piece.file_urls = updated_file_urls
+        db.commit()
+        db.refresh(existing_piece)
+        return CreativePieceResponse.model_validate(normalize_creative_piece_response(existing_piece))
+    else:
+        creative_piece = CreativePiece(
+            id=str(uuid4()),
+            campaign_id=campaign_id,
+            piece_type="App",
+            file_urls=updated_file_urls,
+        )
+        db.add(creative_piece)
+        db.commit()
+        db.refresh(creative_piece)
+        return CreativePieceResponse.model_validate(normalize_creative_piece_response(creative_piece))
+
+
+@router.post("/{campaign_id}/creative-pieces/upload-email", response_model=CreativePieceResponse, status_code=status.HTTP_201_CREATED)
+async def upload_email_creative_piece(
+    campaign_id: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: Dict = Depends(get_current_user),
+):
+    _require_creative_analyst(current_user)
+    campaign = _get_campaign_or_404(db, campaign_id)
+    _require_campaign_status_for_creative_work(campaign)
+    
+    existing_piece = (
+        db.query(CreativePiece)
+        .filter(
+            CreativePiece.campaign_id == campaign_id,
+            CreativePiece.piece_type == "E-mail"
+        )
+        .first()
+    )
+    
+    if existing_piece and existing_piece.html_file_url:
+        try:
+            file_key = extract_file_key_from_url(existing_piece.html_file_url, settings.S3_BUCKET_NAME)
+            if file_key:
+                delete_file(file_key)
+        except Exception as e:
+            logger.warning(f"failed to delete old file: {e}")
+    
+    file_url = await upload_email_file(campaign, file, db)
+    
+    if existing_piece:
+        existing_piece.html_file_url = file_url
+        db.commit()
+        db.refresh(existing_piece)
+        return CreativePieceResponse.model_validate(normalize_creative_piece_response(existing_piece))
+    else:
+        creative_piece = CreativePiece(
+            id=str(uuid4()),
+            campaign_id=campaign_id,
+            piece_type="E-mail",
+            html_file_url=file_url,
+        )
+        db.add(creative_piece)
+        db.commit()
+        db.refresh(creative_piece)
+        return CreativePieceResponse.model_validate(normalize_creative_piece_response(creative_piece))
+
+
+@router.delete("/{campaign_id}/creative-pieces/app/{commercial_space}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_app_creative_piece(
+    campaign_id: str,
+    commercial_space: str,
+    db: Session = Depends(get_db),
+    current_user: Dict = Depends(get_current_user),
+):
+    _require_creative_analyst(current_user)
+    campaign = _get_campaign_or_404(db, campaign_id)
+    _require_campaign_status_for_creative_work(campaign)
+    
+    app_piece = (
+        db.query(CreativePiece)
+        .filter(
+            CreativePiece.campaign_id == campaign_id,
+            CreativePiece.piece_type == "App"
+        )
+        .first()
+    )
+    
+    if not app_piece or not app_piece.file_urls:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Creative piece not found"
+        )
+    
+    try:
+        file_urls = json.loads(app_piece.file_urls)
+    except json.JSONDecodeError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid file URLs format"
+        )
+    
+    if commercial_space not in file_urls:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"File not found for commercial space: {commercial_space}"
+        )
+    
+    try:
+        file_url = file_urls[commercial_space]
+        file_key = extract_file_key_from_url(file_url, settings.S3_BUCKET_NAME)
+        if file_key:
+            delete_file(file_key)
+            logger.info(f"successfully deleted file from s3: {file_key}")
+        else:
+            logger.warning(f"could not extract file key from url: {file_url}")
+    except Exception as e:
+        logger.error(f"failed to delete file from s3: {e}", exc_info=True)
+    
+    del file_urls[commercial_space]
+    
+    if len(file_urls) == 0:
+        db.delete(app_piece)
+    else:
+        app_piece.file_urls = json.dumps(file_urls)
+    
+    db.commit()
+    return None
+
+
+@router.delete("/{campaign_id}/creative-pieces/email", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_email_creative_piece(
+    campaign_id: str,
+    db: Session = Depends(get_db),
+    current_user: Dict = Depends(get_current_user),
+):
+    _require_creative_analyst(current_user)
+    campaign = _get_campaign_or_404(db, campaign_id)
+    _require_campaign_status_for_creative_work(campaign)
+    
+    email_piece = (
+        db.query(CreativePiece)
+        .filter(
+            CreativePiece.campaign_id == campaign_id,
+            CreativePiece.piece_type == "E-mail"
+        )
+        .first()
+    )
+    
+    if not email_piece or not email_piece.html_file_url:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="E-mail creative piece not found"
+        )
+    
+    try:
+        file_key = extract_file_key_from_url(email_piece.html_file_url, settings.S3_BUCKET_NAME)
+        if file_key:
+            delete_file(file_key)
+            logger.info(f"successfully deleted file from s3: {file_key}")
+        else:
+            logger.warning(f"could not extract file key from url: {email_piece.html_file_url}")
+    except Exception as e:
+        logger.error(f"failed to delete file from s3: {e}", exc_info=True)
+    
+    db.delete(email_piece)
+    db.commit()
+    return None
+

@@ -1,0 +1,245 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: orqestra
+      POSTGRES_PASSWORD: orqestra_password
+      POSTGRES_DB: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U orqestra -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  auth-service:
+    build:
+      context: ./auth-service
+      dockerfile: Dockerfile
+    ports:
+      - "8002:8002"
+    environment:
+      - DATABASE_URL=postgresql://orqestra:orqestra_password@db:5432/auth_service
+      - CORS_ORIGINS=["http://localhost:3000"]
+      - ENVIRONMENT=development
+      - SECRET_KEY=dev-secret-key-change-in-production
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  campaigns-service:
+    build:
+      context: ./campaigns-service
+      dockerfile: Dockerfile
+    ports:
+      - "8003:8003"
+    environment:
+      - DATABASE_URL=postgresql://orqestra:orqestra_password@db:5432/campaigns_service
+      - CORS_ORIGINS=["http://localhost:3000"]
+      - ENVIRONMENT=development
+      - AUTH_SERVICE_URL=http://auth-service:8002
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_REGION=us-east-1
+      - S3_ENDPOINT_URL=http://localstack:4566
+      - S3_PUBLIC_URL=http://localhost:4566
+      - S3_BUCKET_NAME=orqestra-creative-pieces
+    depends_on:
+      db:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+      localstack:
+        condition: service_healthy
+    restart: unless-stopped
+
+  briefing-enhancer-service:
+    build:
+      context: ./briefing-enhancer-service
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8001"
+    env_file:
+      - ./briefing-enhancer-service/.env
+    environment:
+      - DATABASE_URL=postgresql://orqestra:orqestra_password@db:5432/briefing_enhancer
+      - ENVIRONMENT=development
+      - CORS_ORIGINS=["http://localhost:3000", "http://localhost:8000"]
+      - AUTH_SERVICE_URL=http://auth-service:8002
+    depends_on:
+      db:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+    restart: unless-stopped
+
+  content-service:
+    build:
+      context: ./content-service
+      dockerfile: Dockerfile
+    ports:
+      - "8004:8004"
+    environment:
+      - DATABASE_URL=postgresql://orqestra:orqestra_password@db:5432/content
+      - ENVIRONMENT=development
+      - CORS_ORIGINS=["http://localhost:3000"]
+      - AUTH_SERVICE_URL=http://auth-service:8002
+      - CAMPAIGNS_SERVICE_URL=http://campaigns-service:8003
+    depends_on:
+      db:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+      campaigns-service:
+        condition: service_started
+    restart: unless-stopped
+
+  legal-service:
+    build:
+      context: ./legal-service
+      dockerfile: Dockerfile
+    ports:
+      - "8005:8005"
+    env_file:
+      - ./legal-service/.env
+    environment:
+      - DATABASE_URL=postgresql://orqestra:orqestra_password@db:5432/legal_service
+      - ENVIRONMENT=development
+      - CORS_ORIGINS=["http://localhost:3000"]
+      - WEAVIATE_URL=http://weaviate:8080
+      - REDIS_URL=redis://redis:6379/0
+      - CACHE_ENABLED=true
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - LLM_MODEL=gpt-5-nano
+      - EMBEDDING_MODEL=text-embedding-3-small
+    depends_on:
+      db:
+        condition: service_healthy
+      weaviate:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - AUTH_SERVICE_URL=http://auth-service:8002
+      - CAMPAIGNS_SERVICE_URL=http://campaigns-service:8003
+      - BRIEFING_ENHANCER_SERVICE_URL=http://briefing-enhancer-service:8001
+      - CONTENT_SERVICE_URL=http://content-service:8004
+      - CORS_ORIGINS=["http://localhost:3000"]
+      - ENVIRONMENT=development
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-key-change-in-production}
+      - ALGORITHM=HS256
+    depends_on:
+      - auth-service
+      - campaigns-service
+      - briefing-enhancer-service
+      - content-service
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - DOCKER_CONTAINER=true
+      - VITE_API_GATEWAY_URL=http://api-gateway:8000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - api-gateway
+    restart: unless-stopped
+
+  localstack:
+    image: localstack/localstack:latest
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=s3
+      - DEBUG=1
+      - DATA_DIR=/var/lib/localstack/data
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - PERSISTENCE=1
+    volumes:
+      - localstack_data:/var/lib/localstack
+      - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  weaviate:
+    image: semitechnologies/weaviate:1.29.0
+    ports:
+      - "8080:8080"
+      - "50051:50051"
+    environment:
+      - QUERY_DEFAULTS_LIMIT=25
+      - AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED=true
+      - PERSISTENCE_DATA_PATH=/var/lib/weaviate
+      - DEFAULT_VECTORIZER_MODULE=none
+      - ENABLE_MODULES=text2vec-openai,reranker-cohere
+      - COHERE_APIKEY=${COHERE_APIKEY:-}
+      - NVIDIA_APIKEY=${NVIDIA_APIKEY:-}
+      - CLUSTER_HOSTNAME=node1
+    volumes:
+      - weaviate_data:/var/lib/weaviate
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/v1/.well-known/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  documents-ingestion:
+    build:
+      context: ./documents-ingestion
+      dockerfile: Dockerfile
+    environment:
+      - WEAVIATE_URL=http://weaviate:8080
+      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-openai}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-text-embedding-3-small}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - DOCUMENTS_DIR=doc-juridico
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    depends_on:
+      weaviate:
+        condition: service_healthy
+    restart: "no"
+    volumes:
+      - ./documents-ingestion/doc-juridico:/app/doc-juridico:ro
+
+volumes:
+  postgres_data:
+  localstack_data:
+  weaviate_data:
+  redis_data:

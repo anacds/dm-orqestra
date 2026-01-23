@@ -1,0 +1,182 @@
+"""Initial schema for campaigns service
+
+Revision ID: 001
+Revises: 
+Create Date: 2024-01-01
+
+"""
+from alembic import op
+import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
+
+
+revision = '001'
+down_revision = None
+branch_labels = None
+depends_on = None
+
+
+def upgrade() -> None:
+    op.execute("""
+        DO $$ BEGIN
+            CREATE TYPE campaign_status AS ENUM (
+                'DRAFT', 
+                'CREATIVE_STAGE', 
+                'CONTENT_REVIEW', 
+                'CONTENT_ADJUSTMENT', 
+                'CAMPAIGN_BUILDING', 
+                'CAMPAIGN_PUBLISHED'
+            );
+        EXCEPTION WHEN duplicate_object THEN null;
+        END $$;
+    """)
+    
+    op.execute("""
+        DO $$ BEGIN
+            CREATE TYPE campaign_category AS ENUM (
+                'Aquisição',
+                'Cross-sell',
+                'Upsell',
+                'Retenção',
+                'Relacionamento',
+                'Regulatório',
+                'Educacional'
+            );
+        EXCEPTION WHEN duplicate_object THEN null;
+        END $$;
+    """)
+    
+    op.execute("""
+        DO $$ BEGIN
+            CREATE TYPE requesting_area AS ENUM (
+                'Produtos PF',
+                'Produtos PJ',
+                'Compliance',
+                'Canais Digitais',
+                'Marketing Institucional'
+            );
+        EXCEPTION WHEN duplicate_object THEN null;
+        END $$;
+    """)
+    
+    op.execute("""
+        DO $$ BEGIN
+            CREATE TYPE campaign_priority AS ENUM (
+                'Normal',
+                'Alta',
+                'Regulatório / Obrigatório'
+            );
+        EXCEPTION WHEN duplicate_object THEN null;
+        END $$;
+    """)
+    
+    op.execute("""
+        DO $$ BEGIN
+            CREATE TYPE communication_tone AS ENUM (
+                'Formal',
+                'Informal',
+                'Urgente',
+                'Educativo',
+                'Consultivo'
+            );
+        EXCEPTION WHEN duplicate_object THEN null;
+        END $$;
+    """)
+    
+    op.execute("""
+        DO $$ BEGIN
+            CREATE TYPE execution_model AS ENUM (
+                'Batch (agendada)',
+                'Event-driven (por evento)'
+            );
+        EXCEPTION WHEN duplicate_object THEN null;
+        END $$;
+    """)
+    
+    op.execute("""
+        DO $$ BEGIN
+            CREATE TYPE trigger_event AS ENUM (
+                'Fatura fechada',
+                'Cliente ultrapassa limite do cartão',
+                'Login no app',
+                'Inatividade por 30 dias'
+            );
+        EXCEPTION WHEN duplicate_object THEN null;
+        END $$;
+    """)
+    
+    # Create campaigns table
+    op.create_table(
+        'campaigns',
+        sa.Column('id', sa.String(), nullable=False),
+        sa.Column('name', sa.String(), nullable=False),
+        sa.Column('category', sa.String(), nullable=False),
+        sa.Column('business_objective', sa.String(), nullable=False),
+        sa.Column('expected_result', sa.String(), nullable=False),
+        sa.Column('requesting_area', sa.String(), nullable=False),
+        sa.Column('start_date', sa.Date(), nullable=False),
+        sa.Column('end_date', sa.Date(), nullable=False),
+        sa.Column('priority', sa.String(), nullable=False),
+        sa.Column('communication_channels', postgresql.ARRAY(sa.String()), nullable=False),
+        sa.Column('commercial_spaces', postgresql.ARRAY(sa.String()), nullable=True),
+        sa.Column('target_audience_description', sa.String(), nullable=False),
+        sa.Column('exclusion_criteria', sa.String(), nullable=False),
+        sa.Column('estimated_impact_volume', sa.Numeric(12, 2), nullable=False),
+        sa.Column('communication_tone', sa.String(), nullable=False),
+        sa.Column('execution_model', sa.String(), nullable=False),
+        sa.Column('trigger_event', sa.String(), nullable=True),
+        sa.Column('recency_rule_days', sa.Integer(), nullable=False),
+        sa.Column('status', sa.String(), nullable=False, server_default='DRAFT'),
+        sa.Column('created_by', sa.String(), nullable=False),  # References user.id in auth-service
+        sa.Column('created_date', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+        sa.PrimaryKeyConstraint('id')
+    )
+    
+    # Create comments table
+    op.create_table(
+        'comments',
+        sa.Column('id', sa.String(), nullable=False),
+        sa.Column('campaign_id', sa.String(), nullable=False),
+        sa.Column('author', sa.String(), nullable=False),
+        sa.Column('role', sa.String(), nullable=False),
+        sa.Column('text', sa.Text(), nullable=False),
+        sa.Column('timestamp', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+        sa.ForeignKeyConstraint(['campaign_id'], ['campaigns.id'], ondelete='CASCADE'),
+        sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_comments_campaign_id'), 'comments', ['campaign_id'], unique=False)
+    
+    # Create creative_pieces table
+    op.create_table(
+        'creative_pieces',
+        sa.Column('id', sa.String(), nullable=False),
+        sa.Column('campaign_id', sa.String(), nullable=False),
+        sa.Column('piece_type', sa.String(), nullable=False),
+        sa.Column('text', sa.Text(), nullable=True),
+        sa.Column('title', sa.String(), nullable=True),
+        sa.Column('body', sa.Text(), nullable=True),
+        sa.Column('file_urls', sa.Text(), nullable=True),
+        sa.Column('html_file_url', sa.String(), nullable=True),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+        sa.ForeignKeyConstraint(['campaign_id'], ['campaigns.id'], ondelete='CASCADE'),
+        sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_creative_pieces_campaign_id'), 'creative_pieces', ['campaign_id'], unique=False)
+
+
+def downgrade() -> None:
+    op.drop_index(op.f('ix_creative_pieces_campaign_id'), table_name='creative_pieces')
+    op.drop_table('creative_pieces')
+    op.drop_index(op.f('ix_comments_campaign_id'), table_name='comments')
+    op.drop_table('comments')
+    op.drop_table('campaigns')
+    
+    # Drop enums
+    op.execute("DROP TYPE IF EXISTS trigger_event")
+    op.execute("DROP TYPE IF EXISTS execution_model")
+    op.execute("DROP TYPE IF EXISTS communication_tone")
+    op.execute("DROP TYPE IF EXISTS campaign_priority")
+    op.execute("DROP TYPE IF EXISTS requesting_area")
+    op.execute("DROP TYPE IF EXISTS campaign_category")
+    op.execute("DROP TYPE IF EXISTS campaign_status")

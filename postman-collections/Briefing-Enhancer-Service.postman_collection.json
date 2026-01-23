@@ -1,0 +1,60 @@
+{
+	"info": {
+		"_postman_id": "briefing-enhancer-service",
+		"name": "Briefing Enhancer Service",
+		"description": "AI-powered text enhancement endpoints",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Enhance Objective",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"text\": \"Aumentar vendas\",\n  \"field_name\": \"businessObjective\"\n}"
+				},
+				"url": {
+					"raw": "{{briefing_enhancer_url}}/api/enhance-objective",
+					"host": ["{{briefing_enhancer_url}}"],
+					"path": ["api", "enhance-objective"]
+				}
+			}
+		},
+		{
+			"name": "Health Check",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{briefing_enhancer_url}}/api/health",
+					"host": ["{{briefing_enhancer_url}}"],
+					"path": ["api", "health"]
+				}
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "briefing_enhancer_url",
+			"value": "http://localhost:8001",
+			"type": "string"
+		},
+		{
+			"key": "access_token",
+			"value": "",
+			"type": "string"
+		}
+	]
+}
+

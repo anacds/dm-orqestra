@@ -1,0 +1,137 @@
+import httpx
+from fastapi import Request, HTTPException, status
+from typing import Optional
+from app.config import AUTH_SERVICE_URL, CAMPAIGNS_SERVICE_URL, BRIEFING_ENHANCER_SERVICE_URL, CONTENT_SERVICE_URL
+from app.auth import validate_and_extract_user, should_skip_auth
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+async def proxy_request(
+    request: Request,
+    service_url: str,
+    path: str,
+    method: str = "GET",
+    body: Optional[bytes] = None,
+    headers: Optional[dict] = None,
+    user_context: Optional[dict] = None
+) -> tuple[bytes, int, dict]:
+    """Proxy HTTP request to downstream service with user context headers."""
+    url = f"{service_url}{path}"
+    
+    proxy_headers = {}
+    if headers:
+        proxy_headers.update(headers)
+    
+    if user_context:
+        import base64
+        
+        def to_ascii_safe(value: str) -> str:
+            """Encode non-ASCII header values as base64."""
+            if not value:
+                return ""
+            try:
+                value.encode('ascii')
+                return value
+            except UnicodeEncodeError:
+                encoded = base64.b64encode(value.encode('utf-8')).decode('ascii')
+                return f"base64:{encoded}"
+        
+        user_id = user_context.get("id", "")
+        user_email = user_context.get("email", "")
+        user_role = user_context.get("role", "")
+        user_is_active = str(user_context.get("is_active", False))
+        
+        proxy_headers["X-User-Id"] = to_ascii_safe(str(user_id))
+        proxy_headers["X-User-Email"] = to_ascii_safe(str(user_email))
+        proxy_headers["X-User-Role"] = to_ascii_safe(str(user_role))
+        proxy_headers["X-User-Is-Active"] = user_is_active
+    
+    auth_header = request.headers.get("authorization")
+    if auth_header:
+        proxy_headers["authorization"] = auth_header
+    
+    content_type = request.headers.get("content-type")
+    if content_type:
+        proxy_headers["content-type"] = content_type
+    
+    cookie_header = request.headers.get("cookie")
+    if cookie_header:
+        proxy_headers["cookie"] = cookie_header
+    
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            if method == "GET":
+                response = await client.get(url, headers=proxy_headers, params=request.query_params)
+            elif method == "POST":
+                response = await client.post(url, headers=proxy_headers, content=body, params=request.query_params)
+            elif method == "PUT":
+                response = await client.put(url, headers=proxy_headers, content=body, params=request.query_params)
+            elif method == "PATCH":
+                response = await client.patch(url, headers=proxy_headers, content=body, params=request.query_params)
+            elif method == "DELETE":
+                response = await client.delete(url, headers=proxy_headers, params=request.query_params)
+            else:
+                raise HTTPException(status_code=status.HTTP_405_METHOD_NOT_ALLOWED, detail="Method not allowed")
+            
+
+            response_body = response.content
+            response_headers = dict(response.headers)
+            hop_by_hop = ["connection", "keep-alive", "transfer-encoding", "upgrade"]
+            for header in hop_by_hop:
+                response_headers.pop(header, None)
+            
+            set_cookie_headers_raw = response.headers.get_list("set-cookie")
+            if not set_cookie_headers_raw:
+                set_cookie_headers = [
+                    value for name, value in response.headers.items()
+                    if name.lower() == "set-cookie"
+                ]
+            else:
+                set_cookie_headers = set_cookie_headers_raw
+            
+            if set_cookie_headers:
+                response_headers["_set_cookie"] = set_cookie_headers
+            
+            return response_body, response.status_code, response_headers
+            
+    except httpx.TimeoutException:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="Service timeout"
+        )
+    except httpx.ConnectError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Service unavailable"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Gateway error: {str(e)}"
+        )
+
+
+def get_service_url(path: str) -> str:
+    """Determine downstream service URL based on request path."""
+    if path.startswith("/api/auth"):
+        return AUTH_SERVICE_URL
+    elif path.startswith("/api/campaigns"):
+        return CAMPAIGNS_SERVICE_URL
+    elif path.startswith("/api/ai/analyze-piece") or path.startswith("/api/ai/generate-text"):
+        return CONTENT_SERVICE_URL
+    elif path.startswith("/api/ai-interactions") or path.startswith("/api/ai") or path.startswith("/api/enhance-objective"):
+        return BRIEFING_ENHANCER_SERVICE_URL
+    else:
+        return CAMPAIGNS_SERVICE_URL
+
+
+def strip_api_prefix(path: str) -> str:
+    """Remove /api prefix from path for downstream services."""
+    if path.startswith("/api/"):
+        return path[4:] 
+    elif path.startswith("/api"):
+        return path[4:]  
+    return path
+

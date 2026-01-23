@@ -1,0 +1,17 @@
+# Core dependencies
+pymupdf>=1.23.0  # PDF extraction
+weaviate-client>=4.0.0  # Weaviate client
+
+# Embeddings & Chunking
+openai>=1.12.0  # OpenAI embeddings (also works with Ollama)
+langchain>=0.1.0  # LangChain core
+langchain-experimental>=0.0.60  # SemanticChunker
+langchain-openai>=0.1.0  # OpenAI embeddings for LangChain
+
+# Utilities
+python-dotenv>=1.0.0  # Environment variable management
+
+# Optional: For advanced PDF parsing
+# pdfplumber>=0.10.0  # Alternative PDF extractor
+# unstructured>=0.11.0  # Unified document parsing
+

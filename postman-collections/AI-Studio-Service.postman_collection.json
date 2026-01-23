@@ -1,0 +1,112 @@
+{
+	"info": {
+		"_postman_id": "ai-studio-service",
+		"name": "AI Studio Service",
+		"description": "Creative piece analysis endpoints",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Analyze Piece (SMS)",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"campaignId\": \"{{campaign_id}}\",\n  \"channel\": \"SMS\",\n  \"content\": {\n    \"text\": \"Oferta especial para você!\"\n  }\n}"
+				},
+				"url": {
+					"raw": "{{ai_studio_url}}/api/ai/analyze-piece",
+					"host": ["{{ai_studio_url}}"],
+					"path": ["api", "ai", "analyze-piece"]
+				}
+			}
+		},
+		{
+			"name": "Analyze Piece (Push)",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"campaignId\": \"{{campaign_id}}\",\n  \"channel\": \"Push\",\n  \"content\": {\n    \"title\": \"Oferta Especial\",\n    \"body\": \"Não perca esta oportunidade única!\"\n  }\n}"
+				},
+				"url": {
+					"raw": "{{ai_studio_url}}/api/ai/analyze-piece",
+					"host": ["{{ai_studio_url}}"],
+					"path": ["api", "ai", "analyze-piece"]
+				}
+			}
+		},
+		{
+			"name": "Get Analysis (SMS)",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}"
+					}
+				],
+				"url": {
+					"raw": "{{ai_studio_url}}/api/ai/analyze-piece/{{campaign_id}}/SMS",
+					"host": ["{{ai_studio_url}}"],
+					"path": ["api", "ai", "analyze-piece", "{{campaign_id}}", "SMS"]
+				}
+			}
+		},
+		{
+			"name": "Get Analysis (Push)",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}"
+					}
+				],
+				"url": {
+					"raw": "{{ai_studio_url}}/api/ai/analyze-piece/{{campaign_id}}/Push",
+					"host": ["{{ai_studio_url}}"],
+					"path": ["api", "ai", "analyze-piece", "{{campaign_id}}", "Push"]
+				}
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "ai_studio_url",
+			"value": "http://localhost:8004",
+			"type": "string"
+		},
+		{
+			"key": "access_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "campaign_id",
+			"value": "",
+			"type": "string"
+		}
+	]
+}
+
