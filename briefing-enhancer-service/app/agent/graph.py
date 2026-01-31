@@ -224,3 +224,60 @@ async def run_enhancement_graph(
         "explanation": explanation
     }
 
+
+# -----------------------------------------------------------------------------
+# Compiled graph for LangGraph Studio (langgraph dev).
+# This version uses stub functions for db/llm dependencies so the graph
+# structure can be visualized without requiring actual connections.
+# Input example: {"field_name": "nome_campanha", "text": "promo especial"}
+# -----------------------------------------------------------------------------
+
+def _create_studio_graph():
+    """Create a graph instance for LangGraph Studio visualization.
+    
+    Uses placeholder functions that allow the graph structure to be visualized
+    without requiring actual database or LLM connections.
+    """
+    workflow = StateGraph(EnhancementGraphState)
+    
+    def fetch_node_stub(state: EnhancementGraphState):
+        """Stub: in production, fetches field config from DB."""
+        return {
+            "field_info": {
+                "display_name": state.get("field_name", "Campo"),
+                "expectations": "Expectativas do campo (carregadas do banco)",
+                "improvement_guidelines": "Diretrizes de melhoria (carregadas do banco)",
+            },
+            "previous_fields_summary": None,
+            "enhancement_history": state.get("enhancement_history") or [],
+            "campaign_name": state.get("campaign_name"),
+        }
+    
+    def enhance_node_stub(state: EnhancementGraphState):
+        """Stub: in production, calls LLM for enhancement."""
+        return {
+            "enhanced_text": f"[Texto aprimorado: {state.get('text', '')}]",
+            "explanation": "Explicação gerada pelo LLM (sabiazinho-4 ou fallback).",
+            "enhancement_history": (state.get("enhancement_history") or []) + [
+                {
+                    "field_name": state.get("field_name"),
+                    "original_text": state.get("text"),
+                    "enhanced_text": f"[Texto aprimorado]",
+                    "explanation": "Stub",
+                    "timestamp": "2026-01-29T00:00:00Z",
+                }
+            ],
+        }
+    
+    workflow.add_node("fetch_field_info", fetch_node_stub)
+    workflow.add_node("enhance_text", enhance_node_stub)
+    
+    workflow.set_entry_point("fetch_field_info")
+    workflow.add_edge("fetch_field_info", "enhance_text")
+    workflow.add_edge("enhance_text", END)
+    
+    return workflow.compile()
+
+
+graph = _create_studio_graph()
+

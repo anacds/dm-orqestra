@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 from app.core.config import settings
 from app.api.routes import router, get_agent
+from app.a2a.app import build_a2a_app
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -48,31 +49,9 @@ app.add_middleware(
 
 app.include_router(router, prefix="/api/legal", tags=["legal"])
 
-
-@app.get(
-    "/",
-    summary="Root endpoint",
-    description="Get basic service information",
-    tags=["health"]
-)
-async def root():
-    """
-    Basic service information
-    """
-    return {
-        "service": settings.SERVICE_NAME,
-        "version": settings.SERVICE_VERSION,
-        "status": "running",
-        "docs": "/docs",
-        "openapi": "/openapi.json"
-    }
-
-
-@app.get("/api/health")
-async def health_check():
-    return {
-        "status": "ok",
-        "service": settings.SERVICE_NAME,
-        "version": settings.SERVICE_VERSION
-    }
+# A2A Protocol (independent of REST). Mount at /a2a so that:
+# - GET  /a2a/.well-known/agent-card.json
+# - POST /a2a/v1/message:send ou /a2a/v1/message/send
+a2a_app = build_a2a_app()
+app.mount("/a2a", a2a_app)
 

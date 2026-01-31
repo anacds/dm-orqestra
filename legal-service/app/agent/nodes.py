@@ -1,12 +1,14 @@
 import logging
-from typing import Dict, Optional
+from typing import Dict
 from app.agent.state import AgentState
 from app.agent.retriever import HybridWeaviateRetriever
+from app.agent.prompts import build_validation_messages
 from app.core.config import settings
 from app.core.models_config import load_models_config
+from app.api.schemas import ValidationOutput
+from langchain_core.output_parsers import PydanticOutputParser
 
 logger = logging.getLogger(__name__)
-
 
 def retrieve_node(state: AgentState, retriever: HybridWeaviateRetriever) -> Dict:
     """Retrieve relevant documents from Weaviate for validation context."""
@@ -15,38 +17,57 @@ def retrieve_node(state: AgentState, retriever: HybridWeaviateRetriever) -> Dict
     content = state.get("content")
     content_title = state.get("content_title")
     content_body = state.get("content_body")
-    
-    # Usa content_body se disponível, senão usa content (backward compatibility)
+    content_image = state.get("content_image")
     body_text = content_body or content
+
+    if not task:
+        raise ValueError("task é obrigatório")
     
-    if not task or not body_text:
-        raise ValueError("task e content (ou content_body) são obrigatórios")
+    # --- CÓDIGO LEGADO: apenas APP usava content_image ---
+    # if channel != "APP" and not body_text:
+    #     raise ValueError("content (ou content_body) é obrigatório para canais além de APP")
+    # if channel == "APP" and not content_image:
+    #     raise ValueError("Para APP, informe content_image")
+    # --- FIM CÓDIGO LEGADO ---
     
-    # Constrói query baseada no canal
+    # EMAIL agora pode ter content_image (análise visual)
+    if channel == "APP" and not content_image:
+        raise ValueError("Para APP, informe content_image")
+    if channel == "EMAIL" and not content_image and not body_text:
+        raise ValueError("Para EMAIL, informe content_image ou content_body")
+    if channel not in ("APP", "EMAIL") and not body_text:
+        raise ValueError("content (ou content_body) é obrigatório para canais além de APP/EMAIL com imagem")
+
     if channel == "PUSH" and content_title and content_body:
-        # Para PUSH com title/body separados, usa ambos na query
         query_text = f"{task} para {channel}: título: {content_title}, corpo: {content_body}"
+    elif channel == "EMAIL" and content_image:
+        # EMAIL com imagem: busca diretrizes visuais (similar a APP)
+        query_text = f"{task} para {channel}: diretrizes para comunicação visual de e-mail, layout, creatives"
+    elif channel == "EMAIL" and content_body:
+        # --- CÓDIGO LEGADO: EMAIL com HTML/texto ---
+        query_text = f"{task} para {channel}: corpo: {content_body}"
+    elif channel == "APP" and content_image:
+        query_text = f"{task} para {channel}: diretrizes para comunicação in-app, telas, creatives"
     else:
-        # Para SMS e outros, usa apenas body
         query_text = f"{task}: {body_text}"
         if channel:
             query_text = f"{task} para {channel}: {body_text}"
-    
+
     logger.info(f"Retrieving documents for query: {query_text[:100]}...")
-    
+
     config = load_models_config()
     retrieval_config = config.get("models", {}).get("retrieval", {})
     limit = retrieval_config.get("limit", 10)
     alpha = retrieval_config.get("alpha", 0.5)
-    
-    # Para PUSH com title/body, passa ambos para o retriever
+
+    use_title_body = channel == "PUSH" and content_title and content_body
     retrieved_chunks = retriever.hybrid_search(
         query=query_text,
         limit=limit,
         alpha=alpha,
         channel=channel,
-        query_title=content_title if channel == "PUSH" else None,
-        query_body=content_body if channel == "PUSH" else None,
+        query_title=content_title if use_title_body else None,
+        query_body=(content_body or content or "") if use_title_body else None,
     )
     
     context_parts = []
@@ -58,7 +79,6 @@ def retrieve_node(state: AgentState, retriever: HybridWeaviateRetriever) -> Dict
         if source not in sources:
             sources.append(source)
         
-        # Log chunks em modo DEBUG
         score_value = chunk.get('score')
         score_str = f"{score_value:.4f}" if score_value is not None else "N/A"
         logger.debug(
@@ -71,7 +91,6 @@ def retrieve_node(state: AgentState, retriever: HybridWeaviateRetriever) -> Dict
     
     context = "\n\n".join(context_parts)
     
-    # Log resumo dos chunks recuperados em modo DEBUG
     logger.debug(
         f"[RETRIEVAL] Total de chunks recuperados: {len(retrieved_chunks)}, "
         f"fontes únicas: {len(sources)}, "
@@ -92,99 +111,117 @@ def retrieve_node(state: AgentState, retriever: HybridWeaviateRetriever) -> Dict
     }
 
 
-def generate_node(state: AgentState, llm) -> Dict:
+def generate_node(
+    state: AgentState,
+    channel_to_llm: dict,
+    default_llm,
+) -> Dict:
     """Generate validation decision using LLM with retrieved context."""
-    from langchain_core.prompts import ChatPromptTemplate
-    import json
-    
     task = state.get("task")
     channel = state.get("channel")
     content = state.get("content")
     content_title = state.get("content_title")
     content_body = state.get("content_body")
+    content_image = state.get("content_image")
     context = state.get("context", "")
     sources = state.get("sources", [])
+
+    if not task:
+        raise ValueError("task é obrigatório")
     
-    if not task or not content:
-        raise ValueError("task e content são obrigatórios")
+    # --- CÓDIGO LEGADO: apenas APP usava content_image ---
+    # if channel != "APP" and not content:
+    #     raise ValueError("content é obrigatório para canais além de APP")
+    # if channel == "APP" and not content_image:
+    #     raise ValueError("Para APP, informe content_image")
+    # --- FIM CÓDIGO LEGADO ---
     
+    # --- CÓDIGO LEGADO: EMAIL aceitava apenas image OU content ---
+    # if channel == "EMAIL" and not content_image and not content:
+    #     raise ValueError("Para EMAIL, informe content_image ou content")
+    # --- FIM CÓDIGO LEGADO ---
+    
+    # EMAIL agora pode ter content_image E/OU content (análise visual + textual)
+    if channel == "APP" and not content_image:
+        raise ValueError("Para APP, informe content_image")
+    if channel == "EMAIL" and not content_image and not content:
+        raise ValueError("Para EMAIL, informe content_image e/ou content")
+    if channel not in ("APP", "EMAIL") and not content:
+        raise ValueError("content é obrigatório para canais além de APP/EMAIL")
+
+    # --- CÓDIGO LEGADO: selecionava LLM apenas pelo canal ---
+    # llm = channel_to_llm.get(channel) if channel else None
+    # --- FIM CÓDIGO LEGADO ---
+    
+    # EMAIL com imagem usa modelo de fallback (APP) que suporta visão
+    if channel == "EMAIL" and content_image:
+        llm = channel_to_llm.get("APP")  # Usa modelo do APP (OpenAI com visão)
+        logger.info("EMAIL com imagem: usando LLM de fallback (APP) - %s", llm.model_name if llm else "default")
+    else:
+        llm = channel_to_llm.get(channel) if channel else None
+    
+    if llm is None:
+        llm = default_llm
+    if channel:
+        logger.info("Usando LLM do canal %s - %s", channel, llm.model_name)
+
     if task == "VALIDATE_COMMUNICATION":
-        from app.api.schemas import ValidationOutput
-        from langchain_core.output_parsers import PydanticOutputParser
-        
         output_parser = PydanticOutputParser(pydantic_object=ValidationOutput)
-        
-        # Constrói descrição do conteúdo baseado no canal
+
         if channel == "PUSH" and content_title and content_body:
             content_description = f"TÍTULO: {content_title}\n\nCORPO: {content_body}"
+        elif channel == "EMAIL" and content_image and content_body:
+            # EMAIL com HTML + imagem (análise visual e textual)
+            content_description = f"CORPO DO E-MAIL:\n{content_body}\n\n[1 imagem anexa do e-mail renderizado para análise visual]"
+        elif channel == "EMAIL" and content_image:
+            # EMAIL apenas com imagem
+            content_description = "Comunicação de e-mail (1 imagem anexa do e-mail renderizado)."
+        elif channel == "EMAIL" and content_body:
+            # --- CÓDIGO LEGADO: EMAIL apenas com HTML/texto ---
+            content_description = f"CORPO (HTML): {content_body}"
+        elif channel == "APP":
+            content_description = "Comunicação in-app (1 imagem anexa)."
         else:
-            content_description = content
+            content_description = content or ""
+
+        # --- CÓDIGO LEGADO: apenas APP enviava imagem ---
+        # image=content_image if channel == "APP" else None
+        # --- FIM CÓDIGO LEGADO ---
         
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", """Você é um assistente jurídico especializado em validação de comunicações.
+        # EMAIL e APP agora podem enviar imagem
+        image_to_send = content_image if channel in ("APP", "EMAIL") and content_image else None
 
-Sua função é analisar o conteúdo da comunicação e determinar se ele atende às diretrizes jurídicas da empresa.
-Para isso, utilize as informações de contexto referentes ao canal específico + guidelines gerais de linguagem promocional e uso de dados pessoais.
-
-INSTRUÇÕES:
-- Analise o conteúdo fornecido com base nas diretrizes no contexto
-- Determine se a comunicação está APROVADA ou REPROVADA
-- Classifique a severidade: BLOCKER (bloqueia envio), WARNING (requer atenção), INFO (aprovado com observações)
-- Indique se requer revisão humana (true para BLOCKER e WARNING críticos)
-- Forneça um resumo claro e objetivo das violações encontradas
-- Liste as fontes utilizadas na análise
-- Tudo o que fizer parte do conteúdo (title ou body) deve ser considerado para a análise.
-
-CRITÉRIOS CRÍTICOS (devem resultar em REPROVADO/BLOCKER):
-- Ausência de identificação da marca "Orqestra" na comunicação
-- Exposição de dados sensíveis (CPF completo, números de documentos, informações financeiras detalhadas)
-- Claims promocionais absolutos ou enganosos
-- Falta de opt-out quando necessário
-- Links suspeitos ou não verificados
-
-CONTEXTO (Diretrizes):
-{context}
-
-Canal: {channel}
-FONTES: {sources}
-
-{format_instructions}"""),
-            ("human", "Analise a seguinte comunicação:\n\n{content_description}"),
-        ])
-        
-        formatted_prompt = prompt.format_messages(
+        messages = build_validation_messages(
             context=context,
             channel=channel or "N/A",
-            sources=", ".join(sources) if sources else "N/A",
-            content_description=content_description,
+            sources=sources,
             format_instructions=output_parser.get_format_instructions(),
+            content_description=content_description,
+            image=image_to_send,
         )
-        
+
         logger.info("Generating structured validation response...")
-        
+
         try:
-            if hasattr(llm, 'with_structured_output'):
+            if hasattr(llm, "with_structured_output"):
                 structured_llm = llm.with_structured_output(
                     ValidationOutput,
-                    method="json_mode"
+                    method="json_mode",
                 )
-                result = structured_llm.invoke(formatted_prompt)
-                
+                result = structured_llm.invoke(messages)
                 return {
                     "decision": result.decision,
-                    "severity": result.severity,
                     "requires_human_review": result.requires_human_review,
                     "summary": result.summary,
                     "sources": result.sources if result.sources else sources,
                 }
             else:
-                response = llm.invoke(formatted_prompt)
+                response = llm.invoke(messages)
                 response_text = response.content if hasattr(response, 'content') else str(response)
                 parsed = output_parser.parse(response_text)
                 
                 return {
                     "decision": parsed.decision,
-                    "severity": parsed.severity,
                     "requires_human_review": parsed.requires_human_review,
                     "summary": parsed.summary,
                     "sources": parsed.sources if parsed.sources else sources,
@@ -207,22 +244,9 @@ FONTES: {sources}
             
             return {
                 "decision": "REPROVADO",
-                "severity": "BLOCKER",
                 "requires_human_review": True,
                 "summary": summary,
                 "sources": sources,
             }
     
     raise ValueError(f"Task '{task}' não é suportada")
-
-
-def should_continue_node(state: AgentState) -> str:
-    """Determine whether to continue or end the workflow."""
-    iteration_count = state.get("iteration_count", 0)
-    max_iterations = state.get("max_iterations", 3)
-    
-    if iteration_count >= max_iterations:
-        return "end"
-    
-    return "continue"
-

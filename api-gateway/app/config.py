@@ -34,7 +34,7 @@ ALGORITHM = os.getenv("ALGORITHM") or _get("auth", {}).get("algorithm", "HS256")
 AUTH_SERVICE_URL = _service_url("auth")
 CAMPAIGNS_SERVICE_URL = _service_url("campaigns")
 BRIEFING_ENHANCER_SERVICE_URL = _service_url("briefing-enhancer")
-CONTENT_SERVICE_URL = _service_url("content")
+CONTENT_VALIDATION_SERVICE_URL = _service_url("content-validation")
 
 def get_cors_origins() -> List[str]:
     cors_env = os.getenv("CORS_ORIGINS")

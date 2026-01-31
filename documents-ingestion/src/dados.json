@@ -1,0 +1,1039 @@
+[
+    {
+      "_additional": {
+        "id": "009eb502-0a5c-57a4-a6b7-761f69d20885"
+      },
+      "channel": "APP",
+      "chunk_index": 2,
+      "document_version": "839ae277ed9b0ee5:2026-01-26T16:45:08.502411",
+      "file_name": "orqestra-guidelines-comunicacao-APP_v1.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:08.502345Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-guidelines-comunicacao-APP_v1.pdf\", \"file_name\": \"orqestra-guidelines-comunicacao-APP_v1.pdf\", \"page_count\": 4, \"title\": \"orqestra-guidelines-comunicacao-APP_v1\", \"producer\": \"Skia/PDF m146 Google Docs Renderer\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-guidelines-comunicacao-APP_v1.pdf",
+      "text": "3. Texto do banner \nDiretrizes gerais \n●​ Texto curto, direto e escaneável. ●​ Evitar frases longas ou explicativas demais. Isso é aceitável porque pode-se assumir \nque, ao clicar no banner, o usuário será direcionado para uma página com mais \ndetalhes. Proibições \n●​ Clickbait (“você não vai acreditar”, “imperdível”)."
+    },
+    {
+      "_additional": {
+        "id": "055fa074-34c9-53c5-b872-0c9bfdcd1e80"
+      },
+      "channel": "SMS",
+      "chunk_index": 0,
+      "document_version": "db65e08cd67849d5:2026-01-26T16:45:07.347429",
+      "file_name": "orqestra-guidelines-comunicacao-SMS_v1.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:07.347378Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-guidelines-comunicacao-SMS_v1.pdf\", \"file_name\": \"orqestra-guidelines-comunicacao-SMS_v1.pdf\", \"page_count\": 5, \"title\": \"orqestra-guidelines-comunicacao-SMS_v1\", \"producer\": \"Skia/PDF m146 Google Docs Renderer\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-guidelines-comunicacao-SMS_v1.pdf",
+      "text": "Diretrizes Jurídicas, de Boas Práticas e \nde Marca \nEnvio de SMS para Clientes \nVersão: 1.0 \nÚltima atualização: 2026-01-01 \nAplicável a: campanhas de CRM, comunicações transacionais e promocionais via SMS \nResponsáveis: Jurídico, Compliance, CRM, Marca \n \n1. Objetivo do documento \nEste documento estabelece as diretrizes obrigatórias para criação, validação e envio de \nmensagens SMS pela companhia, garantindo: \n●​ Conformidade jurídica e regulatória \n●​ Respeito à privacidade e aos direitos do cliente \n●​ Clareza, transparência e boa experiência \n●​ Proteção da marca  \n●​ Redução de riscos legais, reputacionais e operacionais \nEstas diretrizes devem ser seguidas por times internos, agências e sistemas \nautomatizados, incluindo soluções baseadas em Inteligência Artificial. 2. Princípios fundamentais \nToda comunicação via SMS deve respeitar os seguintes princípios: \n1.​ Transparência​\nO cliente deve entender claramente: \n○​ quem está enviando a mensagem \n○​ por que está recebendo \n○​ o que está sendo oferecido \n2.​ Consentimento e controle​\nO cliente deve poder interromper o recebimento de mensagens a qualquer \nmomento. 3.​ Proporcionalidade​\nO conteúdo deve ser adequado ao canal SMS: curto, objetivo e relevante. 4.​ Boa-fé e veracidade​\nNão é permitido induzir o cliente ao erro, exagerar benefícios ou omitir condições \nessenciais. 5.​ Proteção de dados e privacidade​\nNão expor, inferir ou explorar dados pessoais de forma inadequada."
+    },
+    {
+      "_additional": {
+        "id": "08795191-9fe7-52ab-94a0-5e58a93a26db"
+      },
+      "channel": "EMAIL",
+      "chunk_index": 0,
+      "document_version": "ab2383d53e6aec4e:2026-01-26T16:45:05.829803",
+      "file_name": "orqestra-guidelines-comunicacao-EMAIL_v1.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:05.829703Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-guidelines-comunicacao-EMAIL_v1.pdf\", \"file_name\": \"orqestra-guidelines-comunicacao-EMAIL_v1.pdf\", \"page_count\": 6, \"title\": \"orqestra guidelines comunicacao EMAIL\", \"producer\": \"iLovePDF\", \"modification_date\": \"D:20260117012444Z\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-guidelines-comunicacao-EMAIL_v1.pdf",
+      "text": "Envio de E-mail Marketing (HTML e Texto) \nVersão: 1.0 \nÚltima atualização: 2025-01-XX \nAplicável a: e-mails promocionais, informativos e transacionais \nResponsáveis: Jurídico, Compliance, CRM, Marca, Tecnologia \n \n1. Objetivo do documento \nEste documento define as diretrizes obrigatórias para criação, validação, aprovação e envio de \ne-mails pela Orqestra, garantindo: \n●​ Conformidade legal e regulatória \n●​ Transparência e respeito ao destinatário \n●​ Boa experiência de leitura em múltiplos dispositivos \n●​ Proteção da reputação e entregabilidade da marca \n●​ Governança de conteúdos produzidos por humanos e por IA \nEstas diretrizes se aplicam a times internos, agências, fornecedores e sistemas \nautomatizados. 2. Princípios fundamentais do canal E-mail \n1.​ Consentimento e expectativa​\nO destinatário deve reconhecer por que está recebendo o e-mail. 2.​ Transparência total​\nOfertas, condições e intenções devem ser claras."
+    },
+    {
+      "_additional": {
+        "id": "0d86b724-bf6e-5968-a491-a77768477856"
+      },
+      "channel": "GENERAL",
+      "chunk_index": 0,
+      "document_version": "61e9ac979189b3e7:2026-01-26T16:45:09.829278",
+      "file_name": "orqestra-juridico-linguagem-promocional.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:09.829173Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-juridico-linguagem-promocional.pdf\", \"file_name\": \"orqestra-juridico-linguagem-promocional.pdf\", \"page_count\": 2, \"title\": \"orqestra-juridico-linguagem-promocional\", \"producer\": \"Skia/PDF m145 Google Docs Renderer\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-juridico-linguagem-promocional.pdf",
+      "text": "Política de Claims Jurídicos e \nLinguagem Promocional \nVersão 1.0 \n1. Objetivo \nEsta política estabelece diretrizes para o uso de claims, promessas, afirmações e linguagem \npromocional em comunicações de CRM e marketing da Orqestra. Seu objetivo é reduzir \nriscos jurídicos, regulatórios e reputacionais, garantindo que as comunicações sejam claras, \nverdadeiras e não induzam o cliente a erro."
+    },
+    {
+      "_additional": {
+        "id": "11e74f7d-6bd2-5125-b5b9-f180722461bb"
+      },
+      "channel": "EMAIL",
+      "chunk_index": 13,
+      "document_version": "ab2383d53e6aec4e:2026-01-26T16:45:05.829803",
+      "file_name": "orqestra-guidelines-comunicacao-EMAIL_v1.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:05.829703Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-guidelines-comunicacao-EMAIL_v1.pdf\", \"file_name\": \"orqestra-guidelines-comunicacao-EMAIL_v1.pdf\", \"page_count\": 6, \"title\": \"orqestra guidelines comunicacao EMAIL\", \"producer\": \"iLovePDF\", \"modification_date\": \"D:20260117012444Z\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-guidelines-comunicacao-EMAIL_v1.pdf",
+      "text": "12. Entregabilidade e anti-spam \nBoas práticas \n●​ Evitar palavras associadas a spam (“GRÁTIS!!!”, “URGENTE!!!”). \n●​ Não usar excesso de imagens. \n●​ Balancear texto e imagem. \n●​ Evitar anexos em campanhas promocionais. \nFrequência \n●​ Evitar"
+    },
+    {
+      "_additional": {
+        "id": "130798ed-af87-5b2e-b838-28e0e390c000"
+      },
+      "channel": "PUSH",
+      "chunk_index": 11,
+      "document_version": "0c2900d10d6c76fa:2026-01-26T16:45:04.387064",
+      "file_name": "orqestra-guidelines-comunicacao-PUSH_v1.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:04.386513Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-guidelines-comunicacao-PUSH_v1.pdf\", \"file_name\": \"orqestra-guidelines-comunicacao-PUSH_v1.pdf\", \"page_count\": 5, \"title\": \"orqestra guidelines comunicacao PUSH\", \"producer\": \"iLovePDF\", \"modification_date\": \"D:20260117012444Z\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-guidelines-comunicacao-PUSH_v1.pdf",
+      "text": "11. Frequência e risco de spam \nDiretrizes \n●​ Evitar excesso de notificações em curto espaço de tempo. ●​ Não repetir mensagens similares sem valor adicional. ●​ Mensagens repetitivas ou genéricas são consideradas má prática. Risco \n●​ Push percebido como spam leva o usuário a: \n○​ silenciar notificações \n○​ desinstalar o app \n○​ perder confiança na marca \n \n12. Segurança e percepção de fraude \nProibições \n●​ Solicitar senhas, códigos, dados pessoais. ●​ Linguagem típica de phishing (“atividade suspeita”, “verifique agora”) fora de contexto \nlegítimo. Diretrizes \n●​ Mensagens de segurança devem ser claras, objetivas e levar ao app oficial."
+    },
+    {
+      "_additional": {
+        "id": "1920759d-3bcf-56a8-8173-faea152f842d"
+      },
+      "channel": "GENERAL",
+      "chunk_index": 1,
+      "document_version": "61e9ac979189b3e7:2026-01-26T16:45:09.829278",
+      "file_name": "orqestra-juridico-linguagem-promocional.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:09.829173Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-juridico-linguagem-promocional.pdf\", \"file_name\": \"orqestra-juridico-linguagem-promocional.pdf\", \"page_count\": 2, \"title\": \"orqestra-juridico-linguagem-promocional\", \"producer\": \"Skia/PDF m145 Google Docs Renderer\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-juridico-linguagem-promocional.pdf",
+      "text": "Definições \n●​ Claim: qualquer afirmação que atribua um benefício, vantagem, condição \ndiferenciada ou resultado esperado ao cliente. ●​ Claim promocional: afirmação associada a campanhas, ofertas ou incentivos \ncomerciais. ●​ Claim factual: afirmação objetiva, verificável e baseada em condições reais do \nproduto ou serviço. ●​ Claim absoluto: afirmação que não admite exceções ou condições."
+    },
+    {
+      "_additional": {
+        "id": "1922bba7-8d6c-5e22-986c-ec9a824f67e9"
+      },
+      "channel": "APP",
+      "chunk_index": 7,
+      "document_version": "839ae277ed9b0ee5:2026-01-26T16:45:08.502411",
+      "file_name": "orqestra-guidelines-comunicacao-APP_v1.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:08.502345Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-guidelines-comunicacao-APP_v1.pdf\", \"file_name\": \"orqestra-guidelines-comunicacao-APP_v1.pdf\", \"page_count\": 4, \"title\": \"orqestra-guidelines-comunicacao-APP_v1\", \"producer\": \"Skia/PDF m146 Google Docs Renderer\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-guidelines-comunicacao-APP_v1.pdf",
+      "text": "7. Boas práticas visuais \nDiretrizes \n●​ Uso moderado de cores e elementos gráficos. ●​ Não poluir visualmente a interface. Proibições \n●​ Banners visualmente agressivos. ●​ Animações excessivas ou piscantes (quando aplicável). 8. Frequência e repetição \n●​ Evitar exibir o mesmo banner repetidamente em curto período. ●​ Rotacionar mensagens quando possível. ●​ Não usar banners para pressionar o usuário (“ative agora ou perca”)."
+    },
+    {
+      "_additional": {
+        "id": "19670256-d0c4-5a31-9472-8dfe671b4dea"
+      },
+      "channel": "GENERAL",
+      "chunk_index": 1,
+      "document_version": "575e2a61bc99f927:2026-01-26T16:45:10.996897",
+      "file_name": "orqestra-juridico-uso-dados-personalizacao.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:10.996851Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-juridico-uso-dados-personalizacao.pdf\", \"file_name\": \"orqestra-juridico-uso-dados-personalizacao.pdf\", \"page_count\": 2, \"title\": \"orqestra-juridico-uso-dados-personalizacao\", \"producer\": \"Skia/PDF m146 Google Docs Renderer\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-juridico-uso-dados-personalizacao.pdf",
+      "text": "3. Personalização Permitida \nSão considerados usos permitidos: \n●​ Referência genérica a produtos ou serviços contratados. ●​ Comunicação baseada em eventos explícitos (ex.: contratação recente)."
+    },
+    {
+      "_additional": {
+        "id": "1aa56aeb-137b-579a-aad3-4463581fd4cf"
+      },
+      "channel": "PUSH",
+      "chunk_index": 12,
+      "document_version": "0c2900d10d6c76fa:2026-01-26T16:45:04.387064",
+      "file_name": "orqestra-guidelines-comunicacao-PUSH_v1.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:04.386513Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-guidelines-comunicacao-PUSH_v1.pdf\", \"file_name\": \"orqestra-guidelines-comunicacao-PUSH_v1.pdf\", \"page_count\": 5, \"title\": \"orqestra guidelines comunicacao PUSH\", \"producer\": \"iLovePDF\", \"modification_date\": \"D:20260117012444Z\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-guidelines-comunicacao-PUSH_v1.pdf",
+      "text": "Uso de Inteligência Artificial \n●​ Sugestões geradas por IA devem respeitar integralmente estas diretrizes. ●​ A IA pode: \n○​ sugerir melhorias de clareza \n○​ reduzir texto \n○​ ajustar tom \n●​ A IA não substitui a validação humana para aprovação final."
+    },
+    {
+      "_additional": {
+        "id": "22046c03-174d-5b9c-9877-47b914a531ab"
+      },
+      "channel": "EMAIL",
+      "chunk_index": 1,
+      "document_version": "ab2383d53e6aec4e:2026-01-26T16:45:05.829803",
+      "file_name": "orqestra-guidelines-comunicacao-EMAIL_v1.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:05.829703Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-guidelines-comunicacao-EMAIL_v1.pdf\", \"file_name\": \"orqestra-guidelines-comunicacao-EMAIL_v1.pdf\", \"page_count\": 6, \"title\": \"orqestra guidelines comunicacao EMAIL\", \"producer\": \"iLovePDF\", \"modification_date\": \"D:20260117012444Z\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-guidelines-comunicacao-EMAIL_v1.pdf",
+      "text": "3.​ Controle do usuário​\nO cancelamento de comunicações deve ser simples e imediato. 4.​ Entregabilidade e reputação​\nBoas práticas técnicas e de conteúdo são obrigatórias."
+    },
+    {
+      "_additional": {
+        "id": "2275d7a3-24e3-5bc4-98e1-75b4cc880009"
+      },
+      "channel": "PUSH",
+      "chunk_index": 0,
+      "document_version": "0c2900d10d6c76fa:2026-01-26T16:45:04.387064",
+      "file_name": "orqestra-guidelines-comunicacao-PUSH_v1.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:04.386513Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-guidelines-comunicacao-PUSH_v1.pdf\", \"file_name\": \"orqestra-guidelines-comunicacao-PUSH_v1.pdf\", \"page_count\": 5, \"title\": \"orqestra guidelines comunicacao PUSH\", \"producer\": \"iLovePDF\", \"modification_date\": \"D:20260117012444Z\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-guidelines-comunicacao-PUSH_v1.pdf",
+      "text": "Envio de Push Notifications (App) \nVersão: 1.0 \nÚltima atualização: 2025-01-XX \nAplicável a: notificações push promocionais, informativas e transacionais \nResponsáveis: Jurídico, Compliance, CRM, Produto, Marca \n \n1. Objetivo do documento \nEste documento define as diretrizes obrigatórias para criação, validação e envio de \nnotificações push pela Orqestra, assegurando: \n●​ Conformidade jurídica e regulatória \n●​ Boa experiência do usuário no app \n●​ Uso responsável do canal push \n●​ Clareza, relevância e transparência \n●​ Proteção da marca Orqestra \nEstas diretrizes se aplicam a times internos, agências e sistemas automatizados, incluindo \nsoluções baseadas em Inteligência Artificial. 2. Princípios fundamentais do canal Push \nNotificações push devem respeitar: \n1.​ Contexto​\nO push interrompe o usuário. Deve ser relevante e oportuno. 2.​ Clareza imediata​\nO usuário deve entender o conteúdo em poucos segundos, sem precisar abrir o app. 3.​ Moderação​\nO excesso de notificações degrada a experiência e pode levar ao bloqueio do canal pelo \nusuário. 4.​ Consentimento implícito, mas reversível​\nO usuário autorizou push no app, mas pode desativá-lo a qualquer momento. 3."
+    },
+    {
+      "_additional": {
+        "id": "23556ae1-74f6-5723-97ec-f8f42c60fd6f"
+      },
+      "channel": "APP",
+      "chunk_index": 6,
+      "document_version": "839ae277ed9b0ee5:2026-01-26T16:45:08.502411",
+      "file_name": "orqestra-guidelines-comunicacao-APP_v1.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:08.502345Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-guidelines-comunicacao-APP_v1.pdf\", \"file_name\": \"orqestra-guidelines-comunicacao-APP_v1.pdf\", \"page_count\": 4, \"title\": \"orqestra-guidelines-comunicacao-APP_v1\", \"producer\": \"Skia/PDF m146 Google Docs Renderer\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-guidelines-comunicacao-APP_v1.pdf",
+      "text": "6. Acessibilidade \nRegras obrigatórias \n●​ Contraste adequado entre texto e fundo. ●​ Fonte legível em diferentes tamanhos de tela."
+    },
+    {
+      "_additional": {
+        "id": "34afae40-9f7e-5c6d-ae42-efd4b660bc64"
+      },
+      "channel": "EMAIL",
+      "chunk_index": 12,
+      "document_version": "ab2383d53e6aec4e:2026-01-26T16:45:05.829803",
+      "file_name": "orqestra-guidelines-comunicacao-EMAIL_v1.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:05.829703Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-guidelines-comunicacao-EMAIL_v1.pdf\", \"file_name\": \"orqestra-guidelines-comunicacao-EMAIL_v1.pdf\", \"page_count\": 6, \"title\": \"orqestra guidelines comunicacao EMAIL\", \"producer\": \"iLovePDF\", \"modification_date\": \"D:20260117012444Z\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-guidelines-comunicacao-EMAIL_v1.pdf",
+      "text": "12. Entregabilidade e anti-spam \nBoas práticas \n●​ Evitar palavras associadas a spam (“GRÁTIS!!!”, “URGENTE!!!”). ●​ Não usar excesso de imagens."
+    },
+    {
+      "_additional": {
+        "id": "3bce22db-e385-5e02-8d64-b40d1e604037"
+      },
+      "channel": "GENERAL",
+      "chunk_index": 4,
+      "document_version": "61e9ac979189b3e7:2026-01-26T16:45:09.829278",
+      "file_name": "orqestra-juridico-linguagem-promocional.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:09.829173Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-juridico-linguagem-promocional.pdf\", \"file_name\": \"orqestra-juridico-linguagem-promocional.pdf\", \"page_count\": 2, \"title\": \"orqestra-juridico-linguagem-promocional\", \"producer\": \"Skia/PDF m145 Google Docs Renderer\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-juridico-linguagem-promocional.pdf",
+      "text": "4. Claims Proibidos \nSão considerados não permitidos (BLOCKER): \n●​ Afirmações absolutas, como: \n○​ “garantido” \n○​ “sem risco” \n○​ “resultado certo”"
+    },
+    {
+      "_additional": {
+        "id": "3c6fcae5-d800-561a-aa9e-c3a92d465e23"
+      },
+      "channel": "SMS",
+      "chunk_index": 2,
+      "document_version": "db65e08cd67849d5:2026-01-26T16:45:07.347429",
+      "file_name": "orqestra-guidelines-comunicacao-SMS_v1.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:07.347378Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-guidelines-comunicacao-SMS_v1.pdf\", \"file_name\": \"orqestra-guidelines-comunicacao-SMS_v1.pdf\", \"page_count\": 5, \"title\": \"orqestra-guidelines-comunicacao-SMS_v1\", \"producer\": \"Skia/PDF m146 Google Docs Renderer\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-guidelines-comunicacao-SMS_v1.pdf",
+      "text": "Linguagem e tom de voz \nDiretrizes gerais \n●​ Linguagem clara, direta e respeitosa. ●​ Evitar jargões internos, siglas técnicas ou termos pouco compreensíveis."
+    },
+    {
+      "_additional": {
+        "id": "3d0ca811-0cb4-56ad-8ea0-d069719e79ad"
+      },
+      "channel": "EMAIL",
+      "chunk_index": 11,
+      "document_version": "ab2383d53e6aec4e:2026-01-26T16:45:05.829803",
+      "file_name": "orqestra-guidelines-comunicacao-EMAIL_v1.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:05.829703Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-guidelines-comunicacao-EMAIL_v1.pdf\", \"file_name\": \"orqestra-guidelines-comunicacao-EMAIL_v1.pdf\", \"page_count\": 6, \"title\": \"orqestra guidelines comunicacao EMAIL\", \"producer\": \"iLovePDF\", \"modification_date\": \"D:20260117012444Z\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-guidelines-comunicacao-EMAIL_v1.pdf",
+      "text": "11. Linguagem e tom de voz \nDiretrizes \n●​ Linguagem clara, profissional e respeitosa. \n●​ Evitar jargões internos. \n●​ Coerência com a marca Orqestra. \nEmojis \n●​ Permitidos com moderação, preferencialmente no ass"
+    },
+    {
+      "_additional": {
+        "id": "4397739f-4b52-52ea-8b10-6c84c704da21"
+      },
+      "channel": "EMAIL",
+      "chunk_index": 15,
+      "document_version": "ab2383d53e6aec4e:2026-01-26T16:45:05.829803",
+      "file_name": "orqestra-guidelines-comunicacao-EMAIL_v1.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:05.829703Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-guidelines-comunicacao-EMAIL_v1.pdf\", \"file_name\": \"orqestra-guidelines-comunicacao-EMAIL_v1.pdf\", \"page_count\": 6, \"title\": \"orqestra guidelines comunicacao EMAIL\", \"producer\": \"iLovePDF\", \"modification_date\": \"D:20260117012444Z\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-guidelines-comunicacao-EMAIL_v1.pdf",
+      "text": "Uso de Inteligência Artificial \n●​ Conteúdos gerados por IA devem respeitar integralmente estas diretrizes. ●​ Sugestões de IA devem: \n○​ ser auditáveis \n○​ permitir aceitação/rejeição humana \n○​ registrar versão do prompt/modelo \n●​ IA não substitui aprovação humana final."
+    },
+    {
+      "_additional": {
+        "id": "4567dc2e-527a-575f-9897-053c1ce7e58d"
+      },
+      "channel": "GENERAL",
+      "chunk_index": 2,
+      "document_version": "575e2a61bc99f927:2026-01-26T16:45:10.996897",
+      "file_name": "orqestra-juridico-uso-dados-personalizacao.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:10.996851Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-juridico-uso-dados-personalizacao.pdf\", \"file_name\": \"orqestra-juridico-uso-dados-personalizacao.pdf\", \"page_count\": 2, \"title\": \"orqestra-juridico-uso-dados-personalizacao\", \"producer\": \"Skia/PDF m146 Google Docs Renderer\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-juridico-uso-dados-personalizacao.pdf",
+      "text": "4. Personalização Sensível \nExige cautela (WARNING): \n●​ Referências indiretas a comportamento: \n○​ “Sabemos que você costuma…” \n○​ “Percebemos que você tem interesse em…” \n●​ Segmentações que possam revelar padrões implícitos. Esses casos devem ser avaliados quanto à necessidade real da personalização."
+    },
+    {
+      "_additional": {
+        "id": "4984b9c6-b8e9-5976-8e1a-846a56cf39d6"
+      },
+      "channel": "SMS",
+      "chunk_index": 6,
+      "document_version": "db65e08cd67849d5:2026-01-26T16:45:07.347429",
+      "file_name": "orqestra-guidelines-comunicacao-SMS_v1.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:07.347378Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-guidelines-comunicacao-SMS_v1.pdf\", \"file_name\": \"orqestra-guidelines-comunicacao-SMS_v1.pdf\", \"page_count\": 5, \"title\": \"orqestra-guidelines-comunicacao-SMS_v1\", \"producer\": \"Skia/PDF m146 Google Docs Renderer\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-guidelines-comunicacao-SMS_v1.pdf",
+      "text": "8. Clareza e chamada para ação (CTA) \nToda mensagem deve responder claramente: \n●​ O que está sendo comunicado \n●​ Qual o benefício principal \n●​ O que o cliente deve fazer agora \nDiretrizes de CTA \n●​ Usar verbos claros: “acesse”, “confira”, “ative”, “simule”. ●​ Evitar CTAs genéricos como “clique aqui” sem contexto."
+    },
+    {
+      "_additional": {
+        "id": "4b36f6d3-482c-5169-b565-9fe2ed396c2f"
+      },
+      "channel": "SMS",
+      "chunk_index": 5,
+      "document_version": "db65e08cd67849d5:2026-01-26T16:45:07.347429",
+      "file_name": "orqestra-guidelines-comunicacao-SMS_v1.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:07.347378Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-guidelines-comunicacao-SMS_v1.pdf\", \"file_name\": \"orqestra-guidelines-comunicacao-SMS_v1.pdf\", \"page_count\": 5, \"title\": \"orqestra-guidelines-comunicacao-SMS_v1\", \"producer\": \"Skia/PDF m146 Google Docs Renderer\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-guidelines-comunicacao-SMS_v1.pdf",
+      "text": "Dados pessoais e privacidade \nÉ proibido: \n●​ Incluir dados pessoais (Nome completo do cliente, CPF, endereço, número de \ncartão). ●​ Inferir comportamentos ou situações pessoais (“sabemos que você está precisando \nde dinheiro”). ●​ Revelar informações que o cliente não espera receber via SMS. Personalização permitida \n●​ Referência genérica a produtos já contratados, sem detalhamento sensível."
+    },
+    {
+      "_additional": {
+        "id": "5865259d-6733-5b21-802f-67fa43a17e9d"
+      },
+      "channel": "APP",
+      "chunk_index": 9,
+      "document_version": "839ae277ed9b0ee5:2026-01-26T16:45:08.502411",
+      "file_name": "orqestra-guidelines-comunicacao-APP_v1.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:08.502345Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-guidelines-comunicacao-APP_v1.pdf\", \"file_name\": \"orqestra-guidelines-comunicacao-APP_v1.pdf\", \"page_count\": 4, \"title\": \"orqestra-guidelines-comunicacao-APP_v1\", \"producer\": \"Skia/PDF m146 Google Docs Renderer\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-guidelines-comunicacao-APP_v1.pdf",
+      "text": "10. Uso de Inteligência Artificial \n●​ IA pode: \n○​ sugerir textos alternativos \n○​ ajustar tamanho e clareza do copy \n○​ avaliar conformidade com estas diretrizes \n●​ IA não substitui aprovação humana final. ●​ Toda sugestão de IA deve ser: \n○​ rastreável \n○​ versionada \n○​ passível de aceitação ou rejeição humana \n \n\n\n11. Consequências do não cumprimento \nO descumprimento destas diretrizes pode resultar em: \n●​ Bloqueio do banner \n●​ Retorno para ajustes \n●​ Escalonamento para Compliance/Jurídico \n●​ Revisão de processos e fornecedores"
+    },
+    {
+      "_additional": {
+        "id": "67e9b634-f6ff-55be-aa6c-9a7d856edaf2"
+      },
+      "channel": "SMS",
+      "chunk_index": 7,
+      "document_version": "db65e08cd67849d5:2026-01-26T16:45:07.347429",
+      "file_name": "orqestra-guidelines-comunicacao-SMS_v1.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:07.347378Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-guidelines-comunicacao-SMS_v1.pdf\", \"file_name\": \"orqestra-guidelines-comunicacao-SMS_v1.pdf\", \"page_count\": 5, \"title\": \"orqestra-guidelines-comunicacao-SMS_v1\", \"producer\": \"Skia/PDF m146 Google Docs Renderer\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-guidelines-comunicacao-SMS_v1.pdf",
+      "text": "9. Limites técnicos e tamanho da mensagem \nEncoding e segmentação \n●​ A Orqestra prioriza mensagens em GSM-7. ●​ Caracteres especiais ou emojis podem reduzir o limite para UCS-2. Limites recomendados \n●​ Ideal: até 130 caracteres \n●​ Máximo permitido: 160 caracteres \n●​ Mensagens concatenadas devem ser evitadas e, quando permitidas, precisam de \naprovação explícita. Emojis \n●​ Permitidos com moderação."
+    },
+    {
+      "_additional": {
+        "id": "6b14ded4-8720-5e45-bb5c-ed56ca69b73f"
+      },
+      "channel": "EMAIL",
+      "chunk_index": 4,
+      "document_version": "ab2383d53e6aec4e:2026-01-26T16:45:05.829803",
+      "file_name": "orqestra-guidelines-comunicacao-EMAIL_v1.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:05.829703Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-guidelines-comunicacao-EMAIL_v1.pdf\", \"file_name\": \"orqestra-guidelines-comunicacao-EMAIL_v1.pdf\", \"page_count\": 6, \"title\": \"orqestra guidelines comunicacao EMAIL\", \"producer\": \"iLovePDF\", \"modification_date\": \"D:20260117012444Z\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-guidelines-comunicacao-EMAIL_v1.pdf",
+      "text": "Conteúdo e estrutura do e-mail \nDiretrizes gerais \n●​ Hierarquia clara (título → conteúdo → CTA). ●​ Escaneável (parágrafos curtos, bullets). ●​ Um objetivo principal por e-mail. CTA \n●​ Deve ser claro, específico e coerente com o conteúdo. ●​ Evitar múltiplos CTAs concorrentes. ●​ Texto do botão deve indicar ação real (“Simular”, “Acessar”, “Ativar”)."
+    },
+    {
+      "_additional": {
+        "id": "6d2c28a9-e690-5e29-aa36-e47179340604"
+      },
+      "channel": "PUSH",
+      "chunk_index": 4,
+      "document_version": "0c2900d10d6c76fa:2026-01-26T16:45:04.387064",
+      "file_name": "orqestra-guidelines-comunicacao-PUSH_v1.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:04.386513Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-guidelines-comunicacao-PUSH_v1.pdf\", \"file_name\": \"orqestra-guidelines-comunicacao-PUSH_v1.pdf\", \"page_count\": 5, \"title\": \"orqestra guidelines comunicacao PUSH\", \"producer\": \"iLovePDF\", \"modification_date\": \"D:20260117012444Z\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-guidelines-comunicacao-PUSH_v1.pdf",
+      "text": "●​ Pode conter CTA implícito (“Confira”, “Veja no app”). Boas práticas \n●​ Não duplicar informação. ●​ Não usar CAPS LOCK. ●​ Evitar excesso de emojis (máx. 1, quando apropriado)."
+    },
+    {
+      "_additional": {
+        "id": "7134775a-4bb0-5966-846f-7063dcd49295"
+      },
+      "channel": "GENERAL",
+      "chunk_index": 3,
+      "document_version": "575e2a61bc99f927:2026-01-26T16:45:10.996897",
+      "file_name": "orqestra-juridico-uso-dados-personalizacao.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:10.996851Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-juridico-uso-dados-personalizacao.pdf\", \"file_name\": \"orqestra-juridico-uso-dados-personalizacao.pdf\", \"page_count\": 2, \"title\": \"orqestra-juridico-uso-dados-personalizacao\", \"producer\": \"Skia/PDF m146 Google Docs Renderer\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-juridico-uso-dados-personalizacao.pdf",
+      "text": "5. Uso Proibido de Dados \nSão considerados BLOCKER: \n●​ Nome completo do cliente, número de documento, endereços de e-mail e afins são \nproibidos. ●​ Inferência de dados sensíveis (renda, saúde, localização precisa)."
+    },
+    {
+      "_additional": {
+        "id": "71c30186-d5f3-594f-8a43-64e32958b65f"
+      },
+      "channel": "PUSH",
+      "chunk_index": 1,
+      "document_version": "0c2900d10d6c76fa:2026-01-26T16:45:04.387064",
+      "file_name": "orqestra-guidelines-comunicacao-PUSH_v1.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:04.386513Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-guidelines-comunicacao-PUSH_v1.pdf\", \"file_name\": \"orqestra-guidelines-comunicacao-PUSH_v1.pdf\", \"page_count\": 5, \"title\": \"orqestra guidelines comunicacao PUSH\", \"producer\": \"iLovePDF\", \"modification_date\": \"D:20260117012444Z\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-guidelines-comunicacao-PUSH_v1.pdf",
+      "text": "Identificação da marca \nRegras obrigatórias \n\n\n●​ A notificação deve deixar claro que é uma comunicação da Orqestra. ●​ O nome da Orqestra pode aparecer: \n○​ no título, \n○​ no corpo. Exemplos \nAceitável \nOrqestra \nSeu benefício já está disponível no app. Não aceitável \nBenefício disponível agora!"
+    },
+    {
+      "_additional": {
+        "id": "7635d8d8-9c6b-534a-b91c-a4eb5304eb2f"
+      },
+      "channel": "SMS",
+      "chunk_index": 1,
+      "document_version": "db65e08cd67849d5:2026-01-26T16:45:07.347429",
+      "file_name": "orqestra-guidelines-comunicacao-SMS_v1.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:07.347378Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-guidelines-comunicacao-SMS_v1.pdf\", \"file_name\": \"orqestra-guidelines-comunicacao-SMS_v1.pdf\", \"page_count\": 5, \"title\": \"orqestra-guidelines-comunicacao-SMS_v1\", \"producer\": \"Skia/PDF m146 Google Docs Renderer\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-guidelines-comunicacao-SMS_v1.pdf",
+      "text": "3. Identificação do remetente (obrigatório) \nToda mensagem SMS deve permitir identificar claramente que a comunicação é da \ncompanhia. Regras obrigatórias \n●​ O nome Orqestra deve aparecer no texto da mensagem, preferencialmente no \ninício. ●​ O texto não deve induzir o cliente a acreditar que a mensagem vem de terceiros não \nrelacionados à Orqestra. Exemplo aceitável \nOrqestra: confira as condições especiais para você no app. Exemplo não aceitável \nConfira agora sua oferta exclusiva. 4. Opt-out e cancelamento (obrigatório) \nA Orqestra respeita o direito do cliente de interromper comunicações promocionais. Regras obrigatórias \n●​ Toda mensagem promocional deve conter instrução clara de opt-out. ●​ A instrução deve ser simples, direta e padronizada. Padrões aceitos \n●​ “Responda SAIR para cancelar” \n●​ “Envie SAIR para não receber mais mensagens” \nExemplo aceitável \nOrqestra: ative sua oferta no app. Responda SAIR para cancelar. Exemplo não aceitável"
+    },
+    {
+      "_additional": {
+        "id": "7ae26667-c985-5307-84fd-9fbfe2d1754c"
+      },
+      "channel": "GENERAL",
+      "chunk_index": 4,
+      "document_version": "575e2a61bc99f927:2026-01-26T16:45:10.996897",
+      "file_name": "orqestra-juridico-uso-dados-personalizacao.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:10.996851Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-juridico-uso-dados-personalizacao.pdf\", \"file_name\": \"orqestra-juridico-uso-dados-personalizacao.pdf\", \"page_count\": 2, \"title\": \"orqestra-juridico-uso-dados-personalizacao\", \"producer\": \"Skia/PDF m146 Google Docs Renderer\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-juridico-uso-dados-personalizacao.pdf",
+      "text": "●​ Uso de histórico comportamental de forma explícita. ●​ Comunicação que revele dados que o cliente não forneceu diretamente."
+    },
+    {
+      "_additional": {
+        "id": "7de8fe8b-5b16-5774-8146-aeb84341874f"
+      },
+      "channel": "GENERAL",
+      "chunk_index": 2,
+      "document_version": "61e9ac979189b3e7:2026-01-26T16:45:09.829278",
+      "file_name": "orqestra-juridico-linguagem-promocional.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:09.829173Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-juridico-linguagem-promocional.pdf\", \"file_name\": \"orqestra-juridico-linguagem-promocional.pdf\", \"page_count\": 2, \"title\": \"orqestra-juridico-linguagem-promocional\", \"producer\": \"Skia/PDF m145 Google Docs Renderer\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-juridico-linguagem-promocional.pdf",
+      "text": "3. Princípios Gerais \n●​ Toda comunicação deve ser interpretável por um cliente médio, sem exigir \nconhecimento técnico ou jurídico. ●​ A ausência de condicionantes explícitas pode caracterizar comunicação enganosa, \nmesmo quando o produto possua regras internas."
+    },
+    {
+      "_additional": {
+        "id": "804ab4c4-68fc-5eea-9c26-fdb609474a4b"
+      },
+      "channel": "PUSH",
+      "chunk_index": 9,
+      "document_version": "0c2900d10d6c76fa:2026-01-26T16:45:04.387064",
+      "file_name": "orqestra-guidelines-comunicacao-PUSH_v1.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:04.386513Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-guidelines-comunicacao-PUSH_v1.pdf\", \"file_name\": \"orqestra-guidelines-comunicacao-PUSH_v1.pdf\", \"page_count\": 5, \"title\": \"orqestra guidelines comunicacao PUSH\", \"producer\": \"iLovePDF\", \"modification_date\": \"D:20260117012444Z\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-guidelines-comunicacao-PUSH_v1.pdf",
+      "text": "Privacidade e uso de dados \nÉ proibido \n●​ Inferir comportamento ou situação pessoal (“sabemos que você precisa…”). ●​ Revelar dados sensíveis na notificação. ●​ Expor informações que terceiros possam ver na tela bloqueada. Personalização permitida \n●​ Primeiro nome (quando autorizado). ●​ Referência genérica a ações recentes, sem detalhamento sensível."
+    },
+    {
+      "_additional": {
+        "id": "812fa314-dca5-54a2-8f0d-d6f70bcadb12"
+      },
+      "channel": "EMAIL",
+      "chunk_index": 8,
+      "document_version": "ab2383d53e6aec4e:2026-01-26T16:45:05.829803",
+      "file_name": "orqestra-guidelines-comunicacao-EMAIL_v1.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:05.829703Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-guidelines-comunicacao-EMAIL_v1.pdf\", \"file_name\": \"orqestra-guidelines-comunicacao-EMAIL_v1.pdf\", \"page_count\": 6, \"title\": \"orqestra guidelines comunicacao EMAIL\", \"producer\": \"iLovePDF\", \"modification_date\": \"D:20260117012444Z\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-guidelines-comunicacao-EMAIL_v1.pdf",
+      "text": "9. Boas práticas técnicas (HTML) \nEstrutura \n●​ HTML simples, compatível com clientes de e-mail. \n●​ Uso de tabelas quando necessário. \n●​ Fallback em texto (plaintext). \nObrigatório \n●​ Link de unsubscribe funcional \n●​ Endereço físico ou identificação institucional da Orqestra \n●​ Links válidos e testados \n●​ Texto alternativo (alt) em imagens relevantes \nProibições \n●​ Scripts (JavaScript) \n●​ Formulários interativos \n●​ Conteúdo que quebre clientes de e-mail comuns \n \n10. Acessib"
+    },
+    {
+      "_additional": {
+        "id": "8c52ddea-43bb-51e7-a6ff-30e4e563f602"
+      },
+      "channel": "PUSH",
+      "chunk_index": 8,
+      "document_version": "0c2900d10d6c76fa:2026-01-26T16:45:04.387064",
+      "file_name": "orqestra-guidelines-comunicacao-PUSH_v1.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:04.386513Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-guidelines-comunicacao-PUSH_v1.pdf\", \"file_name\": \"orqestra-guidelines-comunicacao-PUSH_v1.pdf\", \"page_count\": 5, \"title\": \"orqestra guidelines comunicacao PUSH\", \"producer\": \"iLovePDF\", \"modification_date\": \"D:20260117012444Z\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-guidelines-comunicacao-PUSH_v1.pdf",
+      "text": "Promessas, ofertas e condições \n\n\nProibições absolutas \nÉ proibido: \n●​ Garantir benefícios (“garantido”, “sem risco”). ●​ Omitir condições essenciais. ●​ Criar falsa sensação de exclusividade (“só você”, “único selecionado”) sem base real. Transparência \nSe houver: \n●​ valores \n●​ descontos \n●​ benefícios financeiros \nDevem ser mencionadas condições mínimas essenciais, mesmo de forma resumida."
+    },
+    {
+      "_additional": {
+        "id": "8ebbb4d3-5e60-5177-9ef4-f94e7d97fc49"
+      },
+      "channel": "EMAIL",
+      "chunk_index": 2,
+      "document_version": "ab2383d53e6aec4e:2026-01-26T16:45:05.829803",
+      "file_name": "orqestra-guidelines-comunicacao-EMAIL_v1.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:05.829703Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-guidelines-comunicacao-EMAIL_v1.pdf\", \"file_name\": \"orqestra-guidelines-comunicacao-EMAIL_v1.pdf\", \"page_count\": 6, \"title\": \"orqestra guidelines comunicacao EMAIL\", \"producer\": \"iLovePDF\", \"modification_date\": \"D:20260117012444Z\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-guidelines-comunicacao-EMAIL_v1.pdf",
+      "text": "3. Identificação do remetente (obrigatório) \nRegras obrigatórias \n●​ O remetente deve ser claramente identificado como Orqestra. ●​ O nome exibido do remetente deve ser consistente e reconhecível. ●​ O domínio de envio deve ser oficial da Orqestra. Exemplo aceitável \nOrqestra <comunicacao@orqestra.com> \nExemplo não aceitável \nOfertas Especiais <promo@email-desconhecido.com> \n \n4. Assunto e preheader \nAssunto \n●​ Deve refletir fielmente o conteúdo do e-mail. ●​ Proibido usar clickbait ou promessas enganosas. ●​ Evitar CAPS LOCK e excesso de emojis. Preheader \n●​ Complementa o assunto. ●​ Não deve repetir o assunto palavra por palavra."
+    },
+    {
+      "_additional": {
+        "id": "924b3f56-3529-55f6-8f41-71f5312df62c"
+      },
+      "channel": "EMAIL",
+      "chunk_index": 3,
+      "document_version": "ab2383d53e6aec4e:2026-01-26T16:45:05.829803",
+      "file_name": "orqestra-guidelines-comunicacao-EMAIL_v1.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:05.829703Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-guidelines-comunicacao-EMAIL_v1.pdf\", \"file_name\": \"orqestra-guidelines-comunicacao-EMAIL_v1.pdf\", \"page_count\": 6, \"title\": \"orqestra guidelines comunicacao EMAIL\", \"producer\": \"iLovePDF\", \"modification_date\": \"D:20260117012444Z\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-guidelines-comunicacao-EMAIL_v1.pdf",
+      "text": "5. Opt-out e cancelamento (obrigatório) \nRegras obrigatórias \nTodo e-mail promocional deve conter: \n●​ Link visível de descadastro (unsubscribe) \n●​ Funcionamento imediato ou com confirmação simples \n●​ Linguagem clara e respeitosa \nExemplos aceitáveis \n●​ “Cancelar recebimento” \n●​ “Descadastrar-se” \n●​ “Não quero mais receber e-mails” \nExemplos não aceitáveis \n●​ Texto confuso ou escondido \n●​ Exigir login para cancelar \n\n\n●​ Condicionar o cancelamento a atendimento humano \n📌 Ausência de unsubscribe é falha crítica (BLOCKER). 6."
+    },
+    {
+      "_additional": {
+        "id": "a1b1dfb3-2d96-5e61-8207-0fdf0d8a2b3d"
+      },
+      "channel": "APP",
+      "chunk_index": 4,
+      "document_version": "839ae277ed9b0ee5:2026-01-26T16:45:08.502411",
+      "file_name": "orqestra-guidelines-comunicacao-APP_v1.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:08.502345Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-guidelines-comunicacao-APP_v1.pdf\", \"file_name\": \"orqestra-guidelines-comunicacao-APP_v1.pdf\", \"page_count\": 4, \"title\": \"orqestra-guidelines-comunicacao-APP_v1\", \"producer\": \"Skia/PDF m146 Google Docs Renderer\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-guidelines-comunicacao-APP_v1.pdf",
+      "text": "5. Privacidade e uso de dados \nÉ proibido \n●​ Expor dados pessoais no banner. ●​ Inferir situações pessoais (“sabemos que você precisa…”)."
+    },
+    {
+      "_additional": {
+        "id": "a4b0c0ac-d12f-575e-9eda-5a5f1b125ee9"
+      },
+      "channel": "GENERAL",
+      "chunk_index": 3,
+      "document_version": "61e9ac979189b3e7:2026-01-26T16:45:09.829278",
+      "file_name": "orqestra-juridico-linguagem-promocional.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:09.829173Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-juridico-linguagem-promocional.pdf\", \"file_name\": \"orqestra-juridico-linguagem-promocional.pdf\", \"page_count\": 2, \"title\": \"orqestra-juridico-linguagem-promocional\", \"producer\": \"Skia/PDF m145 Google Docs Renderer\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-juridico-linguagem-promocional.pdf",
+      "text": "●​ A limitação de espaço do canal (SMS, Push, Banner) não elimina a obrigação de \nclareza. ●​ A grafia oficial do nome da empresa é Orqestra. Variações de capitalização (ex.: \nORQESTRA) são aceitáveis. Nunca sinalize a grafia “Orqestra” como erro ou ponto \nde melhoria. Variações como Orquestra, Orkestra ou Orchestra são proibidas."
+    },
+    {
+      "_additional": {
+        "id": "ab00c378-c1a7-5ef3-9504-d8e7652260af"
+      },
+      "channel": "SMS",
+      "chunk_index": 8,
+      "document_version": "db65e08cd67849d5:2026-01-26T16:45:07.347429",
+      "file_name": "orqestra-guidelines-comunicacao-SMS_v1.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:07.347378Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-guidelines-comunicacao-SMS_v1.pdf\", \"file_name\": \"orqestra-guidelines-comunicacao-SMS_v1.pdf\", \"page_count\": 5, \"title\": \"orqestra-guidelines-comunicacao-SMS_v1\", \"producer\": \"Skia/PDF m146 Google Docs Renderer\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-guidelines-comunicacao-SMS_v1.pdf",
+      "text": "10. Links e segurança \nDiretrizes \n●​ Links devem apontar para domínios oficiais e reconhecíveis da Orqestra. ●​ Evitar encurtadores genéricos ou não corporativos."
+    },
+    {
+      "_additional": {
+        "id": "aff0eeee-1079-5b78-a0b1-eee60062b840"
+      },
+      "channel": "GENERAL",
+      "chunk_index": 5,
+      "document_version": "575e2a61bc99f927:2026-01-26T16:45:10.996897",
+      "file_name": "orqestra-juridico-uso-dados-personalizacao.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:10.996851Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-juridico-uso-dados-personalizacao.pdf\", \"file_name\": \"orqestra-juridico-uso-dados-personalizacao.pdf\", \"page_count\": 2, \"title\": \"orqestra-juridico-uso-dados-personalizacao\", \"producer\": \"Skia/PDF m146 Google Docs Renderer\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-juridico-uso-dados-personalizacao.pdf",
+      "text": "6. Exemplos \nAceitável: \n“Temos uma nova oferta disponível para você.” \nSensível (WARNING): \n“Notamos que você acessa frequentemente nosso app.” \nInaceitável (BLOCKER): \n“Sabemos que você costuma atrasar seus pagamentos.” \n“João Mendes, temos uma nova oferta disponível para você.” \n7. Escalonamento \nSempre que houver risco de percepção invasiva ou exposição de dados sensíveis do \ncliente, a peça deve ser revisada por humano, mesmo que tecnicamente legal."
+    },
+    {
+      "_additional": {
+        "id": "b07f0285-512f-572c-a9d3-284f437f7b8a"
+      },
+      "channel": "PUSH",
+      "chunk_index": 3,
+      "document_version": "0c2900d10d6c76fa:2026-01-26T16:45:04.387064",
+      "file_name": "orqestra-guidelines-comunicacao-PUSH_v1.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:04.386513Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-guidelines-comunicacao-PUSH_v1.pdf\", \"file_name\": \"orqestra-guidelines-comunicacao-PUSH_v1.pdf\", \"page_count\": 5, \"title\": \"orqestra guidelines comunicacao PUSH\", \"producer\": \"iLovePDF\", \"modification_date\": \"D:20260117012444Z\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-guidelines-comunicacao-PUSH_v1.pdf",
+      "text": "5. Estrutura da notificação (Título e Corpo) \nTítulo \n●​ Curto e informativo. \n●​ Evitar clickbait. \n●​ Não repetir exatamente o corpo. \nCorpo \n●​ Explica o benefício ou ação. \n●​ Deve conter o"
+    },
+    {
+      "_additional": {
+        "id": "b38cff21-df79-5451-ae80-21b4ecbc0507"
+      },
+      "channel": "APP",
+      "chunk_index": 1,
+      "document_version": "839ae277ed9b0ee5:2026-01-26T16:45:08.502411",
+      "file_name": "orqestra-guidelines-comunicacao-APP_v1.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:08.502345Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-guidelines-comunicacao-APP_v1.pdf\", \"file_name\": \"orqestra-guidelines-comunicacao-APP_v1.pdf\", \"page_count\": 4, \"title\": \"orqestra-guidelines-comunicacao-APP_v1\", \"producer\": \"Skia/PDF m146 Google Docs Renderer\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-guidelines-comunicacao-APP_v1.pdf",
+      "text": "Princípios fundamentais do canal Banner \n1.​ Leitura imediata​\nO usuário deve compreender a mensagem principal com facilidade. 2.​ Não interrupção agressiva​\nO banner é um convite visual, não uma interrupção forçada. 3.​ Transparência​\nA mensagem não deve induzir o usuário ao erro. 4.​ Contexto​\nO conteúdo deve ser adequado à área do app onde será exibido."
+    },
+    {
+      "_additional": {
+        "id": "b42ff722-460d-53db-8094-e18296d69e4d"
+      },
+      "channel": "APP",
+      "chunk_index": 0,
+      "document_version": "839ae277ed9b0ee5:2026-01-26T16:45:08.502411",
+      "file_name": "orqestra-guidelines-comunicacao-APP_v1.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:08.502345Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-guidelines-comunicacao-APP_v1.pdf\", \"file_name\": \"orqestra-guidelines-comunicacao-APP_v1.pdf\", \"page_count\": 4, \"title\": \"orqestra-guidelines-comunicacao-APP_v1\", \"producer\": \"Skia/PDF m146 Google Docs Renderer\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-guidelines-comunicacao-APP_v1.pdf",
+      "text": "Exibição de Banners no App \nVersão: 1.0 \nÚltima atualização: 2025-01-XX \nAplicável a: banners estáticos ou dinâmicos exibidos no aplicativo da Orqestra \nResponsáveis: Jurídico, Compliance, CRM, Produto, Marca, UX \n \n1. Objetivo do documento \nEste documento define as diretrizes obrigatórias para criação, validação, aprovação e \nexibição de banners no aplicativo da Orqestra, garantindo: \n●​ Conformidade jurídica e regulatória \n●​ Clareza e boa experiência do usuário \n●​ Proteção da marca Orqestra \n●​ Uso responsável de comunicação visual e textual \n●​ Governança sobre peças criadas por humanos e por IA \nAs diretrizes se aplicam a times internos, agências, fornecedores e sistemas \nautomatizados. 2."
+    },
+    {
+      "_additional": {
+        "id": "b4ddb571-8c7b-55ef-94e7-554246b76c1e"
+      },
+      "channel": "EMAIL",
+      "chunk_index": 6,
+      "document_version": "ab2383d53e6aec4e:2026-01-26T16:45:05.829803",
+      "file_name": "orqestra-guidelines-comunicacao-EMAIL_v1.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:05.829703Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-guidelines-comunicacao-EMAIL_v1.pdf\", \"file_name\": \"orqestra-guidelines-comunicacao-EMAIL_v1.pdf\", \"page_count\": 6, \"title\": \"orqestra guidelines comunicacao EMAIL\", \"producer\": \"iLovePDF\", \"modification_date\": \"D:20260117012444Z\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-guidelines-comunicacao-EMAIL_v1.pdf",
+      "text": "●​ Criar falsa escassez (“últimas vagas”) sem base real. Transparência obrigatória \nQuando houver: \n●​ preços \n●​ taxas \n●​ descontos \n●​ benefícios financeiros \nDevem constar: \n●​ condições mínimas essenciais \n●​ prazos \n●​ limitações relevantes \n \n\n\n8. Privacidade e dados pessoais \nÉ proibido \n●​ Incluir dados pessoais sensíveis no corpo do e-mail. ●​ Inferir situações pessoais (“sabemos que você está precisando…”)."
+    },
+    {
+      "_additional": {
+        "id": "c38f8062-67a1-57b8-a3c7-b7bc737c2f81"
+      },
+      "channel": "PUSH",
+      "chunk_index": 6,
+      "document_version": "0c2900d10d6c76fa:2026-01-26T16:45:04.387064",
+      "file_name": "orqestra-guidelines-comunicacao-PUSH_v1.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:04.386513Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-guidelines-comunicacao-PUSH_v1.pdf\", \"file_name\": \"orqestra-guidelines-comunicacao-PUSH_v1.pdf\", \"page_count\": 5, \"title\": \"orqestra guidelines comunicacao PUSH\", \"producer\": \"iLovePDF\", \"modification_date\": \"D:20260117012444Z\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-guidelines-comunicacao-PUSH_v1.pdf",
+      "text": "7. Linguagem e tom de voz \nDiretrizes gerais \n●​ Linguagem clara, direta e respeitosa. ●​ Evitar jargões internos ou termos técnicos não explicados."
+    },
+    {
+      "_additional": {
+        "id": "c6d1f3c6-9aa9-57ef-b1a5-148d2e1eb84f"
+      },
+      "channel": "PUSH",
+      "chunk_index": 7,
+      "document_version": "0c2900d10d6c76fa:2026-01-26T16:45:04.387064",
+      "file_name": "orqestra-guidelines-comunicacao-PUSH_v1.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:04.386513Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-guidelines-comunicacao-PUSH_v1.pdf\", \"file_name\": \"orqestra-guidelines-comunicacao-PUSH_v1.pdf\", \"page_count\": 5, \"title\": \"orqestra guidelines comunicacao PUSH\", \"producer\": \"iLovePDF\", \"modification_date\": \"D:20260117012444Z\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-guidelines-comunicacao-PUSH_v1.pdf",
+      "text": "●​ Evitar urgência artificial (“última chance!”, “agora ou nunca”). Tom de voz \nDeve seguir o briefing: \n●​ Informativo \n●​ Comercial \n●​ Urgente (apenas quando justificado) \nMudanças de tom entre notificações da mesma campanha devem ser evitadas. 8."
+    },
+    {
+      "_additional": {
+        "id": "ccc39f7a-8190-5d80-87dc-e1cb5c0e65b2"
+      },
+      "channel": "EMAIL",
+      "chunk_index": 14,
+      "document_version": "ab2383d53e6aec4e:2026-01-26T16:45:05.829803",
+      "file_name": "orqestra-guidelines-comunicacao-EMAIL_v1.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:05.829703Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-guidelines-comunicacao-EMAIL_v1.pdf\", \"file_name\": \"orqestra-guidelines-comunicacao-EMAIL_v1.pdf\", \"page_count\": 6, \"title\": \"orqestra guidelines comunicacao EMAIL\", \"producer\": \"iLovePDF\", \"modification_date\": \"D:20260117012444Z\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-guidelines-comunicacao-EMAIL_v1.pdf",
+      "text": "13. Segurança e phishing \nProibições \n●​ Solicitar senhas, códigos, dados pessoais. ●​ Linguagem alarmista fora de contexto legítimo. ●​ Links mascarados ou enganosos. Diretriz \nE-mails de segurança devem direcionar o usuário ao app ou site oficial, nunca pedir ação \nsensível diretamente no e-mail. 14."
+    },
+    {
+      "_additional": {
+        "id": "cd2983ad-4435-5982-a153-03472593d299"
+      },
+      "channel": "APP",
+      "chunk_index": 8,
+      "document_version": "839ae277ed9b0ee5:2026-01-26T16:45:08.502411",
+      "file_name": "orqestra-guidelines-comunicacao-APP_v1.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:08.502345Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-guidelines-comunicacao-APP_v1.pdf\", \"file_name\": \"orqestra-guidelines-comunicacao-APP_v1.pdf\", \"page_count\": 4, \"title\": \"orqestra-guidelines-comunicacao-APP_v1\", \"producer\": \"Skia/PDF m146 Google Docs Renderer\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-guidelines-comunicacao-APP_v1.pdf",
+      "text": "9. Segurança e percepção de fraude \nProibições \n●​ Linguagem típica de phishing (“urgente”, “atividade suspeita”) fora de contexto \nlegítimo. ●​ Solicitar dados sensíveis ou ações críticas diretamente via banner."
+    },
+    {
+      "_additional": {
+        "id": "d2d62df3-9003-566b-8879-66248093d81f"
+      },
+      "channel": "GENERAL",
+      "chunk_index": 0,
+      "document_version": "575e2a61bc99f927:2026-01-26T16:45:10.996897",
+      "file_name": "orqestra-juridico-uso-dados-personalizacao.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:10.996851Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-juridico-uso-dados-personalizacao.pdf\", \"file_name\": \"orqestra-juridico-uso-dados-personalizacao.pdf\", \"page_count\": 2, \"title\": \"orqestra-juridico-uso-dados-personalizacao\", \"producer\": \"Skia/PDF m146 Google Docs Renderer\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-juridico-uso-dados-personalizacao.pdf",
+      "text": "Política de Uso de Dados Pessoais e \nPersonalização \nVersão 1.0 \n1. Objetivo \nEsta política define regras para o uso de dados pessoais e personalização de mensagens \nem comunicações de CRM, considerando não apenas conformidade legal, mas também a \npercepção do cliente. 2. Princípios Gerais \n●​ A personalização deve ser proporcional ao canal e ao contexto da comunicação. ●​ O cliente não deve ter a sensação de estar sendo monitorado ou observado. ●​ Mesmo dados permitidos podem gerar percepção negativa se utilizados de forma \nexcessiva ou invasiva."
+    },
+    {
+      "_additional": {
+        "id": "d62161a4-9263-5eb7-9db8-b21907ef9c5e"
+      },
+      "channel": "EMAIL",
+      "chunk_index": 7,
+      "document_version": "ab2383d53e6aec4e:2026-01-26T16:45:05.829803",
+      "file_name": "orqestra-guidelines-comunicacao-EMAIL_v1.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:05.829703Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-guidelines-comunicacao-EMAIL_v1.pdf\", \"file_name\": \"orqestra-guidelines-comunicacao-EMAIL_v1.pdf\", \"page_count\": 6, \"title\": \"orqestra guidelines comunicacao EMAIL\", \"producer\": \"iLovePDF\", \"modification_date\": \"D:20260117012444Z\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-guidelines-comunicacao-EMAIL_v1.pdf",
+      "text": "●​ Expor informações que possam ser compartilhadas indevidamente. Personalização permitida \n●​ Primeiro nome \n●​ Referência genérica a produtos/serviços \n●​ Conteúdo contextual sem revelar dados sensíveis \n \n9. Boas práticas técnicas (HTML) \nEstrutura \n●​ HTML simples, compatível com clientes de e-mail. ●​ Uso de tabelas quando necessário."
+    },
+    {
+      "_additional": {
+        "id": "d72c2171-525d-5740-9ddd-289df9f140e5"
+      },
+      "channel": "EMAIL",
+      "chunk_index": 9,
+      "document_version": "ab2383d53e6aec4e:2026-01-26T16:45:05.829803",
+      "file_name": "orqestra-guidelines-comunicacao-EMAIL_v1.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:05.829703Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-guidelines-comunicacao-EMAIL_v1.pdf\", \"file_name\": \"orqestra-guidelines-comunicacao-EMAIL_v1.pdf\", \"page_count\": 6, \"title\": \"orqestra guidelines comunicacao EMAIL\", \"producer\": \"iLovePDF\", \"modification_date\": \"D:20260117012444Z\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-guidelines-comunicacao-EMAIL_v1.pdf",
+      "text": "10. Acessibilidade \n●​ Contraste adequado entre texto e fundo. \n●​ Fontes legíveis. \n●​ Não depender apenas de imagens para transmitir info"
+    },
+    {
+      "_additional": {
+        "id": "d7934f14-60b7-539d-8ad3-35f68c7c6d43"
+      },
+      "channel": "PUSH",
+      "chunk_index": 2,
+      "document_version": "0c2900d10d6c76fa:2026-01-26T16:45:04.387064",
+      "file_name": "orqestra-guidelines-comunicacao-PUSH_v1.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:04.386513Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-guidelines-comunicacao-PUSH_v1.pdf\", \"file_name\": \"orqestra-guidelines-comunicacao-PUSH_v1.pdf\", \"page_count\": 5, \"title\": \"orqestra guidelines comunicacao PUSH\", \"producer\": \"iLovePDF\", \"modification_date\": \"D:20260117012444Z\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-guidelines-comunicacao-PUSH_v1.pdf",
+      "text": "4. Opt-out e controle do usuário \nDiferença em relação ao SMS \n●​ Push não exige opt-out textual (“SAIR”). ●​ O controle ocorre via configurações do app/sistema operacional. Diretrizes obrigatórias \n●​ O conteúdo não deve: \n○​ induzir o usuário a manter notificações ativas \n○​ ameaçar perda de benefício se o push for desativado \n●​ Mensagens que pressionem o usuário (“ative agora ou perca”) são proibidas. 5."
+    },
+    {
+      "_additional": {
+        "id": "d9d2efdf-14eb-532e-a515-b2df4ccbab56"
+      },
+      "channel": "APP",
+      "chunk_index": 3,
+      "document_version": "839ae277ed9b0ee5:2026-01-26T16:45:08.502411",
+      "file_name": "orqestra-guidelines-comunicacao-APP_v1.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:08.502345Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-guidelines-comunicacao-APP_v1.pdf\", \"file_name\": \"orqestra-guidelines-comunicacao-APP_v1.pdf\", \"page_count\": 4, \"title\": \"orqestra-guidelines-comunicacao-APP_v1\", \"producer\": \"Skia/PDF m146 Google Docs Renderer\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-guidelines-comunicacao-APP_v1.pdf",
+      "text": "●​ Linguagem ambígua ou exagerada. 4. Promessas, ofertas e condições \nProibições absolutas \n●​ Garantir resultados ou benefícios. ●​ Omitir condições relevantes quando houver benefício financeiro."
+    },
+    {
+      "_additional": {
+        "id": "db30e17d-df29-5ff6-b336-6ad0157695dc"
+      },
+      "channel": "SMS",
+      "chunk_index": 9,
+      "document_version": "db65e08cd67849d5:2026-01-26T16:45:07.347429",
+      "file_name": "orqestra-guidelines-comunicacao-SMS_v1.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:07.347378Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-guidelines-comunicacao-SMS_v1.pdf\", \"file_name\": \"orqestra-guidelines-comunicacao-SMS_v1.pdf\", \"page_count\": 5, \"title\": \"orqestra-guidelines-comunicacao-SMS_v1\", \"producer\": \"Skia/PDF m146 Google Docs Renderer\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-guidelines-comunicacao-SMS_v1.pdf",
+      "text": "10. Links e segurança \nDiretrizes \n●​ Links devem apontar para domínios oficiais e reconhecíveis da Orqestra. \n●​ Evitar encurtadores genéricos ou não corporativos. \n●​ O texto não deve se assemelhar a mensagens de phishing ou fraude. \nProibições \n●​ Solicitação de senhas, códigos, dados pessoais ou informações sensíveis via SMS. \n \n11. Frequência e percepção de spam \n●​ Evitar mensagens excessivamente frequentes. \n●​ Conteúdos repetitivos devem ser evitados. \n●​ Mensagens não devem criar sensação de pressão indevida ou urgência artificial. \n \n12. Uso de Inteligência Artificial \n●​ Conteúdos gerados ou sugeridos por IA devem passar por valid"
+    },
+    {
+      "_additional": {
+        "id": "e1b5e53e-950c-59f8-a6d3-83a8fc37f572"
+      },
+      "channel": "PUSH",
+      "chunk_index": 5,
+      "document_version": "0c2900d10d6c76fa:2026-01-26T16:45:04.387064",
+      "file_name": "orqestra-guidelines-comunicacao-PUSH_v1.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:04.386513Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-guidelines-comunicacao-PUSH_v1.pdf\", \"file_name\": \"orqestra-guidelines-comunicacao-PUSH_v1.pdf\", \"page_count\": 5, \"title\": \"orqestra guidelines comunicacao PUSH\", \"producer\": \"iLovePDF\", \"modification_date\": \"D:20260117012444Z\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-guidelines-comunicacao-PUSH_v1.pdf",
+      "text": "6. Limites de tamanho e legibilidade \nRecomendações cross-platform \n●​ Título: até 40–50 caracteres \n●​ Corpo: até 90–120 caracteres \n●​ Total recomendado: até ~140 caracteres \nDiretrizes \n●​ Textos longos podem ser truncados dependendo do dispositivo. ●​ Notificações truncadas são consideradas falha de qualidade."
+    },
+    {
+      "_additional": {
+        "id": "e85dd2fa-4bf1-52f2-8c00-8965ef3361ce"
+      },
+      "channel": "SMS",
+      "chunk_index": 3,
+      "document_version": "db65e08cd67849d5:2026-01-26T16:45:07.347429",
+      "file_name": "orqestra-guidelines-comunicacao-SMS_v1.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:07.347378Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-guidelines-comunicacao-SMS_v1.pdf\", \"file_name\": \"orqestra-guidelines-comunicacao-SMS_v1.pdf\", \"page_count\": 5, \"title\": \"orqestra-guidelines-comunicacao-SMS_v1\", \"producer\": \"Skia/PDF m146 Google Docs Renderer\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-guidelines-comunicacao-SMS_v1.pdf",
+      "text": "●​ Evitar uso excessivo de letras maiúsculas. Tom de voz \nO tom deve seguir o briefing da campanha, respeitando: \n●​ Formal / informal \n●​ Urgente / informativo \n●​ Comercial / transacional \nMudanças bruscas de tom na mesma mensagem não são permitidas. 6."
+    },
+    {
+      "_additional": {
+        "id": "e99ea8e0-a0a7-543d-9bb5-e118fda8e2b4"
+      },
+      "channel": "EMAIL",
+      "chunk_index": 10,
+      "document_version": "ab2383d53e6aec4e:2026-01-26T16:45:05.829803",
+      "file_name": "orqestra-guidelines-comunicacao-EMAIL_v1.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:05.829703Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-guidelines-comunicacao-EMAIL_v1.pdf\", \"file_name\": \"orqestra-guidelines-comunicacao-EMAIL_v1.pdf\", \"page_count\": 6, \"title\": \"orqestra guidelines comunicacao EMAIL\", \"producer\": \"iLovePDF\", \"modification_date\": \"D:20260117012444Z\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-guidelines-comunicacao-EMAIL_v1.pdf",
+      "text": "11. Linguagem e tom de voz \nDiretrizes \n●​ Linguagem clara, profissional e respeitosa. ●​ Evitar jargões internos."
+    },
+    {
+      "_additional": {
+        "id": "f0590616-d4d9-57a1-8754-818239f109c1"
+      },
+      "channel": "GENERAL",
+      "chunk_index": 5,
+      "document_version": "61e9ac979189b3e7:2026-01-26T16:45:09.829278",
+      "file_name": "orqestra-juridico-linguagem-promocional.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:09.829173Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-juridico-linguagem-promocional.pdf\", \"file_name\": \"orqestra-juridico-linguagem-promocional.pdf\", \"page_count\": 2, \"title\": \"orqestra-juridico-linguagem-promocional\", \"producer\": \"Skia/PDF m145 Google Docs Renderer\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-juridico-linguagem-promocional.pdf",
+      "text": "○​ “100% aprovado” \n●​ Comparações não verificáveis ou superlativas: \n○​ “o melhor do mercado” \n○​ “a menor taxa” \n●​ Promessas de resultado futuro fora do controle direto da empresa: \n○​ “você vai economizar” \n○​ “sua renda vai aumentar” \n5. Claims Condicionais \nClaims podem ser utilizados desde que acompanhados de condicionantes claras, como: \n●​ “a partir de” \n●​ “sujeito à análise” \n●​ “consulte condições” \n●​ “para clientes elegíveis” \nA ausência dessas condicionantes, quando aplicáveis, deve ser tratada como WARNING ou \nBLOCKER, dependendo do impacto potencial. 6. Exemplos Práticos \nAceitável: \n“Taxas a partir de X%, sujeitas à análise de crédito.” \nAceitável com ressalvas (WARNING): \n“Aproveite condições especiais agora.” \n(Requer clareza posterior no fluxo) \nInaceitável (BLOCKER): \n“Contrate agora e garanta seu benefício.” \n7. Revisão Humana \nSempre que houver dúvida quanto à interpretação do claim, impacto financeiro relevante ou \nlinguagem potencialmente enganosa, a peça deve ser escalada para revisão jurídica \nhumana antes do envio."
+    },
+    {
+      "_additional": {
+        "id": "f1ec4b90-b42a-5176-a354-61fc82360703"
+      },
+      "channel": "SMS",
+      "chunk_index": 4,
+      "document_version": "db65e08cd67849d5:2026-01-26T16:45:07.347429",
+      "file_name": "orqestra-guidelines-comunicacao-SMS_v1.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:07.347378Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-guidelines-comunicacao-SMS_v1.pdf\", \"file_name\": \"orqestra-guidelines-comunicacao-SMS_v1.pdf\", \"page_count\": 5, \"title\": \"orqestra-guidelines-comunicacao-SMS_v1\", \"producer\": \"Skia/PDF m146 Google Docs Renderer\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-guidelines-comunicacao-SMS_v1.pdf",
+      "text": "Promessas, ofertas e condições \nProibições absolutas \nÉ proibido usar termos ou expressões que possam induzir a erro, como: \n●​ “garantido” \n●​ “sem risco” \n●​ “100% aprovado” \n●​ “sem nenhuma condição” \n●​ “oferta definitiva” \nTransparência obrigatória \nQuando houver menção a: \n●​ valores \n●​ descontos \n●​ taxas \n●​ limites \n●​ benefícios financeiros \nDevem ser incluídas condições mínimas essenciais, mesmo que de forma resumida. Exemplo aceitável \nOrqestra: crédito disponível sujeito a análise."
+    },
+    {
+      "_additional": {
+        "id": "f3ed35db-5e5d-548a-bb02-d740861d8e84"
+      },
+      "channel": "PUSH",
+      "chunk_index": 10,
+      "document_version": "0c2900d10d6c76fa:2026-01-26T16:45:04.387064",
+      "file_name": "orqestra-guidelines-comunicacao-PUSH_v1.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:04.386513Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-guidelines-comunicacao-PUSH_v1.pdf\", \"file_name\": \"orqestra-guidelines-comunicacao-PUSH_v1.pdf\", \"page_count\": 5, \"title\": \"orqestra guidelines comunicacao PUSH\", \"producer\": \"iLovePDF\", \"modification_date\": \"D:20260117012444Z\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-guidelines-comunicacao-PUSH_v1.pdf",
+      "text": "10. CTA e ação esperada \nDiretrizes \n●​ A notificação deve deixar claro o que acontece ao tocar nela. ●​ Usar CTAs implícitos ou explícitos: \n○​ “Confira no app” \n○​ “Veja detalhes” \n○​ “Ative agora” \nProibições \n\n\n●​ “Clique aqui” sem contexto. ●​ CTAs enganosos que levam a telas não relacionadas."
+    },
+    {
+      "_additional": {
+        "id": "f97f8441-7fdf-5929-a7e4-4ea662c54e01"
+      },
+      "channel": "APP",
+      "chunk_index": 5,
+      "document_version": "839ae277ed9b0ee5:2026-01-26T16:45:08.502411",
+      "file_name": "orqestra-guidelines-comunicacao-APP_v1.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:08.502345Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-guidelines-comunicacao-APP_v1.pdf\", \"file_name\": \"orqestra-guidelines-comunicacao-APP_v1.pdf\", \"page_count\": 4, \"title\": \"orqestra-guidelines-comunicacao-APP_v1\", \"producer\": \"Skia/PDF m146 Google Docs Renderer\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-guidelines-comunicacao-APP_v1.pdf",
+      "text": "●​ Revelar informações sensíveis visíveis a terceiros. Personalização permitida \n●​ Segmentação implícita (ex.: exibir banner para um público específico). ●​ Evitar personalização explícita que exponha dados sensíveis."
+    },
+    {
+      "_additional": {
+        "id": "fcc34684-427e-5ecf-8262-b994233de807"
+      },
+      "channel": "EMAIL",
+      "chunk_index": 5,
+      "document_version": "ab2383d53e6aec4e:2026-01-26T16:45:05.829803",
+      "file_name": "orqestra-guidelines-comunicacao-EMAIL_v1.pdf",
+      "ingestion_run_id": "60d685a1-2898-4c84-adec-73b426637afe",
+      "ingestion_timestamp": "2026-01-26T16:45:05.829703Z",
+      "metadata": "{\"source_file\": \"doc-juridico/orqestra-guidelines-comunicacao-EMAIL_v1.pdf\", \"file_name\": \"orqestra-guidelines-comunicacao-EMAIL_v1.pdf\", \"page_count\": 6, \"title\": \"orqestra guidelines comunicacao EMAIL\", \"producer\": \"iLovePDF\", \"modification_date\": \"D:20260117012444Z\"}",
+      "page_number": null,
+      "section_name": null,
+      "section_number": null,
+      "source_file": "doc-juridico/orqestra-guidelines-comunicacao-EMAIL_v1.pdf",
+      "text": "7. Promessas, ofertas e condições \nProibições absolutas \nÉ proibido: \n●​ Garantir resultados (“100% garantido”, “sem risco”). ●​ Omitir condições relevantes."
+    }
+  ]

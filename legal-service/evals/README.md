@@ -6,7 +6,7 @@ Este diretório contém scripts e datasets para avaliar a qualidade do `legal-se
 
 - `eval_retrieval_dataset.csv`: Dataset com exemplos de validação, incluindo `question`, `ground_truth` (arquivos esperados), e `expected_decision`.
 - `evaluate_retrieval.py`: Script Python que avalia **apenas o retrieval** (busca de documentos), calculando precision e recall baseados nos **arquivos** retornados vs. ground truth.
-- `evaluate_generation.py`: Script Python que avalia **a geração completa** (decision + severity), comparando as decisões geradas pelo agente com as esperadas do dataset.
+- `evaluate_generation.py`: Script Python que avalia **a geração** (decision APROVADO/REPROVADO), comparando as decisões geradas pelo agente com as esperadas do dataset.
 
 ## Avaliação de Retrieval
 
@@ -159,18 +159,15 @@ docker-compose run --rm legal-service python3 /app/evals/evaluate_generation.py 
 O script avalia a qualidade das **decisões geradas** pelo agente completo (retrieval + LLM):
 
 - **Accuracy (Decision)**: Percentual de exemplos onde `decision` (APROVADO/REPROVADO) está correta.
-- **Accuracy (Severity)**: Percentual de exemplos onde `severity` (BLOCKER/WARNING/INFO) está correta.
-- **Accuracy (Ambos)**: Percentual de exemplos onde tanto `decision` quanto `severity` estão corretos.
-- **Precision/Recall/F1 por classe**: Métricas detalhadas para cada valor de `decision` e `severity`.
-- **Matriz de confusão**: Mostra onde o modelo está errando (ex: classificando como APROVADO quando deveria ser REPROVADO).
+- **Precision/Recall/F1 por classe**: Métricas detalhadas para cada valor de `decision`.
+- **Matriz de confusão**: Mostra onde o modelo está errando (ex.: classificando como APROVADO quando deveria ser REPROVADO).
 
 ### Mapeamento de expected_decision
 
 O CSV tem valores como `APROVADO`, `BLOCKER`, `WARNING`. O script mapeia assim:
 
-- `APROVADO` → `decision=APROVADO, severity=INFO`
-- `BLOCKER` → `decision=REPROVADO, severity=BLOCKER`
-- `WARNING` → `decision=REPROVADO, severity=WARNING`
+- `APROVADO` -> `decision=APROVADO`
+- `BLOCKER` ou `WARNING` -> `decision=REPROVADO`
 
 ### Exemplo de saída
 
@@ -186,10 +183,7 @@ Configuração:
 
 Total de exemplos: 40
 
-Accuracy:
-  Decision apenas:  0.9250 (92.50%)
-  Severity apenas:  0.8750 (87.50%)
-  Decision + Severity: 0.8250 (82.50%)
+Accuracy (Decision): 0.9250 (92.50%)
 
 Métricas por Decision:
   APROVADO     | Precision: 0.9000 | Recall: 0.8571 | F1: 0.8780 | Support: 7
@@ -202,4 +196,4 @@ Métricas por Decision:
 
 - Por padrão, o **cache está desabilitado** para garantir uma avaliação justa (sem resultados de execuções anteriores).
 - O script usa o mesmo `LegalAgent` e configurações do serviço em produção (mesmo LLM: `sabiazinho-4` ou `gpt-5-nano` fallback).
-- A avaliação é **simples**: compara apenas se a decisão/severity está correta, não avalia a qualidade do `summary` (justificativa).
+- A avaliação é **simples**: compara apenas se a decisão está correta, não avalia a qualidade do `summary` (justificativa).

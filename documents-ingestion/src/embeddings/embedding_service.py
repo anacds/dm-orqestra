@@ -6,6 +6,14 @@ from openai import OpenAI
 logger = logging.getLogger(__name__)
 
 
+def _parse_timeout() -> float:
+    raw = os.getenv("EMBEDDING_REQUEST_TIMEOUT", "60")
+    try:
+        return max(5.0, float(raw))
+    except (TypeError, ValueError):
+        return 60.0
+
+
 class EmbeddingService:
     def __init__(
         self,
@@ -13,34 +21,49 @@ class EmbeddingService:
         model: Optional[str] = None,
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
+        request_timeout: Optional[float] = None,
     ):
         self.provider = provider.lower()
         self.model = model or self._get_default_model()
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
-        
+        self.request_timeout = (
+            request_timeout if request_timeout is not None else _parse_timeout()
+        )
+
         env_base_url = os.getenv("OPENAI_BASE_URL", "")
         if env_base_url:
             env_base_url = env_base_url.strip()
-        
+
         final_base_url = base_url if base_url else (env_base_url if env_base_url else None)
         if final_base_url:
             final_base_url = final_base_url.strip()
             if not final_base_url:
                 final_base_url = None
-        
+
         self.base_url = final_base_url
 
         if self.provider == "openai":
-            client_kwargs = {"api_key": self.api_key}
+            client_kwargs = {"api_key": self.api_key, "timeout": self.request_timeout}
             if self.base_url:
                 client_kwargs["base_url"] = self.base_url
             self.client = OpenAI(**client_kwargs)
         elif self.provider in ["ollama", "local"]:
             if not self.base_url:
                 self.base_url = "http://localhost:11434"
-            self.client = OpenAI(api_key="ollama", base_url=self.base_url)
+            self.client = OpenAI(
+                api_key="ollama",
+                base_url=self.base_url,
+                timeout=self.request_timeout,
+            )
         else:
             raise ValueError(f"Unsupported provider: {provider}")
+
+        logger.info(
+            "EmbeddingService initialized (provider=%s, model=%s, request_timeout=%ss)",
+            self.provider,
+            self.model,
+            self.request_timeout,
+        )
 
     def _get_default_model(self) -> str:
         defaults = {
@@ -55,9 +78,11 @@ class EmbeddingService:
 
     def embed_batch(self, texts: List[str], batch_size: int = 100) -> List[List[float]]:
         all_embeddings = []
+        num_batches = (len(texts) + batch_size - 1) // batch_size
 
         for i in range(0, len(texts), batch_size):
             batch = texts[i : i + batch_size]
+            batch_num = i // batch_size + 1
 
             try:
                 if self.provider in ["openai", "ollama", "local"]:
@@ -72,12 +97,20 @@ class EmbeddingService:
                 all_embeddings.extend(batch_embeddings)
 
                 logger.debug(
-                    f"Generated embeddings for batch {i//batch_size + 1} "
+                    f"Generated embeddings for batch {batch_num}/{num_batches} "
                     f"({len(batch)} texts)"
                 )
 
             except Exception as e:
-                logger.error(f"Error generating embeddings for batch: {e}")
+                logger.error(
+                    "Error generating embeddings for batch %s/%s (size=%s, timeout=%ss): %s",
+                    batch_num,
+                    num_batches,
+                    len(batch),
+                    self.request_timeout,
+                    e,
+                    exc_info=True,
+                )
                 raise
 
         logger.info(f"Generated {len(all_embeddings)} embeddings total")
@@ -87,9 +120,16 @@ class EmbeddingService:
 def create_embedding_service(
     provider: Optional[str] = None,
     model: Optional[str] = None,
+    request_timeout: Optional[float] = None,
 ) -> EmbeddingService:
     provider = provider or os.getenv("EMBEDDING_PROVIDER", "openai")
     model = model or os.getenv("EMBEDDING_MODEL")
+    if request_timeout is None:
+        request_timeout = _parse_timeout()
 
-    return EmbeddingService(provider=provider, model=model)
+    return EmbeddingService(
+        provider=provider,
+        model=model,
+        request_timeout=request_timeout,
+    )
 

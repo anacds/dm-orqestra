@@ -97,6 +97,22 @@ export interface Campaign {
   createdDate: string;
   comments?: Comment[];
   creativePieces?: CreativePiece[];
+  /** Set when status is CONTENT_REVIEW (piece review workflow). */
+  pieceReviews?: PieceReview[];
+}
+
+export interface PieceReview {
+  id: string;
+  campaignId: string;
+  channel: string;
+  pieceId: string;
+  commercialSpace: string;
+  iaVerdict: "approved" | "rejected" | "warning";
+  humanVerdict: "pending" | "approved" | "rejected" | "manually_rejected";
+  reviewedAt?: string;
+  reviewedBy?: string;
+  reviewedByName?: string;
+  rejectionReason?: string;
 }
 
 export interface CreateCampaignRequest {
@@ -166,20 +182,32 @@ export interface UpdateInteractionDecisionRequest {
 
 export type TextChannel = "SMS" | "Push";
 
+export type ContentValidationChannel = "SMS" | "PUSH" | "EMAIL" | "APP";
+
+/** Request body for POST /api/ai/analyze-piece (content-validation-service). */
 export interface AnalyzePieceRequest {
-  campaignId: string;
-  channel: TextChannel;
-  content: {
-    text?: string;
-    title?: string;
-    body?: string;
-  };
+  task: "VALIDATE_COMMUNICATION";
+  channel: ContentValidationChannel;
+  content: Record<string, unknown>;
+  /** Obrigatório para SMS/Push se quiser persistir o parecer (GET ao recarregar). */
+  campaign_id?: string;
 }
 
+/** Raw response from content-validation-service. */
+export interface ContentValidationAnalyzePieceResponse {
+  validation_result: Record<string, unknown>;
+  orchestration_result?: Record<string, unknown> | null;
+  compliance_result?: Record<string, unknown> | null;
+  requires_human_approval: boolean;
+  human_approval_reason?: string | null;
+  final_verdict?: { status?: string; message?: string; contributors?: unknown[] } | null;
+}
+
+/** UI-friendly analysis result (mapped from ContentValidationAnalyzePieceResponse). */
 export interface AnalyzePieceResponse {
   id: string;
   campaign_id: string;
-  channel: TextChannel;
+  channel: TextChannel | "E-mail" | "App";
   is_valid: "valid" | "invalid" | "warning";
   analysis_text: string;
   analyzed_by: string;

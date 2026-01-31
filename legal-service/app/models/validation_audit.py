@@ -16,14 +16,13 @@ class LegalValidationAudit(Base):
     content_preview = Column(String(500))
     
     decision = Column(String, nullable=False, index=True)
-    severity = Column(String, nullable=False, index=True)
     requires_human_review = Column(Boolean, nullable=False, index=True)
     summary = Column(Text, nullable=False)
     sources = Column(ARRAY(String))
     
     num_chunks_retrieved = Column(Integer)
     llm_model = Column(String)
-    search_query = Column(String(1000))
+    search_query = Column(String(100000))
     
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
     

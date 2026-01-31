@@ -2,7 +2,7 @@ import csv
 import os
 import sys
 from pathlib import Path
-from typing import List, Dict, Tuple
+from typing import List, Dict
 import logging
 from collections import defaultdict
 project_root = Path(__file__).parent.parent
@@ -22,135 +22,72 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("openai").setLevel(logging.WARNING)
 logging.getLogger("weaviate").setLevel(logging.WARNING)
 
-def format_expected_decision(expected: str) -> Tuple[str, str]:
+def format_expected_decision(expected: str) -> str:
     """
-    Formata expected_decision do CSV para (decision, severity).
+    Formata expected_decision do CSV para decision (APROVADO ou REPROVADO).
     
     O CSV tem valores como 'APROVADO', 'BLOCKER', 'WARNING'.
-    Mapeia para o formato do agente:
-    - 'APROVADO' -> (decision='APROVADO', severity='INFO')
-    - 'BLOCKER' -> (decision='REPROVADO', severity='BLOCKER')
-    - 'WARNING' -> (decision='REPROVADO', severity='WARNING')
+    - 'APROVADO' -> 'APROVADO'
+    - 'BLOCKER' ou 'WARNING' -> 'REPROVADO'
     """
     expected_upper = expected.strip().upper()
-    
     if expected_upper == "APROVADO":
-        return ("APROVADO", "INFO")
-    elif expected_upper == "BLOCKER":
-        return ("REPROVADO", "BLOCKER")
-    elif expected_upper == "WARNING":
-        return ("REPROVADO", "WARNING")
-    else:
-        return ("REPROVADO", expected_upper)
+        return "APROVADO"
+    return "REPROVADO"
 
 
 def calculate_metrics(results: List[Dict]) -> Dict:
     """
-    Calcula métricas de classificação: accuracy, precision, recall, F1.
+    Calcula métricas de classificação: accuracy, precision, recall, F1 (apenas decision).
     """
     true_positives = defaultdict(int)
     false_positives = defaultdict(int)
     false_negatives = defaultdict(int)
-    
     correct_decision = 0
-    correct_severity = 0
-    correct_both = 0
     total = 0
-    
+
     for result in results:
         if "error" in result:
             continue
-            
         total += 1
-        
         expected_decision = result["expected_decision"]
-        expected_severity = result["expected_severity"]
         predicted_decision = result["predicted_decision"]
-        predicted_severity = result["predicted_severity"]
-        
-        # Accuracy simples
         if predicted_decision == expected_decision:
             correct_decision += 1
-        if predicted_severity == expected_severity:
-            correct_severity += 1
-        if predicted_decision == expected_decision and predicted_severity == expected_severity:
-            correct_both += 1
-        
-        # Precision/Recall por classe (decision)
-        if predicted_decision == expected_decision:
             true_positives[predicted_decision] += 1
         else:
             false_positives[predicted_decision] += 1
             false_negatives[expected_decision] += 1
-        
-        # Precision/Recall por classe (severity)
-        if predicted_severity == expected_severity:
-            true_positives[f"severity_{predicted_severity}"] += 1
-        else:
-            false_positives[f"severity_{predicted_severity}"] += 1
-            false_negatives[f"severity_{expected_severity}"] += 1
-    
-    # Métricas agregadas
+
     accuracy_decision = correct_decision / total if total > 0 else 0.0
-    accuracy_severity = correct_severity / total if total > 0 else 0.0
-    accuracy_both = correct_both / total if total > 0 else 0.0
-    
-    # Precision/Recall/F1 por classe (decision)
     metrics_by_class = {}
-    all_classes = set([r.get("expected_decision") for r in results if "error" not in r] + 
-                      [r.get("predicted_decision") for r in results if "error" not in r])
-    
+    all_classes = set(
+        [r.get("expected_decision") for r in results if "error" not in r]
+        + [r.get("predicted_decision") for r in results if "error" not in r]
+    )
     for cls in all_classes:
         tp = true_positives.get(cls, 0)
         fp = false_positives.get(cls, 0)
         fn = false_negatives.get(cls, 0)
-        
         precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
         recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
         f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
-        
         metrics_by_class[cls] = {
-            "precision": precision,
-            "recall": recall,
-            "f1": f1,
-            "support": tp + fn,  # Número de exemplos verdadeiros desta classe
-        }
-    
-    # Precision/Recall/F1 por severity
-    severity_classes = set([r.get("expected_severity") for r in results if "error" not in r] + 
-                           [r.get("predicted_severity") for r in results if "error" not in r])
-    
-    metrics_by_severity = {}
-    for severity in severity_classes:
-        key = f"severity_{severity}"
-        tp = true_positives.get(key, 0)
-        fp = false_positives.get(key, 0)
-        fn = false_negatives.get(key, 0)
-        
-        precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
-        recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-        f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
-        
-        metrics_by_severity[severity] = {
             "precision": precision,
             "recall": recall,
             "f1": f1,
             "support": tp + fn,
         }
-    
     return {
         "total_examples": total,
         "accuracy_decision": accuracy_decision,
-        "accuracy_severity": accuracy_severity,
-        "accuracy_both": accuracy_both,
         "metrics_by_class": metrics_by_class,
-        "metrics_by_severity": metrics_by_severity,
     }
 
 
 def build_confusion_matrix(results: List[Dict], field: str = "decision") -> Dict[str, Dict[str, int]]:
     """
-    Constrói matriz de confusão para decision ou severity.
+    Constrói matriz de confusão para decision.
     """
     matrix = defaultdict(lambda: defaultdict(int))
     
@@ -179,7 +116,7 @@ def evaluate_generation_dataset(
     forced_model_base_url: str = None,
 ) -> Dict:
     """
-    Avalia a geração (decision/severity) usando o dataset CSV.
+    Avalia a geração (decision APROVADO/REPROVADO) usando o dataset CSV.
     
     Args:
         dataset_path: Caminho para o CSV com o dataset
@@ -267,110 +204,99 @@ def evaluate_generation_dataset(
         logger.info(f"Modelo LLM: {llm_config.get('name', 'N/A')} (fallback: {llm_config.get('fallback_model_name', 'N/A')})")
     logger.info(f"Modelo embeddings: {embeddings_config.get('model', 'N/A')}")
     logger.info(f"Weaviate URL: {weaviate_url}")
-    logger.info(f"Provider: {agent.provider}, Model: {agent.model_name}")
     logger.info("="*80)
     
     logger.info(f"Agent inicializado (cache={'enabled' if cache_enabled else 'disabled'})")
     
     results = []
-    
-    with open(dataset_path, 'r', encoding='utf-8') as f:
-        reader = csv.DictReader(f, delimiter=';')
+    try:
+        with open(dataset_path, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f, delimiter=';')
+            
+            for idx, row in enumerate(reader, start=1):
+                channel = row.get("channel", "").strip()
+                content = row.get("content", "").strip()
+                expected_decision_raw = row.get("expected_decision", "").strip()
+                
+                if not content:
+                    logger.warning(f"Linha {idx}: content vazio, pulando")
+                    continue
+                
+                if not expected_decision_raw:
+                    logger.warning(f"Linha {idx}: expected_decision vazio, pulando")
+                    continue
+                
+                expected_decision = format_expected_decision(expected_decision_raw)
+                
+                logger.info(f"[{idx}] Processando: {content[:60]}...")
+                logger.debug(f"  Expected: decision={expected_decision}")
+                
+                try:
+                    # Chama agente completo (retrieval + geração)
+                    result = agent.invoke(
+                        task="VALIDATE_COMMUNICATION",
+                        channel=channel if channel else None,
+                        content=content,
+                    )
+                    
+                    predicted_decision = result.get("decision", "UNKNOWN")
+                    
+                    result_row = {
+                        "idx": idx,
+                        "channel": channel,
+                        "content": content[:100] + "..." if len(content) > 100 else content,
+                        "expected_decision": expected_decision,
+                        "predicted_decision": predicted_decision,
+                        "predicted_summary": result.get("summary", "")[:100] + "..." if len(result.get("summary", "")) > 100 else result.get("summary", ""),
+                        "predicted_requires_human_review": result.get("requires_human_review", False),
+                        "correct_decision": predicted_decision == expected_decision,
+                        "num_sources": len(result.get("sources", [])),
+                        "rerank_enabled": rerank_enabled,
+                    }
+                    results.append(result_row)
+                    
+                    status = "✓" if result_row["correct_decision"] else "✗"
+                    logger.info(
+                        f"  {status} Predicted: {predicted_decision} | Expected: {expected_decision}"
+                    )
+                    
+                except Exception as e:
+                    logger.error(f"Erro ao processar linha {idx}: {e}", exc_info=True)
+                    results.append({
+                        "idx": idx,
+                        "channel": channel,
+                        "content": content[:100] + "..." if len(content) > 100 else content,
+                        "error": str(e),
+                        "expected_decision": expected_decision,
+                    })
         
-        for idx, row in enumerate(reader, start=1):
-            channel = row.get("channel", "").strip()
-            content = row.get("content", "").strip()
-            expected_decision_raw = row.get("expected_decision", "").strip()
-            
-            if not content:
-                logger.warning(f"Linha {idx}: content vazio, pulando")
-                continue
-            
-            if not expected_decision_raw:
-                logger.warning(f"Linha {idx}: expected_decision vazio, pulando")
-                continue
-            
-            expected_decision, expected_severity = format_expected_decision(expected_decision_raw)
-            
-            logger.info(f"[{idx}] Processando: {content[:60]}...")
-            logger.debug(f"  Expected: decision={expected_decision}, severity={expected_severity}")
-            
-            try:
-                # Chama agente completo (retrieval + geração)
-                result = agent.invoke(
-                    task="VALIDATE_COMMUNICATION",
-                    channel=channel if channel else None,
-                    content=content,
-                )
-                
-                predicted_decision = result.get("decision", "UNKNOWN")
-                predicted_severity = result.get("severity", "UNKNOWN")
-                
-                result_row = {
-                    "idx": idx,
-                    "channel": channel,
-                    "content": content[:100] + "..." if len(content) > 100 else content,
-                    "expected_decision": expected_decision,
-                    "expected_severity": expected_severity,
-                    "predicted_decision": predicted_decision,
-                    "predicted_severity": predicted_severity,
-                    "predicted_summary": result.get("summary", "")[:100] + "..." if len(result.get("summary", "")) > 100 else result.get("summary", ""),
-                    "predicted_requires_human_review": result.get("requires_human_review", False),
-                    "correct_decision": predicted_decision == expected_decision,
-                    "correct_severity": predicted_severity == expected_severity,
-                    "correct_both": (predicted_decision == expected_decision and 
-                                    predicted_severity == expected_severity),
-                    "num_sources": len(result.get("sources", [])),
-                    "rerank_enabled": rerank_enabled,
-                }
-                results.append(result_row)
-                
-                status = "✓" if result_row["correct_both"] else "✗"
-                logger.info(
-                    f"  {status} Predicted: {predicted_decision}/{predicted_severity} | "
-                    f"Expected: {expected_decision}/{expected_severity}"
-                )
-                
-            except Exception as e:
-                logger.error(f"Erro ao processar linha {idx}: {e}", exc_info=True)
-                results.append({
-                    "idx": idx,
-                    "channel": channel,
-                    "content": content[:100] + "..." if len(content) > 100 else content,
-                    "error": str(e),
-                    "expected_decision": expected_decision,
-                    "expected_severity": expected_severity,
-                })
-    
-    agent.close()
-    
-    # métricas
-    metrics = calculate_metrics(results)
-    confusion_matrix_decision = build_confusion_matrix(results, "decision")
-    confusion_matrix_severity = build_confusion_matrix(results, "severity")
-    
-    summary = {
-        **metrics,
-        "confusion_matrix_decision": confusion_matrix_decision,
-        "confusion_matrix_severity": confusion_matrix_severity,
-        "results": results,
-        "config": {
-            "llm_model": agent.model_name,
-            "llm_provider": agent.provider,
-            "embedding_model": embeddings_config.get("model", "N/A"),
-            "cache_enabled": cache_enabled,
-            "rerank_enabled": rerank_enabled,
-        },
-    }
-    
-    if output_path:
-        output_path = Path(output_path)
-        import json
-        with open(output_path, 'w', encoding='utf-8') as f:
-            json.dump(summary, f, indent=2, ensure_ascii=False)
-        logger.info(f"Resultados detalhados salvos em: {output_path}")
-    
-    return summary
+        # métricas
+        metrics = calculate_metrics(results)
+        confusion_matrix_decision = build_confusion_matrix(results, "decision")
+        
+        summary = {
+            **metrics,
+            "confusion_matrix_decision": confusion_matrix_decision,
+            "results": results,
+            "config": {
+                "llm_model": getattr(agent, "model_name", None) or (forced_model if forced_model else llm_config.get("name", "N/A")),
+                "llm_provider": getattr(agent, "provider", None) or "config",
+                "embedding_model": embeddings_config.get("model", "N/A"),
+                "cache_enabled": cache_enabled,
+                "rerank_enabled": rerank_enabled,
+            },
+        }
+        
+        if output_path:
+            output_path = Path(output_path)
+            import json
+            with open(output_path, 'w', encoding='utf-8') as f:
+                json.dump(summary, f, indent=2, ensure_ascii=False)
+            logger.info(f"Resultados detalhados salvos em: {output_path}")
+        
+        return summary
+    finally:
+        agent.close()
 
 
 def print_summary(summary: Dict):
@@ -385,22 +311,13 @@ def print_summary(summary: Dict):
     print(f"  Reranking: {'enabled' if summary['config'].get('rerank_enabled', False) else 'disabled'}")
     
     print(f"\nTotal de exemplos: {summary['total_examples']}")
-    print(f"\nAccuracy:")
-    print(f"  Decision apenas:  {summary['accuracy_decision']:.4f} ({summary['accuracy_decision']*100:.2f}%)")
-    print(f"  Severity apenas:  {summary['accuracy_severity']:.4f} ({summary['accuracy_severity']*100:.2f}%)")
-    print(f"  Decision + Severity: {summary['accuracy_both']:.4f} ({summary['accuracy_both']*100:.2f}%)")
+    print(f"\nAccuracy (Decision): {summary['accuracy_decision']:.4f} ({summary['accuracy_decision']*100:.2f}%)")
     
     print(f"\nMétricas por Decision:")
     for cls, metrics_cls in sorted(summary['metrics_by_class'].items()):
         print(f"  {cls:12s} | Precision: {metrics_cls['precision']:.4f} | "
               f"Recall: {metrics_cls['recall']:.4f} | F1: {metrics_cls['f1']:.4f} | "
               f"Support: {metrics_cls['support']}")
-    
-    print(f"\nMétricas por Severity:")
-    for severity, metrics_sev in sorted(summary['metrics_by_severity'].items()):
-        print(f"  {severity:12s} | Precision: {metrics_sev['precision']:.4f} | "
-              f"Recall: {metrics_sev['recall']:.4f} | F1: {metrics_sev['f1']:.4f} | "
-              f"Support: {metrics_sev['support']}")
     
     print(f"\nMatriz de confusão (Decision):")
     cm_decision = summary['confusion_matrix_decision']
@@ -410,20 +327,11 @@ def print_summary(summary: Dict):
         row = [str(cm_decision[expected].get(pred, 0)) for pred in all_decisions]
         print(f"  {expected:12s} | " + " | ".join(f"{r:12s}" for r in row))
     
-    print(f"\nMatriz de confusão (Severity):")
-    cm_severity = summary['confusion_matrix_severity']
-    all_severities = sorted(set(cm_severity.keys()) | set(s for row in cm_severity.values() for s in row.keys()))
-    print(f"  {'':12s} | " + " | ".join(f"{s:12s}" for s in all_severities))
-    for expected in sorted(cm_severity.keys()):
-        row = [str(cm_severity[expected].get(pred, 0)) for pred in all_severities]
-        print(f"  {expected:12s} | " + " | ".join(f"{r:12s}" for r in row))
-    
-    incorrect_results = [r for r in summary['results'] if "error" not in r and not r.get('correct_both', False)]
+    incorrect_results = [r for r in summary['results'] if "error" not in r and not r.get('correct_decision', False)]
     if incorrect_results:
         print(f"\nTop 5 casos incorretos:")
         for r in incorrect_results[:5]:
-            print(f"  [{r['idx']}] Expected: {r['expected_decision']}/{r['expected_severity']} | "
-                  f"Predicted: {r['predicted_decision']}/{r['predicted_severity']}")
+            print(f"  [{r['idx']}] Expected: {r['expected_decision']} | Predicted: {r['predicted_decision']}")
             print(f"      Content: {r['content'][:60]}...")
     
     print("\n" + "="*80)
@@ -433,7 +341,7 @@ if __name__ == "__main__":
     import argparse
     
     parser = argparse.ArgumentParser(
-        description="Avalia a qualidade da geração (decision/severity) do legal-service"
+        description="Avalia a qualidade da geração (decision APROVADO/REPROVADO) do legal-service"
     )
     parser.add_argument(
         "--dataset",
@@ -462,7 +370,7 @@ if __name__ == "__main__":
         "--model",
         type=str,
         default=None,
-        help="Força uso de um modelo específico (ex: gpt-4o, gpt-4o-mini, sabiazinho-4). Se não especificado, usa a lógica padrão de fallback."
+        help="Força uso de um modelo específico. Se não especificado, usa a lógica padrão de fallback."
     )
     parser.add_argument(
         "--model-base-url",

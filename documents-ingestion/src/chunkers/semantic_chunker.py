@@ -58,6 +58,11 @@ class SemanticChunker:
             embeddings_kwargs["base_url"] = final_base_url
         if embedding_model:
             embeddings_kwargs["model"] = embedding_model
+        try:
+            t = float(os.getenv("EMBEDDING_REQUEST_TIMEOUT", "60"))
+            embeddings_kwargs["request_timeout"] = max(5.0, t)
+        except (TypeError, ValueError):
+            embeddings_kwargs["request_timeout"] = 60.0
 
         self.embeddings = OpenAIEmbeddings(**embeddings_kwargs)
         self.splitter = LangChainSemanticChunker(
@@ -165,6 +170,10 @@ class SemanticChunker:
         channel = self._extract_channel(file_name) if file_name else "GENERAL"
 
         try:
+            logger.info(
+                "Computing semantic breakpoints (embedding sentences). "
+                "This may take a while for long documents."
+            )
             documents = self.splitter.create_documents([text])
             
             result = []

@@ -11,6 +11,8 @@ import {
   UpdateInteractionDecisionRequest,
   AnalyzePieceRequest,
   AnalyzePieceResponse,
+  ContentValidationAnalyzePieceResponse,
+  ContentValidationChannel,
   SubmitCreativePieceRequest,
   CreativePiece,
 } from "@shared/api";
@@ -187,6 +189,33 @@ export const campaignsAPI = {
     });
   },
 
+  submitForReview: async (
+    campaignId: string,
+    pieceReviews: { channel: string; pieceId: string; commercialSpace?: string; iaVerdict: string }[]
+  ): Promise<Campaign> => {
+    return await fetchAPI<CampaignResponse>(`/campaigns/${campaignId}/submit-for-review`, {
+      method: "POST",
+      body: JSON.stringify({ pieceReviews }),
+    });
+  },
+
+  reviewPiece: async (
+    campaignId: string,
+    params: { channel: string; pieceId: string; commercialSpace?: string; action: "approve" | "reject" | "manually_reject"; rejectionReason?: string }
+  ): Promise<Campaign> => {
+    const body: Record<string, unknown> = {
+      channel: params.channel,
+      pieceId: params.pieceId,
+      action: params.action,
+    };
+    if (params.commercialSpace != null) body.commercialSpace = params.commercialSpace;
+    if (params.rejectionReason != null) body.rejectionReason = params.rejectionReason;
+    return await fetchAPI<CampaignResponse>(`/campaigns/${campaignId}/pieces/review`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
   enhanceObjective: async (
     text: string,
     fieldName: string,
@@ -214,22 +243,116 @@ export const campaignsAPI = {
   },
 };
 
+const INTERNAL_ROUTING_MESSAGE = /^Canal (SMS|PUSH|EMAIL|APP) -> retrieve_content$/i;
+
+function mapContentValidationToAnalyzePieceResponse(
+  raw: ContentValidationAnalyzePieceResponse,
+  campaignId: string,
+  channel: "SMS" | "Push" | "E-mail" | "App"
+): AnalyzePieceResponse {
+  const status = raw.final_verdict?.status;
+  const comp = raw.compliance_result as { summary?: string; decision?: string } | undefined;
+  const decision = comp?.decision;
+
+  let is_valid: "valid" | "invalid" | "warning" = "warning";
+  if (status === "approved" || decision === "APROVADO") is_valid = "valid";
+  else if (status === "rejected" || decision === "REPROVADO") is_valid = "invalid";
+  else if (raw.requires_human_approval) is_valid = "warning";
+
+  const val = raw.validation_result as { message?: string } | undefined;
+  const valMsg = typeof val?.message === "string" ? val.message : null;
+  const useValMessage = valMsg && !INTERNAL_ROUTING_MESSAGE.test(valMsg.trim());
+
+  const analysis_text =
+    (typeof comp?.summary === "string" && comp.summary.length > 0 ? comp.summary : null) ??
+    (typeof raw.final_verdict?.message === "string" && raw.final_verdict.message.length > 0
+      ? raw.final_verdict.message
+      : null) ??
+    (useValMessage ? valMsg : null) ??
+    (typeof raw.human_approval_reason === "string" && raw.human_approval_reason.length > 0
+      ? raw.human_approval_reason
+      : null) ??
+    "—";
+
+  return {
+    id: crypto.randomUUID(),
+    campaign_id: campaignId,
+    channel,
+    is_valid,
+    analysis_text,
+    analyzed_by: "Content Validation Service",
+    created_at: new Date().toISOString(),
+  };
+}
+
+export type AnalyzePieceInput =
+  | { channel: "SMS"; content: { body: string } }
+  | { channel: "Push"; content: { title: string; body: string } }
+  | { channel: "EMAIL"; content: { campaign_id: string; piece_id: string } }
+  | { channel: "APP"; content: { campaign_id: string; piece_id: string; commercial_space: string } };
+
+function toApiChannel(ch: AnalyzePieceInput["channel"]): ContentValidationChannel {
+  if (ch === "Push") return "PUSH";
+  if (ch === "EMAIL") return "EMAIL";
+  if (ch === "APP") return "APP";
+  return "SMS";
+}
+
+function toUiChannel(ch: AnalyzePieceInput["channel"]): "SMS" | "Push" | "E-mail" | "App" {
+  if (ch === "EMAIL") return "E-mail";
+  if (ch === "APP") return "App";
+  if (ch === "Push") return "Push";
+  return "SMS";
+}
+
+function getApiChannelForFetch(ch: "SMS" | "Push" | "E-mail" | "App"): "SMS" | "PUSH" | "EMAIL" | "APP" {
+  if (ch === "E-mail") return "EMAIL";
+  if (ch === "App") return "APP";
+  if (ch === "Push") return "PUSH";
+  return "SMS";
+}
+
 export const aiAPI = {
   analyzePiece: async (
     campaignId: string,
-    channel: "SMS" | "Push",
-    content: { text?: string; title?: string; body?: string }
+    input: AnalyzePieceInput
   ): Promise<AnalyzePieceResponse> => {
-    return await fetchAPI<AnalyzePieceResponse>("/ai/analyze-piece", {
+    const body: AnalyzePieceRequest = {
+      task: "VALIDATE_COMMUNICATION",
+      channel: toApiChannel(input.channel),
+      content: input.content as Record<string, unknown>,
+      campaign_id: campaignId,
+    };
+    const raw = await fetchAPI<ContentValidationAnalyzePieceResponse>("/ai/analyze-piece", {
       method: "POST",
-      body: JSON.stringify({ campaignId, channel, content } as AnalyzePieceRequest),
+      body: JSON.stringify(body),
     });
+    return mapContentValidationToAnalyzePieceResponse(raw, campaignId, toUiChannel(input.channel));
   },
 
-  getAnalysis: async (campaignId: string, channel: "SMS" | "Push", contentHash?: string): Promise<AnalyzePieceResponse | null> => {
-    const params = contentHash ? `?content_hash=${encodeURIComponent(contentHash)}` : "";
+  getAnalysis: async (
+    campaignId: string,
+    channel: "SMS" | "Push" | "E-mail" | "App",
+    opts: { contentHash?: string; pieceId?: string; commercialSpace?: string }
+  ): Promise<AnalyzePieceResponse | null> => {
+    const apiCh = getApiChannelForFetch(channel);
+    let params: string;
+    if (apiCh === "SMS" || apiCh === "PUSH") {
+      if (!opts.contentHash) return null;
+      params = `?content_hash=${encodeURIComponent(opts.contentHash)}`;
+    } else if (apiCh === "EMAIL") {
+      if (!opts.pieceId) return null;
+      params = `?piece_id=${encodeURIComponent(opts.pieceId)}`;
+    } else {
+      if (!opts.pieceId || !opts.commercialSpace) return null;
+      params = `?piece_id=${encodeURIComponent(opts.pieceId)}&commercial_space=${encodeURIComponent(opts.commercialSpace)}`;
+    }
     try {
-      return await fetchAPI<AnalyzePieceResponse>(`/ai/analyze-piece/${campaignId}/${channel}${params}`);
+      const raw = await fetchAPI<ContentValidationAnalyzePieceResponse>(
+        `/ai/analyze-piece/${campaignId}/${apiCh}${params}`,
+        { method: "GET" }
+      );
+      return mapContentValidationToAnalyzePieceResponse(raw, campaignId, channel);
     } catch (error) {
       if (error instanceof Error && (error.message.includes("404") || error.message.includes("not found"))) {
         return null;

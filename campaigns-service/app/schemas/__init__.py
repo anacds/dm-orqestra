@@ -11,6 +11,10 @@ from app.schemas.campaign import (
     EnhanceObjectiveResponse,
     GenerateTextRequest,
     GenerateTextResponse,
+    PieceContentResponse,
+    PieceReviewResponse,
+    ReviewPieceRequest,
+    SubmitForReviewRequest,
 )
 
 __all__ = [
@@ -26,5 +30,9 @@ __all__ = [
     "EnhanceObjectiveResponse",
     "GenerateTextRequest",
     "GenerateTextResponse",
+    "PieceContentResponse",
+    "PieceReviewResponse",
+    "ReviewPieceRequest",
+    "SubmitForReviewRequest",
 ]
 

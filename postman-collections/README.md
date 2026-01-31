@@ -99,18 +99,18 @@ A maioria dos endpoints requer autenticação JWT. O token é automaticamente in
 
 ### Criar uma Campanha Completa
 
-1. Login → Obter token
-2. Create Campaign → Obter `campaign_id`
-3. Submit Creative Piece (SMS) → Submeter texto SMS
-4. Analyze Piece (SMS) → Validar o texto
-5. Upload App File → Enviar imagem
-6. Add Comment → Adicionar comentário
+1. Login -> Obter token
+2. Create Campaign -> Obter `campaign_id`
+3. Submit Creative Piece (SMS) -> Submeter texto SMS
+4. Analyze Piece (SMS) -> Validar o texto
+5. Upload App File -> Enviar imagem
+6. Add Comment -> Adicionar comentário
 
 ### Validar Peça Criativa
 
-1. Login → Obter token
-2. Analyze Piece (SMS) → Analisar texto SMS
-3. Get Analysis (SMS) → Verificar resultado da análise
+1. Login -> Obter token
+2. Analyze Piece (SMS) -> Analisar texto SMS
+3. Get Analysis (SMS) -> Verificar resultado da análise
 
 ## Troubleshooting
 

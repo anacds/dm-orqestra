@@ -96,6 +96,18 @@ class CreativePieceResponse(BaseModel):
     model_config = {"from_attributes": True, "populate_by_name": True}
 
 
+class PieceContentResponse(BaseModel):
+    """Response for GET .../creative-pieces/{piece_id}/content."""
+
+    content_type: str = Field(..., alias="contentType", description="e.g. text/html or image/png")
+    content: str = Field(
+        ...,
+        description="HTML as UTF-8 string (JSON-safe) or image as data URL (data:image/png;base64,...)",
+    )
+
+    model_config = {"populate_by_name": True}
+
+
 class CreativePieceCreate(BaseModel):
     piece_type: str = Field(..., alias="pieceType", description="'SMS' or 'Push'")
     text: Optional[str] = Field(None, description="Text content for SMS")
@@ -145,12 +157,65 @@ class CampaignResponse(BaseModel):
     created_date: datetime = Field(alias="createdDate")
     comments: Optional[List[CommentResponse]] = None
     creative_pieces: Optional[List[CreativePieceResponse]] = Field(None, alias="creativePieces")
-    
+    piece_reviews: Optional[List["PieceReviewResponse"]] = Field(None, alias="pieceReviews")
+
     model_config = {"from_attributes": True, "populate_by_name": True}
 
 
 class CampaignsResponse(BaseModel):
     campaigns: List[CampaignResponse]
+
+
+# --- CONTENT_REVIEW workflow (submit-for-review, piece review) ---
+
+
+class PieceReviewItem(BaseModel):
+    """One reviewable unit: IA verdict snapshot when submitting for review."""
+
+    channel: str = Field(..., description="SMS | PUSH | EMAIL | APP")
+    piece_id: str = Field(..., alias="pieceId")
+    commercial_space: Optional[str] = Field(None, alias="commercialSpace")
+    ia_verdict: str = Field(..., alias="iaVerdict", description="approved | rejected | warning")
+
+    model_config = {"populate_by_name": True}
+
+
+class SubmitForReviewRequest(BaseModel):
+    """Request body for POST /campaigns/{id}/submit-for-review."""
+
+    piece_reviews: List[PieceReviewItem] = Field(..., alias="pieceReviews", min_length=1)
+
+    model_config = {"populate_by_name": True}
+
+
+class PieceReviewResponse(BaseModel):
+    """Per-piece review state returned in GET campaign when status is CONTENT_REVIEW."""
+
+    id: str
+    campaign_id: str = Field(alias="campaignId")
+    channel: str
+    piece_id: str = Field(alias="pieceId")
+    commercial_space: str = Field(alias="commercialSpace", default="")
+    ia_verdict: str = Field(alias="iaVerdict")
+    human_verdict: str = Field(alias="humanVerdict")
+    reviewed_at: Optional[datetime] = Field(None, alias="reviewedAt")
+    reviewed_by: Optional[str] = Field(None, alias="reviewedBy")
+    reviewed_by_name: Optional[str] = Field(None, alias="reviewedByName")
+    rejection_reason: Optional[str] = Field(None, alias="rejectionReason")
+
+    model_config = {"from_attributes": True, "populate_by_name": True}
+
+
+class ReviewPieceRequest(BaseModel):
+    """Request body for POST /campaigns/{id}/pieces/review."""
+
+    channel: str = Field(..., description="SMS | PUSH | EMAIL | APP")
+    piece_id: str = Field(..., alias="pieceId")
+    commercial_space: Optional[str] = Field(None, alias="commercialSpace")
+    action: str = Field(..., description="approve | reject | manually_reject")
+    rejection_reason: Optional[str] = Field(None, alias="rejectionReason", max_length=2000)
+
+    model_config = {"populate_by_name": True}
 
 
 class EnhanceObjectiveRequest(BaseModel):

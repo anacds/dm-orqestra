@@ -41,6 +41,8 @@ services:
       - EMBEDDING_MODEL=${EMBEDDING_MODEL:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - DOCUMENTS_DIR=${DOCUMENTS_DIR:-doc-juridico}
+      - CHUNKER_TYPE=${CHUNKER_TYPE:-section}
+      - EMBEDDING_REQUEST_TIMEOUT=${EMBEDDING_REQUEST_TIMEOUT:-60}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
     volumes:
       - ./doc-juridico:/app/doc-juridico:ro

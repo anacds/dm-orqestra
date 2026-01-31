@@ -172,7 +172,6 @@ def downgrade() -> None:
     op.drop_table('comments')
     op.drop_table('campaigns')
     
-    # Drop enums
     op.execute("DROP TYPE IF EXISTS trigger_event")
     op.execute("DROP TYPE IF EXISTS execution_model")
     op.execute("DROP TYPE IF EXISTS communication_tone")

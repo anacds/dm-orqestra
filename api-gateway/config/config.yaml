@@ -14,8 +14,8 @@ services:
     url: "http://campaigns-service:8003"
   briefing-enhancer:
     url: "http://briefing-enhancer-service:8001"
-  content:
-    url: "http://content-service:8004"
+  content-validation:
+    url: "http://content-validation-service:8004"
 
 cors:
   origins:

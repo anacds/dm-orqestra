@@ -53,6 +53,50 @@ class WeaviateIndexer:
 
         self._ensure_collection_exists()
 
+    def delete_all_objects(self):
+        """Deleta todos os objetos da collection (mantém o schema)."""
+        try:
+            if not self.client.collections.exists(self.class_name):
+                logger.info(f"Collection {self.class_name} does not exist, nothing to delete")
+                return 0
+            
+            collection = self.client.collections.get(self.class_name)
+            
+            # Deleta a collection inteira e recria (mais eficiente que deletar objeto por objeto)
+            self.client.collections.delete(self.class_name)
+            logger.info(f"Deleted collection {self.class_name}")
+            
+            # Recria a collection com o mesmo schema
+            self._create_collection()
+            logger.info(f"Recreated collection {self.class_name}")
+            
+            return 1
+        except Exception as e:
+            logger.error(f"Error deleting all objects: {e}")
+            raise
+
+    def _create_collection(self):
+        """Cria a collection com o schema definido."""
+        create_kwargs = {
+            "name": self.class_name,
+            "properties": [
+                Property(name="text", data_type=DataType.TEXT),
+                Property(name="source_file", data_type=DataType.TEXT),
+                Property(name="file_name", data_type=DataType.TEXT),
+                Property(name="chunk_index", data_type=DataType.INT),
+                Property(name="document_version", data_type=DataType.TEXT),
+                Property(name="ingestion_run_id", data_type=DataType.TEXT),
+                Property(name="ingestion_timestamp", data_type=DataType.DATE),
+                Property(name="metadata", data_type=DataType.TEXT),
+                Property(name="channel", data_type=DataType.TEXT),
+                Property(name="section_name", data_type=DataType.TEXT),
+                Property(name="section_number", data_type=DataType.INT),
+                Property(name="page_number", data_type=DataType.INT),
+            ],
+            "reranker_config": Configure.Reranker.cohere(),
+        }
+        self.client.collections.create(**create_kwargs)
+
     def _ensure_collection_exists(self):
         try:
             collection_exists = self.client.collections.exists(self.class_name)
@@ -61,28 +105,7 @@ class WeaviateIndexer:
                 logger.info(f"Collection {self.class_name} already exists")
                 return
 
-            # Criar nova coleção
-            create_kwargs = {
-                "name": self.class_name,
-                "properties": [
-                    Property(name="text", data_type=DataType.TEXT),
-                    Property(name="source_file", data_type=DataType.TEXT),
-                    Property(name="file_name", data_type=DataType.TEXT),
-                    Property(name="chunk_index", data_type=DataType.INT),
-                    Property(name="document_version", data_type=DataType.TEXT),
-                    Property(name="ingestion_run_id", data_type=DataType.TEXT),
-                    Property(name="ingestion_timestamp", data_type=DataType.DATE),
-                    Property(name="metadata", data_type=DataType.TEXT),
-                    Property(name="channel", data_type=DataType.TEXT),
-                    Property(name="section_name", data_type=DataType.TEXT),
-                    Property(name="section_number", data_type=DataType.INT),
-                    Property(name="page_number", data_type=DataType.INT),
-                ],
-                "reranker_config": Configure.Reranker.cohere(),
-            }
-
-            self.client.collections.create(**create_kwargs)
-
+            self._create_collection()
             logger.info(f"Created collection {self.class_name}")
 
         except Exception as e:

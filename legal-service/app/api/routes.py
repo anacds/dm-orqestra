@@ -1,11 +1,20 @@
-from fastapi import APIRouter, HTTPException, status, Request, Depends
-from pydantic import ValidationError
+import re
 import logging
-from typing import Optional
-from sqlalchemy.orm import Session
 import os
+from typing import Optional
 
-from app.api.schemas import ValidationInput, ValidationOutput
+from fastapi import APIRouter, HTTPException, Request, Depends
+from pydantic import ValidationError
+from sqlalchemy.orm import Session
+
+from app.api.schemas import (
+    AppContent,
+    EmailContent,
+    PUSHContent,
+    SMSContent,
+    ValidationInput,
+    ValidationOutput,
+)
 from app.agent.graph import LegalAgent
 from app.core.config import settings
 from app.core.models_config import load_models_config
@@ -19,6 +28,13 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _strip_html(html: str) -> str:
+    """Remove tags HTML e normaliza espaços em branco."""
+    text = re.sub(r"<[^>]+>", " ", html)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
 
 _agent: Optional[LegalAgent] = None
 
@@ -38,12 +54,13 @@ def get_agent() -> LegalAgent:
 
         config = load_models_config()
         llm_config = config.get("models", {}).get("llm", {})
+        defaults = llm_config.get("defaults", {})
         embeddings_config = config.get("models", {}).get("embeddings", {})
         
         _agent = LegalAgent(
             weaviate_url=settings.WEAVIATE_URL,
             embedding_model=embeddings_config.get("model", "text-embedding-3-small"),
-            temperature=float(llm_config.get("temperature", 0.0)),
+            temperature=float(defaults.get("temperature", llm_config.get("temperature", 0.0))),
             redis_url=settings.REDIS_URL,
             cache_enabled=settings.CACHE_ENABLED,
             cache_ttl=settings.CACHE_TTL,
@@ -54,15 +71,18 @@ def get_agent() -> LegalAgent:
 
 @router.get("/health")
 async def health():
+    llm = load_models_config().get("models", {}).get("llm", {})
+    channels = llm.get("channels", {})
+    llm_by_channel = {
+        ch: {"provider": c.get("provider"), "model": c.get("model")}
+        for ch, c in (channels or {}).items()
+    }
     return {
         "status": "healthy",
         "service": settings.SERVICE_NAME,
         "version": settings.SERVICE_VERSION,
         "weaviate_url": settings.WEAVIATE_URL,
-        "llm_model": load_models_config()
-        .get("models", {})
-        .get("llm", {})
-        .get("name", "sabiazinho-4"),
+        "llm_by_channel": llm_by_channel,
     }
 
 
@@ -77,35 +97,64 @@ async def validate_communication(
         agent = get_agent()
         
         logger.info(f"Validating communication: channel={input_data.channel}, task={input_data.task}")
-        
-        # Extrai title e body do content baseado no tipo
+
         content_title = None
         content_body = None
-        
-        # Novo formato: Pydantic model (PUSHContent ou SMSContent)
-        from app.api.schemas import PUSHContent, SMSContent
+        content_image = None
+
         if isinstance(input_data.content, PUSHContent):
             content_title = input_data.content.title
             content_body = input_data.content.body
         elif isinstance(input_data.content, SMSContent):
             content_body = input_data.content.body
+        elif isinstance(input_data.content, EmailContent):
+            # --- CÓDIGO LEGADO: EMAIL aceitava html OU image ---
+            # if input_data.content.image:
+            #     content_image = input_data.content.image
+            # else:
+            #     content_body = _strip_html(input_data.content.html)
+            # --- FIM CÓDIGO LEGADO ---
+            
+            # EMAIL agora pode ter html E image (análise visual + textual)
+            if input_data.content.html:
+                content_body = _strip_html(input_data.content.html)
+            if input_data.content.image:
+                content_image = input_data.content.image
+            logger.info("EMAIL: html=%s, image=%s", 
+                       "yes" if input_data.content.html else "no",
+                       "yes" if input_data.content.image else "no")
+        elif isinstance(input_data.content, AppContent):
+            content_image = input_data.content.image
         else:
-            # Fallback: se vier como dict (não deveria acontecer com validação Pydantic)
             content_title = getattr(input_data.content, "title", None)
             content_body = getattr(input_data.content, "body", None) or getattr(input_data.content, "content", "")
-        
-        # Para backward compatibility, mantém content como string concatenada
+            content_image = getattr(input_data.content, "image", None)
+
         if content_title and content_body:
             content_str = f"{content_title}\n\n{content_body}"
+        elif content_body:
+            content_str = content_body
         else:
-            content_str = content_body or ""
+            content_str = ""
+        
+        # --- CÓDIGO LEGADO: sobrescrevia content_str para imagem ---
+        # if content_image:
+        #     content_str = "[APP 1 imagem]"
+        # --- FIM CÓDIGO LEGADO ---
+        
+        # Para EMAIL com html+image, mantém o texto e adiciona indicador de imagem
+        if content_image and not content_body:
+            content_str = f"[{input_data.channel} 1 imagem]"
+        elif content_image and content_body:
+            content_str = f"{content_body}\n[+ 1 imagem anexa]"
         
         result = agent.invoke(
             task=input_data.task,
             channel=input_data.channel,
-            content=content_str,  # Mantido para backward compatibility
+            content=content_str or ("[APP 1 imagem]" if content_image else ""),
             content_title=content_title,
             content_body=content_body,
+            content_image=content_image,
         )
         
         internal_metadata = result.pop("_internal", {})
@@ -121,7 +170,6 @@ async def validate_communication(
         try:
             filtered_result = {
                 "decision": result.get("decision"),
-                "severity": result.get("severity"),
                 "requires_human_review": result.get("requires_human_review"),
                 "summary": result.get("summary"),
                 "sources": result.get("sources", []),
@@ -134,19 +182,33 @@ async def validate_communication(
             if search_metadata:
                 search_query = search_metadata.get("query")
             
+            llm_model = None
+            if input_data.channel and getattr(agent, "channel_to_model", None):
+                # --- CÓDIGO LEGADO: usava modelo do canal diretamente ---
+                # llm_model = agent.channel_to_model.get(input_data.channel)
+                # --- FIM CÓDIGO LEGADO ---
+                
+                # EMAIL com imagem usa modelo de fallback (APP)
+                if input_data.channel == "EMAIL" and content_image:
+                    llm_model = agent.channel_to_model.get("APP")
+                else:
+                    llm_model = agent.channel_to_model.get(input_data.channel)
+            if llm_model is None:
+                llm_model = next(
+                    iter(getattr(agent, "channel_to_model", {}).values()),
+                    "sabiazinho-4",
+                )
             audit = LegalValidationAudit(
                 task=input_data.task,
                 channel=input_data.channel,
                 content_hash=content_hash,
                 content_preview=content_str[:500] if len(content_str) > 500 else content_str,
                 decision=output.decision,
-                severity=output.severity,
                 requires_human_review=output.requires_human_review,
                 summary=output.summary,
                 sources=output.sources,
                 num_chunks_retrieved=internal_metadata.get("num_chunks_retrieved"),
-                llm_model=getattr(agent, "model_name", None)
-                or load_models_config().get("models", {}).get("llm", {}).get("name", "sabiazinho-4"),
+                llm_model=llm_model,
                 search_query=search_query
             )
             db.add(audit)

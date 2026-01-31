@@ -25,10 +25,12 @@ class IngestionPipeline:
         chunk_min_size: int = 100,
         chunk_max_size: int = 800,
         chunker_type: str = "semantic",
+        clear_before_ingest: bool = False,
     ):
         self.documents_dir = Path(documents_dir)
         self.ingestion_run_id = str(uuid.uuid4())
         self.chunker_type = chunker_type
+        self.clear_before_ingest = clear_before_ingest
 
         if chunker_type == "section":
             self.chunker = SectionChunker(min_chunk_size=chunk_min_size)
@@ -43,6 +45,11 @@ class IngestionPipeline:
             provider=embedding_provider, model=embedding_model
         )
         self.indexer = create_weaviate_indexer(url=weaviate_url)
+
+        # Limpa todos os dados antes de ingerir (evita duplicação)
+        if self.clear_before_ingest:
+            logger.info("Clearing all existing data from Weaviate before ingestion...")
+            self.indexer.delete_all_objects()
 
         logger.info(
             f"The ingestion pipeline has been initialized (run_id: {self.ingestion_run_id})"
@@ -164,11 +171,10 @@ def main():
     embedding_provider = os.getenv("EMBEDDING_PROVIDER", "openai")
     embedding_model = os.getenv("EMBEDDING_MODEL")
     weaviate_url = os.getenv("WEAVIATE_URL", "http://localhost:8080")
-    
-    # TESTAR a melhor estratégia, "semantic" ou "section"
-    chunker_type = "semantic"
+    chunker_type = os.getenv("CHUNKER_TYPE", "section")
+    clear_before_ingest = os.getenv("CLEAR_BEFORE_INGEST", "true").lower() == "true"
 
-    logger.info(f"Starting the ingestion pipeline (chunker: {chunker_type})")
+    logger.info(f"Starting the ingestion pipeline (chunker: {chunker_type}, clear_before_ingest: {clear_before_ingest})")
 
     pipeline = IngestionPipeline(
         documents_dir=documents_dir,
@@ -176,6 +182,7 @@ def main():
         embedding_model=embedding_model,
         weaviate_url=weaviate_url,
         chunker_type=chunker_type,
+        clear_before_ingest=clear_before_ingest,
     )
 
     try:

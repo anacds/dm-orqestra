@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     # External services (URLs that may vary between environments)
     WEAVIATE_URL: str = "http://weaviate:8080"
     REDIS_URL: str = "redis://redis:6379/0"
+
+    # A2A (base URL where the service is reachable; A2A lives at /a2a/v1)
+    A2A_BASE_URL: str = "http://localhost:8005"
     
     # Credentials (sensitive, from environment)
     WEAVIATE_API_KEY: str = ""
@@ -35,6 +38,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = True
+        extra = "ignore"
 
 settings = Settings()
 

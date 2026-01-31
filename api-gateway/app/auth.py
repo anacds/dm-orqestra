@@ -39,7 +39,7 @@ def decode_jwt_token(token: str) -> Optional[Dict]:
 
 async def get_user_from_auth_service(token: str) -> Optional[Dict]:
     """Fetch user information from auth-service."""
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    async with httpx.AsyncClient(timeout=120.0) as client:
         try:
             response = await client.get(
                 f"{AUTH_SERVICE_URL}/api/auth/me",

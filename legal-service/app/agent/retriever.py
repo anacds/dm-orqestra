@@ -8,6 +8,22 @@ from app.core.models_config import load_models_config
 
 logger = logging.getLogger(__name__)
 
+# text-embedding-3-small: 8191 tokens. PT/HTML ~2–2.5 chars/token -> 8k * 2 ≈ 16k; usar 14k p/ margem.
+EMBEDDING_QUERY_MAX_CHARS = 14_000
+
+
+def _truncate_for_embedding(text: str, max_chars: int = EMBEDDING_QUERY_MAX_CHARS) -> str:
+    """Trunca texto para caber no limite do modelo de embedding (8k tokens)."""
+    if len(text) <= max_chars:
+        return text
+    truncated = text[:max_chars].rsplit(maxsplit=1)[0] or text[:max_chars]
+    logger.info(
+        "[RETRIEVAL] Query truncada para embedding: %d -> %d caracteres",
+        len(text),
+        len(truncated),
+    )
+    return truncated
+
 
 class HybridWeaviateRetriever:
     """Hybrid search retriever for Weaviate (sem reranking)."""
@@ -123,23 +139,23 @@ class HybridWeaviateRetriever:
             else:
                 final_limit = limit
             
-            # Para PUSH com title/body, constrói query melhorada incluindo ambos
-            # Os documentos indexados são guidelines (texto contínuo), então buscamos apenas em "text"
-            if channel == "PUSH" and query_title and query_body:
-                # Query melhorada: inclui title e body para melhor matching com guidelines
+            # Para PUSH/EMAIL com title/body, constrói query melhorada
+            if channel in ("PUSH", "EMAIL") and query_title and query_body:
                 enhanced_query = f"{query_title} {query_body}"
                 logger.info(
-                    f"[RETRIEVAL] PUSH com title/body - query melhorada. "
+                    f"[RETRIEVAL] {channel} com title/body - query melhorada. "
                     f"Retrieving {retrieval_limit} chunks"
                 )
-                query_embedding = self._get_embedding(enhanced_query)
+                embedding_input = _truncate_for_embedding(enhanced_query)
+                query_embedding = self._get_embedding(embedding_input)
                 search_query = enhanced_query
             else:
                 # Busca normal para SMS e outros canais
                 logger.info(
                     f"[RETRIEVAL] Retrieving {retrieval_limit} chunks, selecting top {limit} by hybrid score"
                 )
-                query_embedding = self._get_embedding(query)
+                embedding_input = _truncate_for_embedding(query)
+                query_embedding = self._get_embedding(embedding_input)
                 search_query = query
             
             query_kwargs = {
@@ -217,6 +233,7 @@ class HybridWeaviateRetriever:
                         score = rerank_score if rerank_score is not None else hybrid_score
                     
                     file_name = props.get("file_name", props.get("source_file", "unknown"))
+                    chunk_index = props.get("chunk_index", 0)
                     text_preview = props.get("text", "")[:80] + "..." if len(props.get("text", "")) > 80 else props.get("text", "")
                     
                     if rerank_enabled:
@@ -224,13 +241,13 @@ class HybridWeaviateRetriever:
                         if hybrid_score is not None:
                             score_info += f", hybrid={hybrid_score:.4f}"
                         logger.info(
-                            f"  [{idx}] {file_name} | {score_info} | "
+                            f"  [{idx}] {file_name} | chunk_index={chunk_index} | {score_info} | "
                             f"channel={channel or 'N/A'} | {text_preview}"
                         )
                     else:
                         score_info = f"hybrid={hybrid_score:.4f}" if hybrid_score is not None else "score=N/A"
                         logger.info(
-                            f"  [{idx}] {file_name} | {score_info} | "
+                            f"  [{idx}] {file_name} | chunk_index={chunk_index} | {score_info} | "
                             f"channel={channel or 'N/A'} | {text_preview}"
                         )
                     
@@ -238,7 +255,7 @@ class HybridWeaviateRetriever:
                         "text": props.get("text", ""),
                         "source_file": props.get("source_file", ""),
                         "file_name": props.get("file_name", ""),
-                        "chunk_index": props.get("chunk_index", 0),
+                        "chunk_index": chunk_index,
                         "section_name": props.get("section_name"),
                         "section_number": props.get("section_number"),
                         "page_number": props.get("page_number"),

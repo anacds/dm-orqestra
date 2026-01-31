@@ -26,7 +26,6 @@ export default function Logo({ size = "md", showText = false, className }: LogoP
         <span className="text-white font-bold relative z-10">O</span>
       </div>
       
-      {/* Musical notes - positioned around the logo like sparkles (few, subtle) */}
       <span className={cn("absolute top-0 left-1/2 -translate-x-1/2 -translate-y-full -mt-0.5 text-primary/50", noteSize[size])}>
         ♪
       </span>

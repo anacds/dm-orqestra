@@ -107,10 +107,10 @@ graph LR
 - Roteamento baseado em path prefix
 - Suporte a múltiplos serviços backend
 - Mapeamento de paths para serviços:
-  - `/api/auth` → Auth Service (8002)
-  - `/api/campaigns` → Campaigns Service (8003)
-  - `/api/enhance-objective`, `/api/ai-interactions` → Briefing Enhancer (8001)
-  - `/api/ai/analyze-piece`, `/api/ai/generate-text` → Content Service (8004)
+  - `/api/auth` -> Auth Service (8002)
+  - `/api/campaigns` -> Campaigns Service (8003)
+  - `/api/enhance-objective`, `/api/ai-interactions` -> Briefing Enhancer (8001)
+  - `/api/ai/analyze-piece`, `/api/ai/generate-text` -> Content Service (8004)
 
 ### 2. **Autenticação Centralizada**
 - Validação de tokens JWT no Gateway
@@ -248,11 +248,11 @@ Endpoint raiz que retorna informações básicas do Gateway (nome, versão, stat
 Endpoint catch-all que faz proxy reverso para todos os serviços backend baseado no path da requisição. Suporta métodos HTTP: GET, POST, PUT, DELETE, PATCH, OPTIONS.
 
 **Roteamento:**
-- `/api/auth/*` → Auth Service (porta 8002)
-- `/api/campaigns/*` → Campaigns Service (porta 8003)
-- `/api/enhance-objective`, `/api/ai-interactions`, `/api/ai/*` → Briefing Enhancer Service (porta 8001)
-- `/api/ai/analyze-piece`, `/api/ai/generate-text` → Content Service (porta 8004)
-- Outros paths → Campaigns Service (default)
+- `/api/auth/*` -> Auth Service (porta 8002)
+- `/api/campaigns/*` -> Campaigns Service (porta 8003)
+- `/api/enhance-objective`, `/api/ai-interactions`, `/api/ai/*` -> Briefing Enhancer Service (porta 8001)
+- `/api/ai/analyze-piece`, `/api/ai/generate-text` -> Content Service (porta 8004)
+- Outros paths -> Campaigns Service (default)
 
 **Comportamento:**
 - Aplica rate limiting baseado no path

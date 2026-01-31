@@ -58,6 +58,44 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  campaigns-mcp-server:
+    build:
+      context: ./campaigns-mcp-server
+      dockerfile: Dockerfile
+    ports:
+      - "8010:8010"
+    environment:
+      - CAMPAIGNS_SERVICE_URL=http://campaigns-service:8003
+      - PORT=8010
+      - MCP_SERVICE_USER_ID=svc-mcp-campaigns
+      - MCP_SERVICE_USER_EMAIL=mcp-campaigns@internal
+      - MCP_SERVICE_USER_ROLE=Analista de criação
+      - MCP_SERVICE_USER_IS_ACTIVE=true
+      - HTTP_TIMEOUT=30
+    depends_on:
+      campaigns-service:
+        condition: service_started
+    restart: unless-stopped
+
+  html-converter-service:
+    build:
+      context: ./html-converter-service
+      dockerfile: Dockerfile
+    ports:
+      - "8011:8011"
+    restart: unless-stopped
+
+  branding-service:
+    build:
+      context: ./branding-service
+      dockerfile: Dockerfile
+    ports:
+      - "8012:8012"
+    environment:
+      - PORT=8012
+      - LOG_LEVEL=INFO
+    restart: unless-stopped
+
   briefing-enhancer-service:
     build:
       context: ./briefing-enhancer-service
@@ -78,24 +116,37 @@ services:
         condition: service_started
     restart: unless-stopped
 
-  content-service:
+  content-validation-service:
     build:
-      context: ./content-service
+      context: ./content-validation-service
       dockerfile: Dockerfile
     ports:
       - "8004:8004"
+    env_file:
+      - ./content-validation-service/.env
+    volumes:
+      # Pasta local para ver imagens de debug de conversão de e-mail
+      - ./content-validation-service/debug_images:/app/debug_images
     environment:
-      - DATABASE_URL=postgresql://orqestra:orqestra_password@db:5432/content
       - ENVIRONMENT=development
       - CORS_ORIGINS=["http://localhost:3000"]
       - AUTH_SERVICE_URL=http://auth-service:8002
-      - CAMPAIGNS_SERVICE_URL=http://campaigns-service:8003
+      - LEGAL_SERVICE_URL=http://legal-service:8005
+      - CAMPAIGNS_MCP_URL=http://campaigns-mcp-server:8010
+      - HTML_CONVERTER_MCP_URL=http://html-converter-service:8011
+      - A2A_BASE_URL=http://content-validation-service:8004
+      - DATABASE_URL=postgresql://orqestra:orqestra_password@db:5432/content_validation
+      - DEBUG_IMAGES_DIR=/app/debug_images
     depends_on:
       db:
         condition: service_healthy
       auth-service:
         condition: service_started
-      campaigns-service:
+      legal-service:
+        condition: service_started
+      campaigns-mcp-server:
+        condition: service_started
+      html-converter-service:
         condition: service_started
     restart: unless-stopped
 
@@ -124,6 +175,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      documents-ingestion:
+        condition: service_completed_successfully
     restart: unless-stopped
 
   api-gateway:
@@ -136,7 +189,7 @@ services:
       - AUTH_SERVICE_URL=http://auth-service:8002
       - CAMPAIGNS_SERVICE_URL=http://campaigns-service:8003
       - BRIEFING_ENHANCER_SERVICE_URL=http://briefing-enhancer-service:8001
-      - CONTENT_SERVICE_URL=http://content-service:8004
+      - CONTENT_VALIDATION_SERVICE_URL=http://content-validation-service:8004
       - CORS_ORIGINS=["http://localhost:3000"]
       - ENVIRONMENT=development
       - SECRET_KEY=${SECRET_KEY:-dev-secret-key-change-in-production}
@@ -145,7 +198,7 @@ services:
       - auth-service
       - campaigns-service
       - briefing-enhancer-service
-      - content-service
+      - content-validation-service
     restart: unless-stopped
 
   frontend:
@@ -230,7 +283,11 @@ services:
       - EMBEDDING_MODEL=${EMBEDDING_MODEL:-text-embedding-3-small}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - DOCUMENTS_DIR=doc-juridico
+      - CHUNKER_TYPE=${CHUNKER_TYPE:-semantic}
+      - EMBEDDING_REQUEST_TIMEOUT=${EMBEDDING_REQUEST_TIMEOUT:-60}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      # Limpa todos os dados do Weaviate antes de ingerir (evita duplicação)
+      - CLEAR_BEFORE_INGEST=${CLEAR_BEFORE_INGEST:-true}
     depends_on:
       weaviate:
         condition: service_healthy

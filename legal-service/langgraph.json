@@ -1,0 +1,8 @@
+{
+  "$schema": "https://langgra.ph/schema.json",
+  "dependencies": ["."],
+  "graphs": {
+    "legal_validation": "./app/agent/graph.py:graph"
+  },
+  "env": ".env"
+}

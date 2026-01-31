@@ -11,6 +11,7 @@ import uuid
 from datetime import date, timedelta
 from alembic import op
 import sqlalchemy as sa
+import psycopg2
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
@@ -27,7 +28,6 @@ def get_user_id_from_auth_service(email: str) -> str:
     Returns empty string if not found or connection fails.
     """
     try:
-        import psycopg2
         
         db_host = os.getenv("DB_HOST", "db")
         db_user = os.getenv("POSTGRES_USER", "orqestra")
@@ -105,7 +105,7 @@ def upgrade() -> None:
                 "end_date": end_date,
                 "priority": "Normal",
                 "communication_channels": ["SMS", "Push", "E-mail", "App"],
-                "commercial_spaces": ["Banner superior da Home", "Área do Cliente", "Página de ofertas"],
+                "commercial_spaces": ["Banner superior da Home", "Área do Cliente"],
                 "target_audience_description": "Pessoas físicas entre 25 e 55 anos, sem vínculo bancário atual ou com necessidade de serviços financeiros digitais, residentes em áreas urbanas",
                 "exclusion_criteria": "Clientes já ativos, menores de 18 anos, clientes com restrições no CPF, funcionários do banco",
                 "estimated_impact_volume": 2500000.00,  

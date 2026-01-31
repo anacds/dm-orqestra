@@ -1,10 +1,10 @@
 import { useParams, useNavigate } from "react-router-dom";
 import Header from "@/components/Header";
-import { ArrowLeft, Plus, MessageSquare, Send, AlertCircle, Edit2, Save, X, Loader2, CheckCircle, FileText, Sparkles, Smartphone, MessageSquare as MessageSquareIcon, Upload, Image, FileCode, Trash2, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Plus, MessageSquare, Send, AlertCircle, Edit2, Save, X, Loader2, CheckCircle, FileText, Sparkles, Smartphone, MessageSquare as MessageSquareIcon, Upload, Image, FileCode, Trash2, AlertTriangle, ChevronUp, User } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
-import { campaignsAPI, authAPI, aiAPI, creativePiecesAPI } from "@/lib/api";
+import { campaignsAPI, authAPI, aiAPI, creativePiecesAPI, type AnalyzePieceInput } from "@/lib/api";
 import { Campaign, Comment, CampaignStatus, AnalyzePieceResponse } from "@shared/api";
 import { format, formatDistanceToNow } from "date-fns";
 
@@ -36,6 +36,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
 
 export default function CampaignDetail() {
   const { id } = useParams<{ id: string }>();
@@ -65,10 +66,27 @@ export default function CampaignDetail() {
   const [emailSubmitted, setEmailSubmitted] = useState(false);
   const [appFileUrls, setAppFileUrls] = useState<Record<string, string>>({});
   const [emailFileUrl, setEmailFileUrl] = useState<string | null>(null);
+  const [emailPieceId, setEmailPieceId] = useState<string | null>(null);
+  const [appPieceId, setAppPieceId] = useState<string | null>(null);
+  const [emailAnalysis, setEmailAnalysis] = useState<AnalyzePieceResponse | null>(null);
+  const [appAnalysis, setAppAnalysis] = useState<Record<string, AnalyzePieceResponse | null>>({});
+  const [isAnalyzingEmail, setIsAnalyzingEmail] = useState(false);
+  const [isAnalyzingAppBySpace, setIsAnalyzingAppBySpace] = useState<Record<string, boolean>>({});
+  const isAnalyzingAnyApp = Object.values(isAnalyzingAppBySpace).some(Boolean);
   const [statusError, setStatusError] = useState<string | null>(null);
   const [emailUploadError, setEmailUploadError] = useState<string | null>(null);
+  const [skipEmailAnalysisFetch, setSkipEmailAnalysisFetch] = useState(false);
   const [appUploadErrors, setAppUploadErrors] = useState<Record<string, string>>({});
   const [activeChannelTab, setActiveChannelTab] = useState<string>("");
+  const [studioOpen, setStudioOpen] = useState(false);
+  const [rejectionDialogOpen, setRejectionDialogOpen] = useState(false);
+  const [rejectionDialogPayload, setRejectionDialogPayload] = useState<{
+    pr: { pieceId: string; commercialSpace: string };
+    uiChannel: string;
+    action: "reject" | "manually_reject";
+    spaceLabel?: string;
+  } | null>(null);
+  const [rejectionReasonInput, setRejectionReasonInput] = useState("");
 
   
   const { data: currentUser } = useQuery({
@@ -109,7 +127,7 @@ export default function CampaignDetail() {
       if (appPiece && appPiece.fileUrls) {
         try {
           const fileUrls = JSON.parse(appPiece.fileUrls);
-          
+          setAppPieceId(appPiece.id);
           setAppFileUrls(fileUrls);
           const submitted: Record<string, boolean> = {};
           Object.keys(fileUrls).forEach(space => {
@@ -117,12 +135,23 @@ export default function CampaignDetail() {
           });
           setAppSubmitted(submitted);
         } catch (e) {
-          
+          /* ignore */
         }
+      } else {
+        setAppPieceId(null);
+        setAppFileUrls({});
+        setAppSubmitted({});
+        setAppAnalysis({});
       }
       if (emailPiece && emailPiece.htmlFileUrl) {
         setEmailFileUrl(emailPiece.htmlFileUrl);
+        setEmailPieceId(emailPiece.id);
         setEmailSubmitted(true);
+      } else {
+        setEmailPieceId(null);
+        setEmailFileUrl(null);
+        setEmailSubmitted(false);
+        setEmailAnalysis(null);
       }
     }
   }, [campaign?.creativePieces]);
@@ -138,34 +167,70 @@ export default function CampaignDetail() {
       
       if (smsPiece && smsPiece.text) {
         try {
-          // Calculate hash of current content to find matching analysis
           const contentHash = await calculateContentHash("SMS", { text: smsPiece.text });
-          const analysis = await aiAPI.getAnalysis(id, "SMS", contentHash);
+          const analysis = await aiAPI.getAnalysis(id, "SMS", { contentHash });
           setSubmittedSmsAnalysis(analysis);
-        } catch (error) {
-          
+        } catch {
           setSubmittedSmsAnalysis(null);
         }
       } else {
         setSubmittedSmsAnalysis(null);
       }
-      
-      
+
       if (pushPiece && (pushPiece.title || pushPiece.body)) {
         try {
-          // Calculate hash of current content to find matching analysis
           const contentHash = await calculateContentHash("Push", { title: pushPiece.title, body: pushPiece.body });
-          const analysis = await aiAPI.getAnalysis(id, "Push", contentHash);
+          const analysis = await aiAPI.getAnalysis(id, "Push", { contentHash });
           setSubmittedPushAnalysis(analysis);
-        } catch (error) {
-          
+        } catch {
           setSubmittedPushAnalysis(null);
         }
       } else {
         setSubmittedPushAnalysis(null);
       }
+
+      const emailPiece = campaign.creativePieces.find(p => p.pieceType === "E-mail");
+      if (emailPiece?.id) {
+        // Skip fetch if we just uploaded a new file (to avoid restoring old cached analysis)
+        if (skipEmailAnalysisFetch) {
+          setSkipEmailAnalysisFetch(false);
+          // Keep emailAnalysis as null (already set in handleEmailFileUpload)
+        } else {
+          try {
+            const analysis = await aiAPI.getAnalysis(id, "E-mail", { pieceId: emailPiece.id });
+            setEmailAnalysis(analysis);
+          } catch {
+            setEmailAnalysis(null);
+          }
+        }
+      } else {
+        setEmailAnalysis(null);
+      }
+
+      const appPiece = campaign.creativePieces.find(p => p.pieceType === "App");
+      if (appPiece?.id && appPiece?.fileUrls) {
+        try {
+          const fileUrls = JSON.parse(appPiece.fileUrls) as Record<string, string>;
+          const next: Record<string, AnalyzePieceResponse | null> = {};
+          await Promise.all(
+            Object.keys(fileUrls).map(async (space) => {
+              try {
+                const a = await aiAPI.getAnalysis(id, "App", { pieceId: appPiece.id, commercialSpace: space });
+                next[space] = a;
+              } catch {
+                next[space] = null;
+              }
+            })
+          );
+          setAppAnalysis(next);
+        } catch {
+          setAppAnalysis({});
+        }
+      } else {
+        setAppAnalysis({});
+      }
     };
-    
+
     loadAnalyses();
   }, [id, campaign?.creativePieces]);
 
@@ -201,22 +266,43 @@ export default function CampaignDetail() {
       setStatusError(null);
     },
     onError: (error: Error) => {
-      
       setStatusError(error.message || "Erro ao atualizar status da campanha");
-      
       setTimeout(() => setStatusError(null), 5000);
     },
   });
 
+  const submitForReviewMutation = useMutation({
+    mutationFn: (pieceReviews: { channel: string; pieceId: string; commercialSpace?: string; iaVerdict: string }[]) =>
+      campaignsAPI.submitForReview(id!, pieceReviews),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["campaign", id] });
+      queryClient.invalidateQueries({ queryKey: ["campaigns"] });
+      setStatusError(null);
+    },
+    onError: (error: Error) => {
+      setStatusError(error.message || "Erro ao submeter para revisão");
+      setTimeout(() => setStatusError(null), 5000);
+    },
+  });
+
+  const reviewPieceMutation = useMutation({
+    mutationFn: (params: { channel: string; pieceId: string; commercialSpace?: string; action: "approve" | "reject" | "manually_reject"; rejectionReason?: string }) =>
+      campaignsAPI.reviewPiece(id!, params),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["campaign", id] });
+      queryClient.invalidateQueries({ queryKey: ["campaigns"] });
+    },
+  });
+
+  type AnalyzeTarget = "sms" | "push" | "email" | "app";
   const analyzePieceMutation = useMutation({
-    mutationFn: ({ channel, content }: { channel: "SMS" | "Push"; content: { text?: string; title?: string; body?: string } }) =>
-      aiAPI.analyzePiece(id!, channel, content),
-    onSuccess: (data, variables) => {
-      if (variables.channel === "SMS") {
-        setSmsAnalysis(data);
-      } else {
-        setPushAnalysis(data);
-      }
+    mutationFn: ({ input }: { input: AnalyzePieceInput; target: AnalyzeTarget; space?: string }) =>
+      aiAPI.analyzePiece(id!, input),
+    onSuccess: (data, { target, space }) => {
+      if (target === "sms") setSmsAnalysis(data);
+      else if (target === "push") setPushAnalysis(data);
+      else if (target === "email") setEmailAnalysis(data);
+      else if (target === "app" && space) setAppAnalysis(prev => ({ ...prev, [space]: data }));
     },
   });
 
@@ -226,43 +312,41 @@ export default function CampaignDetail() {
     onSuccess: async (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["campaign", id] });
       queryClient.invalidateQueries({ queryKey: ["campaigns"] });
-      
-      
+
       if (variables.pieceType === "SMS") {
         setSmsSubmitted(true);
         setTimeout(() => setSmsSubmitted(false), 3000);
-        
-        // Clear old analysis and try to find matching one for new content
-        setSubmittedSmsAnalysis(null);
-        try {
-          const contentHash = await calculateContentHash("SMS", { text: variables.text || "" });
-          const analysis = await aiAPI.getAnalysis(id!, "SMS", contentHash);
-          setSubmittedSmsAnalysis(analysis);
-        } catch (error) {
-          
-          console.log("No analysis found for submitted SMS piece");
+
+        // Use current validation if available (user validated before submit); else try GET (content-validation has no GET, so often null)
+        let analysis: AnalyzePieceResponse | null = smsAnalysis;
+        if (!analysis) {
+          try {
+            const contentHash = await calculateContentHash("SMS", { text: variables.text || "" });
+            analysis = await aiAPI.getAnalysis(id!, "SMS", { contentHash });
+          } catch {
+            /* no stored analysis */
+          }
         }
+        setSubmittedSmsAnalysis(analysis);
       } else {
         setPushSubmitted(true);
         setTimeout(() => setPushSubmitted(false), 3000);
-        
-        // Clear old analysis and try to find matching one for new content
-        setSubmittedPushAnalysis(null);
-        try {
-          const contentHash = await calculateContentHash("Push", { title: variables.title, body: variables.body });
-          const analysis = await aiAPI.getAnalysis(id!, "Push", contentHash);
-          setSubmittedPushAnalysis(analysis);
-        } catch (error) {
-          
-          console.log("No analysis found for submitted Push piece");
+
+        let analysis: AnalyzePieceResponse | null = pushAnalysis;
+        if (!analysis) {
+          try {
+            const contentHash = await calculateContentHash("Push", { title: variables.title, body: variables.body });
+            analysis = await aiAPI.getAnalysis(id!, "Push", { contentHash });
+          } catch {
+            /* no stored analysis */
+          }
         }
+        setSubmittedPushAnalysis(analysis);
       }
-      
-      
+
       setSmsText("");
       setPushTitle("");
       setPushBody("");
-      
       setSmsAnalysis(null);
       setPushAnalysis(null);
     },
@@ -270,37 +354,62 @@ export default function CampaignDetail() {
 
   const handleAnalyzePiece = async (channel: "SMS" | "Push") => {
     if (channel === "SMS") {
-      if (!smsText.trim()) {
-        
-        return;
-      }
+      if (!smsText.trim()) return;
       setIsAnalyzingSms(true);
       try {
-        await analyzePieceMutation.mutateAsync({ 
-          channel: "SMS", 
-          content: { text: smsText } 
+        await analyzePieceMutation.mutateAsync({
+          input: { channel: "SMS", content: { body: smsText } },
+          target: "sms",
         });
-      } catch (error) {
-        
+      } catch {
+        /* already surfaced */
       } finally {
         setIsAnalyzingSms(false);
       }
     } else {
-      if (!pushTitle.trim() || !pushBody.trim()) {
-        
-        return;
-      }
+      if (!pushTitle.trim() || !pushBody.trim()) return;
       setIsAnalyzingPush(true);
       try {
-        await analyzePieceMutation.mutateAsync({ 
-          channel: "Push", 
-          content: { title: pushTitle, body: pushBody } 
+        await analyzePieceMutation.mutateAsync({
+          input: { channel: "Push", content: { title: pushTitle, body: pushBody } },
+          target: "push",
         });
-      } catch (error) {
-        
+      } catch {
+        /* already surfaced */
       } finally {
         setIsAnalyzingPush(false);
       }
+    }
+  };
+
+  const handleAnalyzePieceEmail = async () => {
+    if (!id || !emailPieceId) return;
+    setIsAnalyzingEmail(true);
+    try {
+      await analyzePieceMutation.mutateAsync({
+        input: { channel: "EMAIL", content: { campaign_id: id, piece_id: emailPieceId } },
+        target: "email",
+      });
+    } catch {
+      /* already surfaced */
+    } finally {
+      setIsAnalyzingEmail(false);
+    }
+  };
+
+  const handleAnalyzePieceApp = async (space: string) => {
+    if (!id || !appPieceId) return;
+    setIsAnalyzingAppBySpace(prev => ({ ...prev, [space]: true }));
+    try {
+      await analyzePieceMutation.mutateAsync({
+        input: { channel: "APP", content: { campaign_id: id, piece_id: appPieceId, commercial_space: space } },
+        target: "app",
+        space,
+      });
+    } catch {
+      /* already surfaced */
+    } finally {
+      setIsAnalyzingAppBySpace(prev => ({ ...prev, [space]: false }));
     }
   };
 
@@ -353,17 +462,20 @@ export default function CampaignDetail() {
     try {
       const result = await creativePiecesAPI.uploadAppFile(id, commercialSpace, file);
       queryClient.invalidateQueries({ queryKey: ["campaign", id] });
-      
-      
+      if (result.id) setAppPieceId(result.id);
       if (result.fileUrls) {
         try {
           const fileUrls = JSON.parse(result.fileUrls);
           setAppFileUrls(prev => ({ ...prev, ...fileUrls }));
         } catch (e) {
-          
+          /* ignore */
         }
       }
-      
+      setAppAnalysis(prev => {
+        const next = { ...prev };
+        delete next[commercialSpace];
+        return next;
+      });
       setAppSubmitted(prev => ({ ...prev, [commercialSpace]: true }));
       setTimeout(() => {
         setAppSubmitted(prev => {
@@ -395,15 +507,13 @@ export default function CampaignDetail() {
     
     setEmailUploading(true);
     setEmailUploadError(null);
+    setSkipEmailAnalysisFetch(true); // Evita re-fetch da análise antiga após upload
     try {
       const result = await creativePiecesAPI.uploadEmailFile(id, file);
       queryClient.invalidateQueries({ queryKey: ["campaign", id] });
-      
-      
-      if (result.htmlFileUrl) {
-        setEmailFileUrl(result.htmlFileUrl);
-      }
-      
+      if (result.id) setEmailPieceId(result.id);
+      if (result.htmlFileUrl) setEmailFileUrl(result.htmlFileUrl);
+      setEmailAnalysis(null);
       setEmailSubmitted(true);
       setTimeout(() => setEmailSubmitted(false), 3000);
       setEmailFile(null);
@@ -440,8 +550,12 @@ export default function CampaignDetail() {
         delete newState[commercialSpace];
         return newState;
       });
+      setAppAnalysis(prev => {
+        const next = { ...prev };
+        delete next[commercialSpace];
+        return next;
+      });
     } catch (error) {
-      
       console.error("Failed to delete app file:", error);
       alert("Erro ao remover arquivo. Tente novamente.");
     }
@@ -460,13 +574,10 @@ export default function CampaignDetail() {
       
       
       setEmailFileUrl(null);
+      setEmailPieceId(null);
       setEmailSubmitted(false);
-      
-      
-      
-      
+      setEmailAnalysis(null);
     } catch (error: any) {
-      
       console.error("Failed to delete email file:", error);
       alert(error.message || "Erro ao remover arquivo. Tente novamente.");
     }
@@ -546,6 +657,220 @@ export default function CampaignDetail() {
   };
 
 
+  const channelToApi = (ch: string) => {
+    if (ch === "Push") return "PUSH";
+    if (ch === "E-mail") return "EMAIL";
+    if (ch === "App") return "APP";
+    return "SMS";
+  };
+
+  const buildPieceReviewsForSubmit = (): { channel: string; pieceId: string; commercialSpace?: string; iaVerdict: string }[] => {
+    if (!campaign?.creativePieces?.length) return [];
+    const out: { channel: string; pieceId: string; commercialSpace?: string; iaVerdict: string }[] = [];
+    const smsPiece = campaign.creativePieces.find(p => p.pieceType === "SMS");
+    const pushPiece = campaign.creativePieces.find(p => p.pieceType === "Push");
+    const emailPiece = campaign.creativePieces.find(p => p.pieceType === "E-mail");
+    const appPiece = campaign.creativePieces.find(p => p.pieceType === "App");
+    const toIa = (a: AnalyzePieceResponse | null | undefined) => {
+      if (!a) return "warning";
+      if (a.is_valid === "valid") return "approved";
+      if (a.is_valid === "invalid") return "rejected";
+      return "warning";
+    };
+    if (smsPiece?.id) {
+      const a = submittedSmsAnalysis ?? smsAnalysis;
+      out.push({ channel: "SMS", pieceId: smsPiece.id, iaVerdict: toIa(a) });
+    }
+    if (pushPiece?.id) {
+      const a = submittedPushAnalysis ?? pushAnalysis;
+      out.push({ channel: "PUSH", pieceId: pushPiece.id, iaVerdict: toIa(a) });
+    }
+    if (emailPiece?.id) {
+      out.push({ channel: "EMAIL", pieceId: emailPiece.id, iaVerdict: toIa(emailAnalysis) });
+    }
+    if (appPiece?.id && appPiece.fileUrls) {
+      try {
+        const urls = JSON.parse(appPiece.fileUrls) as Record<string, string>;
+        Object.keys(urls).forEach(space => {
+          out.push({
+            channel: "APP",
+            pieceId: appPiece!.id,
+            commercialSpace: space,
+            iaVerdict: toIa(appAnalysis[space]),
+          });
+        });
+      } catch {
+        /* ignore */
+      }
+    }
+    return out;
+  };
+
+  const computeReviewState = (c: Campaign) => {
+    const pr = c.pieceReviews ?? [];
+    let allApproved = pr.length > 0;
+    let anyRejected = false;
+    for (const r of pr) {
+      const ia = (r.iaVerdict || "").toLowerCase();
+      const hu = (r.humanVerdict || "").toLowerCase();
+      const approved = (ia === "approved" && hu !== "manually_rejected") || ((ia === "rejected" || ia === "warning") && hu === "approved");
+      const rejected = (ia === "approved" && hu === "manually_rejected") || ((ia === "rejected" || ia === "warning") && hu === "rejected");
+      if (!approved) allApproved = false;
+      if (rejected) anyRejected = true;
+    }
+    return { allApproved, anyRejected };
+  };
+
+  const getPieceReviewsForChannel = (ch: string) => {
+    const apiCh = channelToApi(ch);
+    return (campaign?.pieceReviews ?? []).filter((r) => (r.channel || "").toUpperCase() === apiCh);
+  };
+
+  const openRejectionDialog = (payload: {
+    pr: { pieceId: string; commercialSpace: string };
+    uiChannel: string;
+    action: "reject" | "manually_reject";
+    spaceLabel?: string;
+  }) => {
+    setRejectionDialogPayload(payload);
+    setRejectionReasonInput("");
+    setRejectionDialogOpen(true);
+  };
+
+  const confirmRejection = () => {
+    if (!rejectionDialogPayload || !id) return;
+    const reason = rejectionReasonInput.trim() || undefined;
+    reviewPieceMutation.mutate(
+      {
+        channel: channelToApi(rejectionDialogPayload.uiChannel),
+        pieceId: rejectionDialogPayload.pr.pieceId,
+        commercialSpace: rejectionDialogPayload.pr.commercialSpace || undefined,
+        action: rejectionDialogPayload.action,
+        rejectionReason: reason,
+      },
+      {
+        onSettled: () => {
+          setRejectionDialogOpen(false);
+          setRejectionDialogPayload(null);
+          setRejectionReasonInput("");
+        },
+      }
+    );
+  };
+
+  const showPieceReviewBlock =
+    (currentUser?.role === "Analista de negócios" && campaign?.status === "CONTENT_REVIEW") ||
+    (currentUser?.role === "Analista de criação" && campaign?.status === "CONTENT_ADJUSTMENT");
+  const showPieceReviewActions =
+    currentUser?.role === "Analista de negócios" && campaign?.status === "CONTENT_REVIEW";
+
+  type PieceReviewType = NonNullable<NonNullable<Campaign["pieceReviews"]>[number]>;
+  const renderPieceReviewBlock = (
+    pr: PieceReviewType,
+    uiChannel: string,
+    spaceLabel?: string,
+    showActions?: boolean
+  ) => {
+    const ia = (pr.iaVerdict || "").toLowerCase();
+    const hu = (pr.humanVerdict || "").toLowerCase();
+    const needsHuman = ia === "rejected" || ia === "warning";
+    const canApproveReject = needsHuman && hu === "pending";
+    const canManuallyReject = ia === "approved" && hu !== "manually_rejected";
+    const pending = reviewPieceMutation.isPending;
+    const displayActions = showActions !== false;
+    const reviewed = hu !== "pending";
+    const isApproved = hu === "approved" || (ia === "approved" && hu !== "manually_rejected");
+    const isRejected = hu === "rejected" || hu === "manually_rejected";
+    const blockVariant = isRejected ? "red" : isApproved ? "green" : "yellow";
+    const variantClasses = {
+      green: "bg-green-50 border-green-200 dark:bg-green-950/20 dark:border-green-800",
+      red: "bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-800",
+      yellow: "bg-yellow-50 border-yellow-200 dark:bg-yellow-950/20 dark:border-yellow-800",
+    };
+    const iaLabel = ia === "approved" ? "Aprovado" : ia === "rejected" ? "Reprovado" : "Ressalvas";
+    const huLabel = hu === "approved" ? "Aprovado" : hu === "rejected" ? "Reprovado" : hu === "manually_rejected" ? "Reprovado manualmente" : "Pendente";
+
+    return (
+      <div className={cn("mt-4 p-4 rounded-lg border-2", variantClasses[blockVariant])}>
+        <div className="flex items-start gap-3">
+          {blockVariant === "green" ? (
+            <CheckCircle size={20} className="text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
+          ) : blockVariant === "red" ? (
+            <AlertCircle size={20} className="text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
+          ) : (
+            <AlertTriangle size={20} className="text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" />
+          )}
+          <div className="flex-1 min-w-0 space-y-2">
+            {spaceLabel && <p className="text-xs font-medium text-foreground/60">{spaceLabel}</p>}
+            <p className="text-sm font-semibold text-foreground">Revisão da peça</p>
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span className={cn(
+                "font-medium px-2 py-0.5 rounded",
+                ia === "approved" && "bg-green-500/20 text-green-800 dark:text-green-200",
+                ia === "rejected" && "bg-red-500/20 text-red-800 dark:text-red-200",
+                (ia === "warning" || !ia) && "bg-yellow-500/20 text-yellow-800 dark:text-yellow-200",
+              )}>
+                Parecer IA: {iaLabel}
+              </span>
+              <span className={cn(
+                "font-medium px-2 py-0.5 rounded",
+                hu === "approved" && "bg-green-500/20 text-green-800 dark:text-green-200",
+                (hu === "rejected" || hu === "manually_rejected") && "bg-red-500/20 text-red-800 dark:text-red-200",
+                hu === "pending" && "bg-muted text-foreground/70",
+              )}>
+                Revisão humana: {huLabel}
+              </span>
+            </div>
+            {reviewed && pr.reviewedAt && (
+              <p className="text-xs text-foreground/70 flex items-center gap-1.5">
+                <User size={14} className="flex-shrink-0" />
+                Revisado por <span className="font-medium text-foreground">{pr.reviewedByName || "Usuário"}</span>
+                {" "}em {format(new Date(pr.reviewedAt), "dd/MM/yyyy 'às' HH:mm")}
+              </p>
+            )}
+            {isRejected && pr.rejectionReason && (
+              <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-3">
+                <p className="text-xs font-medium text-red-800 dark:text-red-200 mb-1">Motivo da reprovação</p>
+                <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{pr.rejectionReason}</p>
+              </div>
+            )}
+            {displayActions && (canApproveReject || canManuallyReject) && (
+              <div className="flex flex-wrap gap-2 pt-1">
+                {canApproveReject && (
+                  <>
+                    <button
+                      onClick={() => reviewPieceMutation.mutate({ channel: channelToApi(uiChannel), pieceId: pr.pieceId, commercialSpace: pr.commercialSpace || undefined, action: "approve" })}
+                      disabled={pending}
+                      className="px-3 py-1.5 rounded-lg text-sm font-medium bg-green-500/10 text-green-700 dark:text-green-300 hover:bg-green-500/20 border border-green-500/30 disabled:opacity-50 transition-colors"
+                    >
+                      Aprovar
+                    </button>
+                    <button
+                      onClick={() => openRejectionDialog({ pr: { pieceId: pr.pieceId, commercialSpace: pr.commercialSpace || "" }, uiChannel, action: "reject", spaceLabel })}
+                      disabled={pending}
+                      className="px-3 py-1.5 rounded-lg text-sm font-medium bg-red-500/10 text-red-700 dark:text-red-300 hover:bg-red-500/20 border border-red-500/30 disabled:opacity-50 transition-colors"
+                    >
+                      Reprovar
+                    </button>
+                  </>
+                )}
+                {canManuallyReject && (
+                  <button
+                    onClick={() => openRejectionDialog({ pr: { pieceId: pr.pieceId, commercialSpace: pr.commercialSpace || "" }, uiChannel, action: "manually_reject", spaceLabel })}
+                    disabled={pending}
+                    className="px-3 py-1.5 rounded-lg text-sm font-medium border border-border bg-background/50 text-foreground hover:bg-muted/50 disabled:opacity-50 transition-colors"
+                  >
+                    Reprovar manualmente
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
     DRAFT: { label: "Rascunho", color: "text-slate-500", bg: "bg-slate-500/10" },
     CREATIVE_STAGE: {
@@ -576,63 +901,48 @@ export default function CampaignDetail() {
   };
 
   
-  const getAvailableActions = () => {
+  const getAvailableActions = (): { kind: "status" | "submit_for_review"; label: string; status?: CampaignStatus; variant: string; disabled?: boolean }[] => {
     if (!campaign || !currentUser) return [];
 
-    const actions = [];
+    const actions: { kind: "status" | "submit_for_review"; label: string; status?: CampaignStatus; variant: string; disabled?: boolean }[] = [];
     const userRole = currentUser.role;
 
-    
     if (userRole === "Analista de negócios") {
       if (campaign.status === "DRAFT" && campaign.createdBy === currentUser.id) {
-        actions.push({
-          label: "Enviar para Criação",
-          status: "CREATIVE_STAGE" as CampaignStatus,
-          variant: "primary",
-        });
+        actions.push({ kind: "status", label: "Enviar para Criação", status: "CREATIVE_STAGE" as CampaignStatus, variant: "primary" });
       }
       if (campaign.status === "CONTENT_REVIEW") {
+        const { allApproved, anyRejected } = computeReviewState(campaign);
         actions.push(
-          {
-            label: "Aprovar Conteúdo",
-            status: "CAMPAIGN_BUILDING" as CampaignStatus,
-            variant: "success",
-          },
-          {
-            label: "Solicitar Ajustes",
-            status: "CONTENT_ADJUSTMENT" as CampaignStatus,
-            variant: "warning",
-          }
+          { kind: "status", label: "Aprovar Conteúdo", status: "CAMPAIGN_BUILDING" as CampaignStatus, variant: "success", disabled: !allApproved },
+          { kind: "status", label: "Solicitar Ajustes", status: "CONTENT_ADJUSTMENT" as CampaignStatus, variant: "warning", disabled: !anyRejected }
         );
       }
     }
 
-    
     if (userRole === "Analista de criação") {
+      const noPieces = buildPieceReviewsForSubmit().length === 0;
       if (campaign.status === "CREATIVE_STAGE") {
         actions.push({
+          kind: "submit_for_review",
           label: "Enviar para Revisão",
-          status: "CONTENT_REVIEW" as CampaignStatus,
           variant: "primary",
+          disabled: noPieces,
         });
       }
       if (campaign.status === "CONTENT_ADJUSTMENT") {
         actions.push({
+          kind: "submit_for_review",
           label: "Reenviar para Revisão",
-          status: "CONTENT_REVIEW" as CampaignStatus,
           variant: "primary",
+          disabled: noPieces,
         });
       }
     }
 
-    
     if (userRole === "Analista de campanhas") {
       if (campaign.status === "CAMPAIGN_BUILDING") {
-        actions.push({
-          label: "Publicar Campanha",
-          status: "CAMPAIGN_PUBLISHED" as CampaignStatus,
-          variant: "success",
-        });
+        actions.push({ kind: "status", label: "Publicar Campanha", status: "CAMPAIGN_PUBLISHED" as CampaignStatus, variant: "success" });
       }
     }
 
@@ -728,22 +1038,6 @@ export default function CampaignDetail() {
             </div>
 
                 <div className="flex gap-2">
-                  {/* UPLOAD DE PEÇAS */}
-                  {currentUser?.role === "Analista de criação" && 
-                   (campaign.status === "CREATIVE_STAGE" || campaign.status === "CONTENT_ADJUSTMENT") && (
-                    <button
-                      onClick={() => {
-                        const section = document.getElementById("creative-pieces-section");
-                        if (section) {
-                          section.scrollIntoView({ behavior: "smooth", block: "start" });
-                        }
-                      }}
-                      className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white font-medium hover:shadow-lg transition-all"
-                    >
-                      <Sparkles size={20} />
-                      Upload de Peças
-                    </button>
-                  )}
                   {currentUser?.role === "Analista de negócios" && 
                    campaign.status === "DRAFT" && 
                    campaign.createdBy === currentUser.id && (
@@ -785,8 +1079,8 @@ export default function CampaignDetail() {
       </div>
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 order-2">
           {/* Briefing Content */}
           <div className="lg:col-span-2 space-y-4">
 
@@ -1026,18 +1320,23 @@ export default function CampaignDetail() {
                     success: "bg-green-500/10 text-green-700 hover:bg-green-500/20",
                     warning: "bg-orange-500/10 text-orange-700 hover:bg-orange-500/20",
                   };
-                  
+                  const isSubmit = action.kind === "submit_for_review";
+                  const pending = isSubmit ? submitForReviewMutation.isPending : updateStatusMutation.isPending;
+                  const disabled = pending || !!action.disabled;
                   return (
                     <button
                       key={index}
-                      onClick={() => handleStatusTransition(action.status)}
-                      disabled={updateStatusMutation.isPending}
+                      onClick={() => {
+                        if (isSubmit) submitForReviewMutation.mutate(buildPieceReviewsForSubmit());
+                        else if (action.status) handleStatusTransition(action.status);
+                      }}
+                      disabled={disabled}
                       className={cn(
                         "w-full px-4 py-2 rounded-lg font-medium transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed",
                         variantClasses[action.variant as keyof typeof variantClasses] || variantClasses.primary
                       )}
                     >
-                      {updateStatusMutation.isPending ? "Processando..." : action.label}
+                      {pending ? "Processando..." : action.label}
                     </button>
                   );
                 })}
@@ -1050,35 +1349,38 @@ export default function CampaignDetail() {
         {((currentUser?.role === "Analista de negócios" && (campaign.status === "CONTENT_REVIEW" || campaign.status === "CAMPAIGN_BUILDING" || campaign.status === "CAMPAIGN_PUBLISHED")) ||
           (currentUser?.role === "Analista de criação" && (campaign.status === "CREATIVE_STAGE" || campaign.status === "CONTENT_ADJUSTMENT" || campaign.status === "CONTENT_REVIEW")) ||
           (currentUser?.role === "Analista de campanhas" && (campaign.status === "CAMPAIGN_BUILDING" || campaign.status === "CAMPAIGN_PUBLISHED"))) && (
-          <div id="creative-pieces-section" className={cn(
-            "mt-8",
-            currentUser?.role === "Analista de criação" && "relative"
-          )}>
+          <div id="creative-pieces-section" className="order-1 w-full">
             <div className={cn(
-              "p-6 rounded-lg border",
+              "rounded-lg border overflow-hidden",
               currentUser?.role === "Analista de criação"
                 ? "bg-gradient-to-br from-purple-50/80 via-purple-50/60 to-purple-100/40 dark:from-purple-950/30 dark:via-purple-900/20 dark:to-purple-950/20 border-purple-200/50 dark:border-purple-800/30 shadow-lg shadow-purple-500/10"
                 : "border-border/50 bg-card"
             )}>
               {currentUser?.role === "Analista de criação" && (
-                <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-400 via-purple-500 to-purple-400 rounded-t-lg" />
+                <div className="h-0.5 bg-gradient-to-r from-purple-400 via-purple-500 to-purple-400" />
               )}
-              <div className="flex items-center gap-3 mb-6">
-                <div className={cn(
-                  "p-2 rounded-lg",
-                  currentUser?.role === "Analista de criação"
-                    ? "bg-purple-500/20 dark:bg-purple-400/20"
-                    : "bg-primary/10"
-                )}>
-                  {currentUser?.role === "Analista de criação" ? (
-                    <Sparkles size={24} className="text-purple-600 dark:text-purple-400" />
-                  ) : (
-                    <FileText size={24} className="text-primary" />
-                  )}
-                </div>
-                <div>
-                  <h2 className={cn(
-                    "text-xl font-semibold",
+              {/* Faixa fina sempre visível */}
+              <div className={cn(
+                "flex items-center justify-between gap-3 px-4 py-2.5",
+                currentUser?.role === "Analista de criação"
+                  ? "bg-purple-50/60 dark:bg-purple-950/20"
+                  : "bg-muted/30"
+              )}>
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className={cn(
+                    "p-1.5 rounded-md shrink-0",
+                    currentUser?.role === "Analista de criação"
+                      ? "bg-purple-500/20 dark:bg-purple-400/20"
+                      : "bg-primary/10"
+                  )}>
+                    {currentUser?.role === "Analista de criação" ? (
+                      <Sparkles size={18} className="text-purple-600 dark:text-purple-400" />
+                    ) : (
+                      <FileText size={18} className="text-primary" />
+                    )}
+                  </div>
+                  <span className={cn(
+                    "text-sm font-medium truncate",
                     currentUser?.role === "Analista de criação"
                       ? "text-purple-900 dark:text-purple-100"
                       : "text-foreground"
@@ -1087,23 +1389,36 @@ export default function CampaignDetail() {
                       ? "Revisão de Peças Criativas" 
                       : currentUser?.role === "Analista de campanhas"
                       ? "Peças Criativas"
-                      : "Studio de Criação"}
-                  </h2>
-                  <p className={cn(
-                    "text-sm",
-                    currentUser?.role === "Analista de criação"
-                      ? "text-purple-700/80 dark:text-purple-300/80"
-                      : "text-foreground/60"
-                  )}>
-                    {currentUser?.role === "Analista de negócios"
-                      ? "Revise todas as peças criativas antes de aprovar ou solicitar ajustes"
-                      : currentUser?.role === "Analista de campanhas"
-                      ? "Visualize as peças criativas aprovadas para construir a campanha"
-                      : "Crie e gerencie as peças criativas para os canais de comunicação da campanha"}
-                  </p>
+                      : "Peças Criativas"}
+                  </span>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setStudioOpen(!studioOpen)}
+                  className={cn(
+                    "flex items-center gap-1.5 shrink-0 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
+                    currentUser?.role === "Analista de criação"
+                      ? "bg-purple-500/20 text-purple-800 dark:text-purple-200 hover:bg-purple-500/30"
+                      : "bg-primary/10 text-primary hover:bg-primary/20"
+                  )}
+                >
+                  {studioOpen ? (
+                    <>
+                      <ChevronUp size={16} />
+                      Recolher
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles size={16} />
+                      Ver peças
+                    </>
+                  )}
+                </button>
               </div>
 
+              <Collapsible open={studioOpen} onOpenChange={setStudioOpen}>
+                <CollapsibleContent>
+                  <div className="px-4 pb-6 pt-2 border-t border-border/40">
               {/* Tabs by Channel */}
               {campaign.communicationChannels && campaign.communicationChannels.length > 0 && (
                 <Tabs 
@@ -1144,26 +1459,32 @@ export default function CampaignDetail() {
                     const piece = campaign.creativePieces?.find(p => p.pieceType === channel);
                     
                     return (
-                      <TabsContent key={channel} value={channel} className="mt-0 space-y-6">
-                        {/* Creation Section - Only shown if user can edit */}
-                        {canEdit && (
-                          <div className="space-y-4">
-                            <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
-                              <Sparkles size={18} className="text-purple-600" />
-                              Criação
-                            </h3>
-                            
-                            {/* SMS Channel Creation */}
-                            {channel === "SMS" && (
-                    <div className="p-6 rounded-lg border border-border/50 bg-card">
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 rounded-lg bg-primary/10">
-                            <Smartphone size={24} className="text-primary" />
+                      <TabsContent key={channel} value={channel} className="mt-0">
+                        <div className={cn(
+                          "grid gap-6",
+                          canEdit
+                            ? "grid-cols-1 lg:grid-cols-[minmax(0,440px)_1fr]"
+                            : "grid-cols-1"
+                        )}>
+                          {/* Creation Section - Left, upload/criação */}
+                          {canEdit && (
+                            <div className="space-y-4">
+                              <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
+                                <Sparkles size={16} className="text-purple-600" />
+                                Criação
+                              </h3>
+                              
+                              {/* SMS Channel Creation */}
+                              {channel === "SMS" && (
+                    <div className="p-4 rounded-lg border border-border/50 bg-card">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <div className="p-1.5 rounded-lg bg-primary/10">
+                            <Smartphone size={20} className="text-primary" />
                           </div>
                           <div>
-                            <h4 className="text-lg font-semibold text-foreground">Texto SMS</h4>
-                            <p className="text-sm text-foreground/60">Máximo recomendado: 160 caracteres</p>
+                            <h4 className="text-base font-semibold text-foreground">Texto SMS</h4>
+                            <p className="text-xs text-foreground/60">Máximo recomendado: 160 caracteres</p>
                           </div>
                         </div>
                         <button
@@ -1200,7 +1521,7 @@ export default function CampaignDetail() {
                           onChange={(e) => setSmsText(e.target.value)}
                           placeholder="Digite o texto SMS..."
                           rows={4}
-                          className="resize-none text-base font-medium"
+                          className="resize-none text-sm font-medium"
                         />
                         
                         {/* Display Analysis Result */}
@@ -1231,7 +1552,7 @@ export default function CampaignDetail() {
                                     : "text-yellow-900 dark:text-yellow-100"
                                 )}>
                                   {smsAnalysis.is_valid === "valid" 
-                                    ? "Validação Aprovada" 
+                                    ? "Conteúdo aprovado" 
                                     : smsAnalysis.is_valid === "invalid"
                                     ? "Validação Reprovada"
                                     : "Validação com Ressalvas"}
@@ -1289,15 +1610,15 @@ export default function CampaignDetail() {
 
                             {/* Push Channel Creation */}
                             {channel === "Push" && (
-                    <div className="p-6 rounded-lg border border-border/50 bg-card">
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 rounded-lg bg-primary/10">
-                            <MessageSquareIcon size={24} className="text-primary" />
+                    <div className="p-4 rounded-lg border border-border/50 bg-card">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <div className="p-1.5 rounded-lg bg-primary/10">
+                            <MessageSquareIcon size={20} className="text-primary" />
                           </div>
                           <div>
-                            <h4 className="text-lg font-semibold text-foreground">Notificação Push</h4>
-                            <p className="text-sm text-foreground/60">Título (até 50) e corpo (até 120 caracteres)</p>
+                            <h4 className="text-base font-semibold text-foreground">Notificação Push</h4>
+                            <p className="text-xs text-foreground/60">Título (até 50) e corpo (até 120 caracteres)</p>
                           </div>
                         </div>
                         <button
@@ -1331,7 +1652,7 @@ export default function CampaignDetail() {
                       <div className="mt-4 space-y-4">
                         <div className="space-y-2">
                           <div className="flex items-center justify-between">
-                            <Label htmlFor="push-title" className="text-sm font-medium text-foreground">
+                            <Label htmlFor="push-title" className="text-xs font-medium text-foreground">
                               Título
                             </Label>
                             <span className={cn(
@@ -1347,12 +1668,12 @@ export default function CampaignDetail() {
                             onChange={(e) => setPushTitle(e.target.value)}
                             placeholder="Digite o título da notificação push..."
                             rows={2}
-                            className="resize-none text-base font-medium"
+                            className="resize-none text-sm font-medium"
                           />
                         </div>
                         <div className="space-y-2">
                           <div className="flex items-center justify-between">
-                            <Label htmlFor="push-body" className="text-sm font-medium text-foreground">
+                            <Label htmlFor="push-body" className="text-xs font-medium text-foreground">
                               Corpo
                             </Label>
                             <span className={cn(
@@ -1368,7 +1689,7 @@ export default function CampaignDetail() {
                             onChange={(e) => setPushBody(e.target.value)}
                             placeholder="Digite o corpo da notificação push..."
                             rows={3}
-                            className="resize-none text-base font-medium"
+                            className="resize-none text-sm font-medium"
                           />
                         </div>
                         
@@ -1400,7 +1721,7 @@ export default function CampaignDetail() {
                                     : "text-yellow-900 dark:text-yellow-100"
                                 )}>
                                   {pushAnalysis.is_valid === "valid" 
-                                    ? "Validação Aprovada" 
+                                    ? "Conteúdo aprovado" 
                                     : pushAnalysis.is_valid === "invalid"
                                     ? "Validação Reprovada"
                                     : "Validação com Ressalvas"}
@@ -1453,14 +1774,14 @@ export default function CampaignDetail() {
 
                             {/* App Channel Creation */}
                             {channel === "App" && campaign.commercialSpaces && campaign.commercialSpaces.length > 0 && (
-                    <div className="p-6 rounded-lg border border-border/50 bg-card">
-                      <div className="flex items-center gap-3 mb-4">
-                        <div className="p-2 rounded-lg bg-primary/10">
-                          <Image size={24} className="text-primary" />
+                    <div className="p-4 rounded-lg border border-border/50 bg-card">
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="p-1.5 rounded-lg bg-primary/10">
+                          <Image size={20} className="text-primary" />
                         </div>
                         <div>
-                          <h4 className="text-lg font-semibold text-foreground">Arquivos App</h4>
-                          <p className="text-sm text-foreground/60">Envie 1 arquivo PNG por espaço comercial</p>
+                          <h4 className="text-base font-semibold text-foreground">Arquivos App</h4>
+                          <p className="text-xs text-foreground/60">Envie 1 arquivo PNG por espaço comercial</p>
                         </div>
                       </div>
                       <div className="space-y-4">
@@ -1470,7 +1791,7 @@ export default function CampaignDetail() {
                           return (
                             <div key={space} className="space-y-2">
                               <div className="flex items-center justify-between">
-                                <Label className="text-sm font-medium text-foreground">{space}</Label>
+                                <Label className="text-xs font-medium text-foreground">{space}</Label>
                                 {hasFile && (
                                   <div className="flex items-center gap-2 px-2 py-1 rounded-lg bg-green-500/10">
                                     <CheckCircle size={14} className="text-green-600" />
@@ -1523,30 +1844,90 @@ export default function CampaignDetail() {
                                 </div>
                               )}
                               {hasFile && (
-                                <div className="mt-2 p-2 rounded-lg bg-muted/30 border border-border/50">
-                                  <div className="flex items-center gap-2">
-                                    <Image size={14} className="text-foreground/60" />
-                                    <span className="text-xs text-foreground/60">Arquivo PNG enviado</span>
-                                    <div className="ml-auto flex items-center gap-2">
-                                      {appFileUrls[space] && (
-                                        <a
-                                          href={appFileUrls[space]}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          className="text-xs text-primary hover:underline"
+                                <div className="mt-2 space-y-2">
+                                  <div className="p-2 rounded-lg bg-muted/30 border border-border/50">
+                                    <div className="flex items-center gap-2">
+                                      <Image size={14} className="text-foreground/60" />
+                                      <span className="text-xs text-foreground/60">Arquivo PNG enviado</span>
+                                      <div className="ml-auto flex items-center gap-2">
+                                        {appFileUrls[space] && (
+                                          <a
+                                            href={appFileUrls[space]}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-xs text-primary hover:underline"
+                                          >
+                                            Ver arquivo
+                                          </a>
+                                        )}
+                                        <button
+                                          onClick={() => handleAnalyzePieceApp(space)}
+                                          disabled={!appPieceId || isAnalyzingAnyApp || !!appAnalysis[space]}
+                                          className={cn(
+                                            "flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium transition-all",
+                                            (!appPieceId || isAnalyzingAnyApp || !!appAnalysis[space])
+                                              ? "text-foreground/30 cursor-not-allowed bg-muted"
+                                              : "bg-primary text-white hover:bg-primary/90"
+                                          )}
                                         >
-                                          Ver arquivo
-                                        </a>
-                                      )}
-                                      <button
-                                        onClick={() => handleDeleteAppFile(space)}
-                                        className="p-1 rounded hover:bg-red-500/10 text-red-600 hover:text-red-700 transition-colors"
-                                        title="Remover arquivo"
-                                      >
-                                        <Trash2 size={14} />
-                                      </button>
+                                          {isAnalyzingAppBySpace[space] ? (
+                                            <Loader2 size={12} className="animate-spin" />
+                                          ) : appAnalysis[space] ? (
+                                            <CheckCircle size={12} />
+                                          ) : (
+                                            <Sparkles size={12} />
+                                          )}
+                                          {isAnalyzingAppBySpace[space] ? "Validando..." : appAnalysis[space] ? "Análise OK" : "Validar"}
+                                        </button>
+                                        <button
+                                          onClick={() => handleDeleteAppFile(space)}
+                                          className="p-1 rounded hover:bg-red-500/10 text-red-600 hover:text-red-700 transition-colors"
+                                          title="Remover arquivo"
+                                        >
+                                          <Trash2 size={14} />
+                                        </button>
+                                      </div>
                                     </div>
                                   </div>
+                                  {appAnalysis[space] && (
+                                    <div className={cn(
+                                      "p-3 rounded-lg border-2",
+                                      appAnalysis[space]!.is_valid === "valid"
+                                        ? "bg-green-50 border-green-200 dark:bg-green-950/20 dark:border-green-800"
+                                        : appAnalysis[space]!.is_valid === "invalid"
+                                        ? "bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-800"
+                                        : "bg-yellow-50 border-yellow-200 dark:bg-yellow-950/20 dark:border-yellow-800"
+                                    )}>
+                                      <div className="flex items-start gap-2">
+                                        {appAnalysis[space]!.is_valid === "valid" ? (
+                                          <CheckCircle size={16} className="text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
+                                        ) : appAnalysis[space]!.is_valid === "invalid" ? (
+                                          <AlertCircle size={16} className="text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
+                                        ) : (
+                                          <AlertTriangle size={16} className="text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" />
+                                        )}
+                                        <div className="flex-1 min-w-0">
+                                          <p className={cn(
+                                            "text-xs font-semibold mb-1",
+                                            appAnalysis[space]!.is_valid === "valid"
+                                              ? "text-green-900 dark:text-green-100"
+                                              : appAnalysis[space]!.is_valid === "invalid"
+                                              ? "text-red-900 dark:text-red-100"
+                                              : "text-yellow-900 dark:text-yellow-100"
+                                          )}>
+                                            {appAnalysis[space]!.is_valid === "valid"
+                                              ? "Conteúdo aprovado"
+                                              : appAnalysis[space]!.is_valid === "invalid"
+                                              ? "Validação Reprovada"
+                                              : "Validação com Ressalvas"}
+                                          </p>
+                                          <p className="text-xs text-foreground whitespace-pre-wrap leading-relaxed">
+                                            {appAnalysis[space]!.analysis_text}
+                                          </p>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
                               )}
                             </div>
@@ -1558,15 +1939,44 @@ export default function CampaignDetail() {
 
                             {/* E-mail Channel Creation */}
                             {channel === "E-mail" && (
-                    <div className="p-6 rounded-lg border border-border/50 bg-card">
-                      <div className="flex items-center gap-3 mb-4">
-                        <div className="p-2 rounded-lg bg-primary/10">
-                          <FileCode size={24} className="text-primary" />
+                    <div className="p-4 rounded-lg border border-border/50 bg-card">
+                      <div className="flex items-center justify-between gap-2 mb-3">
+                        <div className="flex items-center gap-2">
+                          <div className="p-1.5 rounded-lg bg-primary/10">
+                            <FileCode size={20} className="text-primary" />
+                          </div>
+                          <div>
+                            <h4 className="text-base font-semibold text-foreground">Arquivo E-mail</h4>
+                            <p className="text-xs text-foreground/60">Envie 1 arquivo HTML</p>
+                          </div>
                         </div>
-                        <div>
-                          <h4 className="text-lg font-semibold text-foreground">Arquivo E-mail</h4>
-                          <p className="text-sm text-foreground/60">Envie 1 arquivo HTML</p>
-                        </div>
+                        <button
+                          onClick={handleAnalyzePieceEmail}
+                          disabled={isAnalyzingEmail || !emailFileUrl || !emailPieceId || !!emailAnalysis}
+                          className={cn(
+                            "flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all",
+                            (isAnalyzingEmail || !emailFileUrl || !emailPieceId || !!emailAnalysis)
+                              ? "text-foreground/30 cursor-not-allowed bg-muted"
+                              : "bg-primary text-white hover:bg-primary/90"
+                          )}
+                        >
+                          {isAnalyzingEmail ? (
+                            <>
+                              <Loader2 size={18} className="animate-spin" />
+                              Validando...
+                            </>
+                          ) : emailAnalysis ? (
+                            <>
+                              <CheckCircle size={18} />
+                              Análise Concluída
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles size={18} />
+                              Validar Peça
+                            </>
+                          )}
+                        </button>
                       </div>
                       <div className="space-y-3">
                         {emailFileUrl && (
@@ -1639,14 +2049,56 @@ export default function CampaignDetail() {
                             </>
                           )}
                         </div>
+                        {emailAnalysis && (
+                          <div className={cn(
+                            "p-4 rounded-lg border-2",
+                            emailAnalysis.is_valid === "valid"
+                              ? "bg-green-50 border-green-200 dark:bg-green-950/20 dark:border-green-800"
+                              : emailAnalysis.is_valid === "invalid"
+                              ? "bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-800"
+                              : "bg-yellow-50 border-yellow-200 dark:bg-yellow-950/20 dark:border-yellow-800"
+                          )}>
+                            <div className="flex items-start gap-3">
+                              {emailAnalysis.is_valid === "valid" ? (
+                                <CheckCircle size={20} className="text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
+                              ) : emailAnalysis.is_valid === "invalid" ? (
+                                <AlertCircle size={20} className="text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
+                              ) : (
+                                <AlertTriangle size={20} className="text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" />
+                              )}
+                              <div className="flex-1">
+                                <p className={cn(
+                                  "text-sm font-semibold mb-2",
+                                  emailAnalysis.is_valid === "valid"
+                                    ? "text-green-900 dark:text-green-100"
+                                    : emailAnalysis.is_valid === "invalid"
+                                    ? "text-red-900 dark:text-red-100"
+                                    : "text-yellow-900 dark:text-yellow-100"
+                                )}>
+                                  {emailAnalysis.is_valid === "valid"
+                                    ? "Conteúdo aprovado"
+                                    : emailAnalysis.is_valid === "invalid"
+                                    ? "Validação Reprovada"
+                                    : "Validação com Ressalvas"}
+                                </p>
+                                <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
+                                  {emailAnalysis.analysis_text}
+                                </p>
+                                <p className="text-xs text-foreground/60 mt-2">
+                                  Análise realizada em {format(new Date(emailAnalysis.created_at), "dd/MM/yyyy 'às' HH:mm")}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
                             </div>
                             )}
                           </div>
                         )}
 
-                        {/* Visualization Section - Always visible */}
-                        <div className="space-y-4">
+                        {/* Visualization Section - Right, or full width when !canEdit */}
+                        <div className={cn("space-y-4", !canEdit && "lg:col-span-2")}>
                           <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
                             <FileText size={18} className="text-primary" />
                             Visualização
@@ -1719,7 +2171,7 @@ export default function CampaignDetail() {
                                           : "text-yellow-900 dark:text-yellow-100"
                                       )}>
                                         {submittedSmsAnalysis.is_valid === "valid" 
-                                          ? "Validação Aprovada" 
+                                          ? "Conteúdo aprovado" 
                                           : submittedSmsAnalysis.is_valid === "invalid"
                                           ? "Validação Reprovada"
                                           : "Validação com Ressalvas"}
@@ -1734,6 +2186,10 @@ export default function CampaignDetail() {
                                   </div>
                                 </div>
                               )}
+                              {showPieceReviewBlock && (() => {
+                                const pr = getPieceReviewsForChannel("SMS")[0];
+                                return pr ? renderPieceReviewBlock(pr, "SMS", undefined, showPieceReviewActions) : null;
+                              })()}
                             </div>
                           )}
 
@@ -1812,7 +2268,7 @@ export default function CampaignDetail() {
                                           : "text-yellow-900 dark:text-yellow-100"
                                       )}>
                                         {submittedPushAnalysis.is_valid === "valid" 
-                                          ? "Validação Aprovada" 
+                                          ? "Conteúdo aprovado" 
                                           : submittedPushAnalysis.is_valid === "invalid"
                                           ? "Validação Reprovada"
                                           : "Validação com Ressalvas"}
@@ -1827,6 +2283,10 @@ export default function CampaignDetail() {
                                   </div>
                                 </div>
                               )}
+                              {showPieceReviewBlock && (() => {
+                                const pr = getPieceReviewsForChannel("Push")[0];
+                                return pr ? renderPieceReviewBlock(pr, "Push", undefined, showPieceReviewActions) : null;
+                              })()}
                             </div>
                           )}
 
@@ -1850,11 +2310,11 @@ export default function CampaignDetail() {
                                     {spaces.map((space) => (
                                       <div key={space} className="space-y-2">
                                         <p className="text-xs font-medium text-foreground/60">{space}</p>
-                                        <div className="relative rounded-lg border-2 border-border/30 overflow-hidden bg-muted/20">
+                                        <div className="relative rounded-lg border-2 border-border/30 overflow-hidden bg-muted/20 max-w-sm">
                                           <img
                                             src={fileUrls[space]}
                                             alt={`Imagem para ${space}`}
-                                            className="w-full h-auto max-h-96 object-contain"
+                                            className="w-full h-auto max-h-56 object-contain"
                                             onError={(e) => {
                                               (e.target as HTMLImageElement).src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='200'%3E%3Crect fill='%23ddd' width='400' height='200'/%3E%3Ctext fill='%23999' font-family='sans-serif' font-size='14' x='50%25' y='50%25' text-anchor='middle' dy='.3em'%3EImagem não disponível%3C/text%3E%3C/svg%3E";
                                             }}
@@ -1869,6 +2329,26 @@ export default function CampaignDetail() {
                                           <Image size={12} />
                                           Abrir imagem em nova aba
                                         </a>
+                                        {/* Warning if this piece was submitted without validation */}
+                                        {!appAnalysis[space] && (
+                                          <div className="p-3 rounded-lg border-2 bg-yellow-50 border-yellow-200 dark:bg-yellow-950/20 dark:border-yellow-800">
+                                            <div className="flex items-start gap-2">
+                                              <AlertTriangle size={16} className="text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" />
+                                              <div className="flex-1 min-w-0">
+                                                <p className="text-xs font-semibold mb-0.5 text-yellow-900 dark:text-yellow-100">
+                                                  Peça não validada
+                                                </p>
+                                                <p className="text-xs text-yellow-800 dark:text-yellow-200">
+                                                  Esta peça foi submetida sem validação automática. Recomendamos validar antes de prosseguir.
+                                                </p>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        )}
+                                        {showPieceReviewBlock && (() => {
+                                          const pr = getPieceReviewsForChannel("App").find((r) => r.commercialSpace === space);
+                                          return pr ? renderPieceReviewBlock(pr, "App", space, showPieceReviewActions) : null;
+                                        })()}
                                       </div>
                                     ))}
                                   </div>
@@ -1895,11 +2375,11 @@ export default function CampaignDetail() {
                                 <CheckCircle size={18} className="text-green-600" />
                               </div>
                               <div className="space-y-3 mb-3">
-                                <div className="bg-muted/30 p-4 rounded-lg border border-border/30">
+                                <div className="bg-muted/30 p-4 rounded-lg border border-border/30 max-w-2xl">
                                   <p className="text-xs font-medium text-foreground/60 mb-2">Preview do HTML</p>
                                   <iframe
                                     src={piece.htmlFileUrl}
-                                    className="w-full h-[600px] border border-border/30 rounded bg-white"
+                                    className="w-full h-[320px] border border-border/30 rounded bg-white"
                                     title="E-mail HTML Preview"
                                     sandbox="allow-same-origin"
                                   />
@@ -1914,7 +2394,27 @@ export default function CampaignDetail() {
                                   Abrir arquivo HTML em nova aba
                                 </a>
                               </div>
-                              <div className="text-xs text-foreground/60 text-right">
+                              {/* Warning if piece was submitted without validation */}
+                              {!emailAnalysis && (
+                                <div className="mt-4 p-4 rounded-lg border-2 bg-yellow-50 border-yellow-200 dark:bg-yellow-950/20 dark:border-yellow-800">
+                                  <div className="flex items-start gap-3">
+                                    <AlertTriangle size={20} className="text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" />
+                                    <div className="flex-1">
+                                      <p className="text-sm font-semibold mb-1 text-yellow-900 dark:text-yellow-100">
+                                        Peça não validada
+                                      </p>
+                                      <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                                        Esta peça criativa foi submetida sem validação automática. Recomendamos validar a peça antes de prosseguir com a campanha.
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                              {showPieceReviewBlock && (() => {
+                                const pr = getPieceReviewsForChannel("E-mail")[0];
+                                return pr ? renderPieceReviewBlock(pr, "E-mail", undefined, showPieceReviewActions) : null;
+                              })()}
+                              <div className="text-xs text-foreground/60 text-right mt-3">
                                 Criado em {format(new Date(piece.createdAt), "dd/MM/yyyy 'às' HH:mm")}
                               </div>
                               </div>
@@ -1934,11 +2434,15 @@ export default function CampaignDetail() {
                             </div>
                           )}
                         </div>
+                        </div>
                       </TabsContent>
                     );
                   })}
                 </Tabs>
               )}
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
             </div>
           </div>
         )}
@@ -1994,6 +2498,64 @@ export default function CampaignDetail() {
                 </>
               ) : (
                 "Solicitar Ajustes"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rejection reason Dialog (Reprovar / Reprovar manualmente) */}
+      <Dialog open={rejectionDialogOpen} onOpenChange={(open) => { if (!open) { setRejectionDialogOpen(false); setRejectionDialogPayload(null); setRejectionReasonInput(""); } }}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>
+              {rejectionDialogPayload?.action === "manually_reject" ? "Reprovar manualmente" : "Reprovar peça"}
+            </DialogTitle>
+            <DialogDescription>
+              Descreva o problema com a peça (opcional). O motivo será registrado e visível para o time de criação.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="rejection-reason">Motivo da reprovação</Label>
+              <Textarea
+                id="rejection-reason"
+                placeholder="Ex.: Texto não está alinhado às diretrizes de tom; imagem com resolução inadequada..."
+                value={rejectionReasonInput}
+                onChange={(e) => setRejectionReasonInput(e.target.value)}
+                rows={5}
+                className="resize-none"
+                maxLength={2000}
+              />
+              <p className="text-xs text-foreground/60">
+                Opcional. Máximo 2.000 caracteres.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setRejectionDialogOpen(false);
+                setRejectionDialogPayload(null);
+                setRejectionReasonInput("");
+              }}
+              disabled={reviewPieceMutation.isPending}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={confirmRejection}
+              disabled={reviewPieceMutation.isPending}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              {reviewPieceMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Enviando...
+                </>
+              ) : (
+                "Confirmar reprovação"
               )}
             </Button>
           </DialogFooter>

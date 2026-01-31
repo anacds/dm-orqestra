@@ -1,13 +1,14 @@
-from typing import List, Optional
+from datetime import datetime, timezone
+from typing import Dict, List, Optional
 from uuid import uuid4
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from fastapi import HTTPException, status
 
-from typing import Dict
 from app.models.campaign import Campaign, CampaignStatus
 from app.models.comment import Comment
 from app.models.creative_piece import CreativePiece
+from app.models.piece_review import PieceReview, HumanVerdict
 from app.models.user_role import UserRole
 from app.schemas.campaign import (
     CampaignCreate,
@@ -18,6 +19,9 @@ from app.schemas.campaign import (
     CommentResponse,
     CreativePieceCreate,
     CreativePieceResponse,
+    PieceReviewResponse,
+    ReviewPieceRequest,
+    SubmitForReviewRequest,
 )
 from app.core.permissions import (
     get_visible_statuses_for_role,
@@ -29,7 +33,44 @@ from app.core.auth_client import auth_client
 import json
 
 
-async def campaign_to_response(campaign: Campaign, auth_token: Optional[str] = None) -> CampaignResponse:
+def _piece_review_to_response(pr: PieceReview) -> dict:
+    return {
+        "id": pr.id,
+        "campaignId": pr.campaign_id,
+        "channel": pr.channel,
+        "pieceId": pr.piece_id,
+        "commercialSpace": pr.commercial_space or "",
+        "iaVerdict": pr.ia_verdict,
+        "humanVerdict": pr.human_verdict,
+        "reviewedAt": pr.reviewed_at,
+        "reviewedBy": pr.reviewed_by,
+        "rejectionReason": pr.rejection_reason,
+    }
+
+
+def _is_piece_finally_approved(ia: str, human: str) -> bool:
+    """True if piece is approved: (IA approved and not manually rejected) or (IA rejected/warning and human approved)."""
+    if ia == "approved":
+        return human != HumanVerdict.MANUALLY_REJECTED.value
+    if ia in ("rejected", "warning"):
+        return human == HumanVerdict.APPROVED.value
+    return False
+
+
+def _is_piece_finally_rejected(ia: str, human: str) -> bool:
+    """True if piece is rejected: (IA approved and manually rejected) or (IA rejected/warning and human rejected)."""
+    if ia == "approved":
+        return human == HumanVerdict.MANUALLY_REJECTED.value
+    if ia in ("rejected", "warning"):
+        return human == HumanVerdict.REJECTED.value
+    return False
+
+
+async def campaign_to_response(
+    campaign: Campaign,
+    auth_token: Optional[str] = None,
+    db: Optional[Session] = None,
+) -> CampaignResponse:
     """Convert Campaign model to CampaignResponse schema."""
     comments_list = None
     if campaign.comments:
@@ -69,6 +110,28 @@ async def campaign_to_response(campaign: Campaign, auth_token: Optional[str] = N
             
             normalized_pieces.append(CreativePieceResponse.model_validate(piece_data))
         creative_pieces_list = normalized_pieces
+
+    piece_reviews_list = None
+    _status = getattr(campaign, "status", None)
+    _status_val = _status.value if hasattr(_status, "value") else (_status.strip() if isinstance(_status, str) else None)
+    if db and _status_val in (
+        CampaignStatus.CONTENT_REVIEW.value,
+        CampaignStatus.CONTENT_ADJUSTMENT.value,
+    ):
+        rows = db.query(PieceReview).filter(PieceReview.campaign_id == campaign.id).all()
+        if rows:
+            out = []
+            for r in rows:
+                d = _piece_review_to_response(r)
+                if r.reviewed_by and auth_token:
+                    try:
+                        u = await auth_client.get_user_by_id(r.reviewed_by, auth_token)
+                        if u:
+                            d["reviewedByName"] = u.get("full_name") or u.get("email") or r.reviewed_by
+                    except Exception:
+                        pass
+                out.append(PieceReviewResponse.model_validate(d))
+            piece_reviews_list = out
     
     response_dict = {
         "id": campaign.id,
@@ -94,6 +157,7 @@ async def campaign_to_response(campaign: Campaign, auth_token: Optional[str] = N
         "created_date": campaign.created_date,
         "comments": comments_list,
         "creative_pieces": creative_pieces_list,
+        "piece_reviews": piece_reviews_list,
     }
     
     if auth_token and campaign.created_by:
@@ -162,7 +226,7 @@ class CampaignService:
         
         campaign_responses = []
         for campaign in campaigns:
-            response = await campaign_to_response(campaign, auth_token)
+            response = await campaign_to_response(campaign, auth_token, db)
             campaign_responses.append(response)
         
         return CampaignsResponse(campaigns=campaign_responses)
@@ -189,7 +253,7 @@ class CampaignService:
                 detail="You don't have permission to view this campaign"
             )
         
-        return await campaign_to_response(campaign, auth_token)
+        return await campaign_to_response(campaign, auth_token, db)
     
     @staticmethod
     async def create_campaign(
@@ -226,7 +290,7 @@ class CampaignService:
         db.commit()
         db.refresh(campaign)
         
-        return await campaign_to_response(campaign, auth_token)
+        return await campaign_to_response(campaign, auth_token, db)
     
     @staticmethod
     async def update_campaign(
@@ -297,6 +361,34 @@ class CampaignService:
                     detail=error_msg or f"You cannot transition from {current_status.value} to {new_status.value}"
                 )
             
+            # CONTENT_REVIEW -> CONTENT_ADJUSTMENT ou CAMPAIGN_BUILDING: validar piece_reviews
+            if current_status == CampaignStatus.CONTENT_REVIEW and new_status in (
+                CampaignStatus.CONTENT_ADJUSTMENT,
+                CampaignStatus.CAMPAIGN_BUILDING,
+            ):
+                rows = db.query(PieceReview).filter(PieceReview.campaign_id == campaign_id).all()
+                if not rows:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Nenhum parecer de peça encontrado. Submeta para revisão antes de alterar o status.",
+                    )
+                any_rejected = any(
+                    _is_piece_finally_rejected(r.ia_verdict, r.human_verdict) for r in rows
+                )
+                all_approved = all(
+                    _is_piece_finally_approved(r.ia_verdict, r.human_verdict) for r in rows
+                )
+                if new_status == CampaignStatus.CONTENT_ADJUSTMENT and not any_rejected:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Solicitar ajustes só é permitido quando ao menos uma peça está reprovada.",
+                    )
+                if new_status == CampaignStatus.CAMPAIGN_BUILDING and not all_approved:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Aprovar conteúdo só é permitido quando todas as peças estão aprovadas.",
+                    )
+            
             update_data['status'] = new_status.value
         
         enum_fields = ['category', 'requesting_area', 'priority', 'communication_tone', 'execution_model', 'trigger_event']
@@ -315,7 +407,7 @@ class CampaignService:
         db.commit()
         db.refresh(campaign)
         
-        return await campaign_to_response(campaign, auth_token)
+        return await campaign_to_response(campaign, auth_token, db)
     
     @staticmethod
     def delete_campaign(db: Session, campaign_id: str, current_user: Dict) -> None:
@@ -454,4 +546,115 @@ class CampaignService:
             db.refresh(creative_piece)
             
             return CreativePieceResponse.model_validate(creative_piece)
+
+    @staticmethod
+    async def submit_for_review(
+        db: Session,
+        campaign_id: str,
+        body: SubmitForReviewRequest,
+        current_user: Dict,
+        auth_token: Optional[str] = None,
+    ) -> CampaignResponse:
+        """Creation analyst submits campaign for review. Inserts piece_reviews (IA verdict snapshot) and transitions to CONTENT_REVIEW."""
+        if current_user.get("role") != UserRole.CREATIVE_ANALYST.value:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only creative analysts can submit for review",
+            )
+        campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
+        if not campaign:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
+        if campaign.status not in (CampaignStatus.CREATIVE_STAGE.value, CampaignStatus.CONTENT_ADJUSTMENT.value):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Submit for review only allowed when campaign is CREATIVE_STAGE or CONTENT_ADJUSTMENT",
+            )
+        db.query(PieceReview).filter(PieceReview.campaign_id == campaign_id).delete()
+        for item in body.piece_reviews:
+            ch = (item.channel or "").upper().replace("-", "").replace(" ", "")
+            if ch == "E-MAIL":
+                ch = "EMAIL"
+            space = (item.commercial_space or "").strip() or ""
+            ia = (item.ia_verdict or "warning").lower()
+            if ia not in ("approved", "rejected", "warning"):
+                ia = "warning"
+            pr = PieceReview(
+                campaign_id=campaign_id,
+                channel=ch,
+                piece_id=item.piece_id,
+                commercial_space=space,
+                ia_verdict=ia,
+                human_verdict=HumanVerdict.PENDING.value,
+            )
+            db.add(pr)
+        campaign.status = CampaignStatus.CONTENT_REVIEW.value
+        db.commit()
+        db.refresh(campaign)
+        return await campaign_to_response(campaign, auth_token, db)
+
+    @staticmethod
+    async def review_piece(
+        db: Session,
+        campaign_id: str,
+        body: ReviewPieceRequest,
+        current_user: Dict,
+        auth_token: Optional[str] = None,
+    ) -> CampaignResponse:
+        """Business analyst approves/rejects a piece (or manually rejects an IA-approved piece)."""
+        if current_user.get("role") != UserRole.BUSINESS_ANALYST.value:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only business analysts can review pieces",
+            )
+        campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
+        if not campaign:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
+        if campaign.status != CampaignStatus.CONTENT_REVIEW.value:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Review only allowed when campaign is CONTENT_REVIEW",
+            )
+        ch = (body.channel or "").upper().replace("-", "").replace(" ", "")
+        if ch == "E-MAIL":
+            ch = "EMAIL"
+        space = (body.commercial_space or "").strip() or ""
+        action = (body.action or "").lower()
+        if action not in ("approve", "reject", "manually_reject"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="action must be approve, reject, or manually_reject",
+            )
+        pr = (
+            db.query(PieceReview)
+            .filter(
+                PieceReview.campaign_id == campaign_id,
+                PieceReview.channel == ch,
+                PieceReview.piece_id == body.piece_id,
+                PieceReview.commercial_space == space,
+            )
+            .first()
+        )
+        if not pr:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Piece review not found for this campaign/channel/piece",
+            )
+        human = HumanVerdict.PENDING.value
+        if action == "approve":
+            human = HumanVerdict.APPROVED.value
+        elif action == "reject":
+            human = HumanVerdict.REJECTED.value
+        else:
+            human = HumanVerdict.MANUALLY_REJECTED.value
+        pr.human_verdict = human
+        pr.reviewed_at = datetime.now(timezone.utc)
+        pr.reviewed_by = current_user.get("id") or ""
+        if action in ("reject", "manually_reject") and body.rejection_reason is not None:
+            reason = (body.rejection_reason or "").strip()
+            pr.rejection_reason = reason if reason else None
+        else:
+            pr.rejection_reason = None
+        db.commit()
+        db.refresh(campaign)
+        return await campaign_to_response(campaign, auth_token, db)
 

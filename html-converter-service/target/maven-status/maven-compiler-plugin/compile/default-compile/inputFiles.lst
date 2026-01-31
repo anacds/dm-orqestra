@@ -1,0 +1,10 @@
+/Users/anasilva/Documents/DM/dm-orqestra/html-converter-service/src/main/java/com/example/htmlconverter/service/HtmlConversionService.java
+/Users/anasilva/Documents/DM/dm-orqestra/html-converter-service/src/main/java/com/example/htmlconverter/service/ImageProcessingService.java
+/Users/anasilva/Documents/DM/dm-orqestra/html-converter-service/src/main/java/com/example/htmlconverter/dto/ConversionRequest.java
+/Users/anasilva/Documents/DM/dm-orqestra/html-converter-service/src/main/java/com/example/htmlconverter/controller/HtmlConverterController.java
+/Users/anasilva/Documents/DM/dm-orqestra/html-converter-service/src/main/java/com/example/htmlconverter/service/HtmlDecoderService.java
+/Users/anasilva/Documents/DM/dm-orqestra/html-converter-service/src/main/java/com/example/htmlconverter/exception/ConversionException.java
+/Users/anasilva/Documents/DM/dm-orqestra/html-converter-service/src/main/java/com/example/htmlconverter/HtmlConverterApplication.java
+/Users/anasilva/Documents/DM/dm-orqestra/html-converter-service/src/main/java/com/example/htmlconverter/exception/GlobalExceptionHandler.java
+/Users/anasilva/Documents/DM/dm-orqestra/html-converter-service/src/main/java/com/example/htmlconverter/dto/ConversionResponse.java
+/Users/anasilva/Documents/DM/dm-orqestra/html-converter-service/src/main/java/com/example/htmlconverter/config/McpServerConfig.java

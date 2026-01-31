@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request, Response, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi.middleware import SlowAPIMiddleware
 from slowapi.errors import RateLimitExceeded
-from app.config import SERVICE_VERSION, SERVICE_NAME, get_cors_origins, AUTH_SERVICE_URL, CAMPAIGNS_SERVICE_URL, BRIEFING_ENHANCER_SERVICE_URL, CONTENT_SERVICE_URL, ENVIRONMENT
+from app.config import SERVICE_VERSION, SERVICE_NAME, get_cors_origins, AUTH_SERVICE_URL, CAMPAIGNS_SERVICE_URL, BRIEFING_ENHANCER_SERVICE_URL, CONTENT_VALIDATION_SERVICE_URL, ENVIRONMENT
 from app.gateway import proxy_request, get_service_url
 from app.rate_limit import limiter, rate_limit_handler, get_rate_limit_for_path
 from app.auth import validate_and_extract_user, should_skip_auth
@@ -126,7 +126,7 @@ async def health_check():
                     "auth": AUTH_SERVICE_URL,
                     "campaigns": CAMPAIGNS_SERVICE_URL,
                     "briefing-enhancer": BRIEFING_ENHANCER_SERVICE_URL,
-                    "content": CONTENT_SERVICE_URL,
+                    "content-validation": CONTENT_VALIDATION_SERVICE_URL,
                 }
     }
 

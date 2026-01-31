@@ -1,7 +1,7 @@
 import httpx
 from fastapi import Request, HTTPException, status
 from typing import Optional
-from app.config import AUTH_SERVICE_URL, CAMPAIGNS_SERVICE_URL, BRIEFING_ENHANCER_SERVICE_URL, CONTENT_SERVICE_URL
+from app.config import AUTH_SERVICE_URL, CAMPAIGNS_SERVICE_URL, BRIEFING_ENHANCER_SERVICE_URL, CONTENT_VALIDATION_SERVICE_URL
 from app.auth import validate_and_extract_user, should_skip_auth
 import logging
 
@@ -61,7 +61,7 @@ async def proxy_request(
         proxy_headers["cookie"] = cookie_header
     
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=120.0) as client:
             if method == "GET":
                 response = await client.get(url, headers=proxy_headers, params=request.query_params)
             elif method == "POST":
@@ -120,7 +120,7 @@ def get_service_url(path: str) -> str:
     elif path.startswith("/api/campaigns"):
         return CAMPAIGNS_SERVICE_URL
     elif path.startswith("/api/ai/analyze-piece") or path.startswith("/api/ai/generate-text"):
-        return CONTENT_SERVICE_URL
+        return CONTENT_VALIDATION_SERVICE_URL
     elif path.startswith("/api/ai-interactions") or path.startswith("/api/ai") or path.startswith("/api/enhance-objective"):
         return BRIEFING_ENHANCER_SERVICE_URL
     else:

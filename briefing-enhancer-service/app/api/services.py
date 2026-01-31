@@ -18,13 +18,13 @@ class AIService:
         Generate thread_id based on fixed priority: session_id > campaign_id > new UUID.
         
         Strategy (FIXED - frontend doesn't choose):
-        - Durante criação de campanha: frontend SEMPRE envia session_id → usa session_id
-        - Editando campanha existente: frontend NÃO envia session_id → usa campaign_id
+        - Durante criação de campanha: frontend SEMPRE envia session_id -> usa session_id
+        - Editando campanha existente: frontend NÃO envia session_id -> usa campaign_id
         - Fallback: gera novo UUID se nenhum estiver disponível (não deveria acontecer)
         
         O frontend não escolhe - é o backend que decide baseado no que recebe:
-        - Se recebe session_id → usa session_id (contexto da sessão de criação)
-        - Se NÃO recebe session_id mas recebe campaign_id → usa campaign_id (contexto da campanha existente)
+        - Se recebe session_id -> usa session_id (contexto da sessão de criação)
+        - Se NÃO recebe session_id mas recebe campaign_id -> usa campaign_id (contexto da campanha existente)
         
         Args:
             session_id: Session ID do frontend (apenas durante criação de campanha)

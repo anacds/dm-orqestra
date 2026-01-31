@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
+import base64
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Query
 from sqlalchemy.orm import Session
 from typing import Dict, Optional
 from uuid import uuid4
@@ -16,14 +17,23 @@ from app.schemas.campaign import (
     CommentResponse,
     CreativePieceCreate,
     CreativePieceResponse,
+    PieceContentResponse,
+    ReviewPieceRequest,
+    SubmitForReviewRequest,
 )
 from app.models.user_role import UserRole
 from app.models.campaign import Campaign, CampaignStatus
 from app.models.creative_piece import CreativePiece
 from app.core.permissions import require_business_analyst
 from app.services.services import CampaignService
-from app.services.file_upload import upload_app_file, upload_email_file, update_app_file_urls, extract_file_key_from_url
-from app.core.s3_client import normalize_file_url, delete_file
+from app.services.file_upload import (
+    upload_app_file,
+    upload_email_file,
+    update_app_file_urls,
+    extract_file_key_from_url,
+    get_app_file_urls_dict,
+)
+from app.core.s3_client import normalize_file_url, delete_file, get_file
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -153,6 +163,34 @@ async def add_comment(
     return CampaignService.add_comment(db, campaign_id, comment_data, current_user)
 
 
+@router.post("/{campaign_id}/submit-for-review", response_model=CampaignResponse)
+async def submit_for_review(
+    campaign_id: str,
+    body: SubmitForReviewRequest,
+    db: Session = Depends(get_db),
+    current_user: Dict = Depends(get_current_user),
+    auth_token: str = Depends(get_token_from_cookie_or_header),
+):
+    """Creation analyst submits campaign for review. Sends IA verdict snapshot per piece and transitions to CONTENT_REVIEW."""
+    _require_creative_analyst(current_user)
+    _get_campaign_or_404(db, campaign_id)
+    return await CampaignService.submit_for_review(db, campaign_id, body, current_user, auth_token)
+
+
+@router.post("/{campaign_id}/pieces/review", response_model=CampaignResponse)
+async def review_piece(
+    campaign_id: str,
+    body: ReviewPieceRequest,
+    db: Session = Depends(get_db),
+    current_user: Dict = Depends(get_current_user),
+    auth_token: str = Depends(get_token_from_cookie_or_header),
+):
+    """Business analyst approves/rejects a piece (or manually rejects an IA-approved piece)."""
+    require_business_analyst(current_user)
+    _get_campaign_or_404(db, campaign_id)
+    return await CampaignService.review_piece(db, campaign_id, body, current_user, auth_token)
+
+
 @router.post("/{campaign_id}/creative-pieces", response_model=CreativePieceResponse, status_code=status.HTTP_201_CREATED)
 async def submit_creative_piece(
     campaign_id: str,
@@ -269,6 +307,89 @@ async def upload_email_creative_piece(
         db.commit()
         db.refresh(creative_piece)
         return CreativePieceResponse.model_validate(normalize_creative_piece_response(creative_piece))
+
+
+@router.get(
+    "/{campaign_id}/creative-pieces/{piece_id}/content",
+    response_model=PieceContentResponse,
+    summary="Download piece content",
+    description="Returns HTML (JSON-safe string) or image (base64 data URL). For App pieces, use ?commercial_space=.",
+)
+async def download_piece_content(
+    campaign_id: str,
+    piece_id: str,
+    commercial_space: Optional[str] = Query(None, description="Required for App pieces; use the commercial space key"),
+    db: Session = Depends(get_db),
+    current_user: Dict = Depends(get_current_user),
+):
+    """Download creative piece content from S3. E-mail -> HTML (escaped for JSON). App -> image as base64 data URL."""
+    _get_campaign_or_404(db, campaign_id)
+    piece = (
+        db.query(CreativePiece)
+        .filter(
+            CreativePiece.campaign_id == campaign_id,
+            CreativePiece.id == piece_id,
+        )
+        .first()
+    )
+    if not piece:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Creative piece not found")
+
+    if piece.piece_type == "E-mail":
+        if not piece.html_file_url:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="E-mail piece has no HTML file",
+            )
+        file_key = extract_file_key_from_url(piece.html_file_url, settings.S3_BUCKET_NAME)
+        if not file_key:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Invalid HTML file URL")
+        try:
+            body, content_type = get_file(file_key)
+        except Exception as e:
+            logger.exception("download piece content: get_file failed for %s: %s", file_key, e)
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Failed to fetch file from storage") from e
+        try:
+            html = body.decode("utf-8")
+        except UnicodeDecodeError:
+            try:
+                html = body.decode("latin-1")
+            except UnicodeDecodeError:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="HTML file could not be decoded as UTF-8 or Latin-1",
+                )
+        return PieceContentResponse(content_type=content_type, content=html)
+
+    if piece.piece_type == "App":
+        if not commercial_space:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="commercial_space query param is required for App pieces",
+            )
+        urls = get_app_file_urls_dict(piece.file_urls)
+        file_url = urls.get(commercial_space)
+        if not file_url:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No file for commercial space '{commercial_space}'",
+            )
+        file_key = extract_file_key_from_url(file_url, settings.S3_BUCKET_NAME)
+        if not file_key:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Invalid file URL")
+        try:
+            body, content_type = get_file(file_key)
+        except Exception as e:
+            logger.exception("download piece content: get_file failed for %s: %s", file_key, e)
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Failed to fetch file from storage") from e
+        b64 = base64.b64encode(body).decode("ascii")
+        data_url = f"data:{content_type};base64,{b64}"
+        return PieceContentResponse(content_type=content_type, content=data_url)
+
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="Download not supported for SMS or Push pieces",
+    )
 
 
 @router.delete("/{campaign_id}/creative-pieces/app/{commercial_space}", status_code=status.HTTP_204_NO_CONTENT)

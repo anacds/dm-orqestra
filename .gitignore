@@ -22,6 +22,8 @@ dist-ssr
 *.sw?
 
 .config/
+.venv
+venv
 
 .env
 .env.local

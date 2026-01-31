@@ -8,8 +8,9 @@ class AgentState(TypedDict):
     task: Optional[str]
     channel: Optional[str]
     content: Optional[str]  # Mantido para backward compatibility
-    content_title: Optional[str]  # Para PUSH
-    content_body: Optional[str]  # Para SMS e PUSH
+    content_title: Optional[str]  # Para PUSH, EMAIL, APP
+    content_body: Optional[str]  # Para SMS, PUSH, EMAIL, APP
+    content_image: Optional[str]  # Para APP (uma data URL, máx. 1 MB)
     
     # Resultados da busca
     retrieved_chunks: List[dict]
@@ -21,7 +22,6 @@ class AgentState(TypedDict):
     
     # Output estruturado
     decision: Optional[str]
-    severity: Optional[str]
     requires_human_review: Optional[bool]
     summary: Optional[str]
     

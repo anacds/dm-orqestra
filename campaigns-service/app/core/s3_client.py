@@ -67,6 +67,19 @@ def delete_file(file_key: str) -> None:
         raise Exception(f"Failed to delete file from S3: {error_msg}")
 
 
+def get_file(file_key: str) -> tuple[bytes, str]:
+    """Download file from S3. Returns (body, content_type)."""
+    ensure_bucket_exists()
+    try:
+        resp = s3_client.get_object(Bucket=settings.S3_BUCKET_NAME, Key=file_key)
+        body = resp["Body"].read()
+        content_type = resp.get("ContentType") or "application/octet-stream"
+        return body, content_type
+    except ClientError as e:
+        logger.error("failed to get file %s: %s", file_key, e)
+        raise Exception(f"Failed to get file from S3: {e}") from e
+
+
 def normalize_file_url(url: str) -> str:
     if not url:
         return url
