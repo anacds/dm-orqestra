@@ -15,6 +15,12 @@ import {
   ContentValidationChannel,
   SubmitCreativePieceRequest,
   CreativePiece,
+  PieceReviewHistoryResponse,
+  PieceReviewEvent,
+  CampaignStatusHistoryResponse,
+  CampaignStatusEvent,
+  MyTasksResponse,
+  TaskGroup,
 } from "@shared/api";
 
 const API_BASE = "/api";
@@ -214,6 +220,20 @@ export const campaignsAPI = {
       method: "POST",
       body: JSON.stringify(body),
     });
+  },
+
+  getPieceReviewHistory: async (campaignId: string): Promise<PieceReviewEvent[]> => {
+    const response = await fetchAPI<PieceReviewHistoryResponse>(`/campaigns/${campaignId}/piece-review-history`);
+    return response.events;
+  },
+
+  getStatusHistory: async (campaignId: string): Promise<{ events: CampaignStatusEvent[]; currentStatus: string }> => {
+    const response = await fetchAPI<CampaignStatusHistoryResponse>(`/campaigns/${campaignId}/status-history`);
+    return { events: response.events, currentStatus: response.currentStatus };
+  },
+
+  getMyTasks: async (): Promise<MyTasksResponse> => {
+    return await fetchAPI<MyTasksResponse>("/campaigns/my-tasks");
   },
 
   enhanceObjective: async (

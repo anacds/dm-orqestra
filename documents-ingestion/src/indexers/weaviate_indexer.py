@@ -79,6 +79,8 @@ class WeaviateIndexer:
         """Cria a collection com o schema definido."""
         create_kwargs = {
             "name": self.class_name,
+            # IMPORTANTE: Vetores são fornecidos externamente (OpenAI embeddings)
+            "vectorizer_config": Configure.Vectorizer.none(),
             "properties": [
                 Property(name="text", data_type=DataType.TEXT),
                 Property(name="source_file", data_type=DataType.TEXT),
@@ -234,6 +236,29 @@ class WeaviateIndexer:
             self.client.close()
 
 
-def create_weaviate_indexer(**kwargs) -> WeaviateIndexer:
-    return WeaviateIndexer(**kwargs)
+def create_weaviate_indexer(
+    url: Optional[str] = None,
+    api_key: Optional[str] = None,
+    class_name: Optional[str] = None,
+    vectorizer: Optional[str] = None,
+    **kwargs
+) -> WeaviateIndexer:
+    """Cria um WeaviateIndexer com as configurações fornecidas.
+    
+    Args:
+        url: URL do Weaviate
+        api_key: API key (opcional)
+        class_name: Nome da collection no Weaviate (default: LegalDocuments)
+        vectorizer: Vectorizer a usar (None = vetores externos)
+    """
+    # Usa class_name do env se não fornecido
+    if class_name is None:
+        class_name = os.getenv("WEAVIATE_CLASS_NAME", "LegalDocuments")
+    
+    return WeaviateIndexer(
+        url=url,
+        api_key=api_key,
+        class_name=class_name,
+        vectorizer=vectorizer,
+    )
 

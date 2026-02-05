@@ -109,6 +109,9 @@ services:
       - ENVIRONMENT=development
       - CORS_ORIGINS=["http://localhost:3000", "http://localhost:8000"]
       - AUTH_SERVICE_URL=http://auth-service:8002
+      # LangSmith tracing (usa @traceable)
+      - LANGCHAIN_TRACING_V2=${LANGCHAIN_TRACING_V2:-false}
+      - LANGCHAIN_API_KEY=${LANGCHAIN_API_KEY:-}
     depends_on:
       db:
         condition: service_healthy
@@ -125,7 +128,6 @@ services:
     env_file:
       - ./content-validation-service/.env
     volumes:
-      # Pasta local para ver imagens de debug de conversão de e-mail
       - ./content-validation-service/debug_images:/app/debug_images
     environment:
       - ENVIRONMENT=development
@@ -134,6 +136,7 @@ services:
       - LEGAL_SERVICE_URL=http://legal-service:8005
       - CAMPAIGNS_MCP_URL=http://campaigns-mcp-server:8010
       - HTML_CONVERTER_MCP_URL=http://html-converter-service:8011
+      - BRANDING_MCP_URL=http://branding-service:8012
       - A2A_BASE_URL=http://content-validation-service:8004
       - DATABASE_URL=postgresql://orqestra:orqestra_password@db:5432/content_validation
       - DEBUG_IMAGES_DIR=/app/debug_images
@@ -148,6 +151,8 @@ services:
         condition: service_started
       html-converter-service:
         condition: service_started
+      branding-service:
+        condition: service_started
     restart: unless-stopped
 
   legal-service:
@@ -158,15 +163,23 @@ services:
       - "8005:8005"
     env_file:
       - ./legal-service/.env
+    volumes:
+      - ./legal-service/evals/results:/app/evals/results
     environment:
       - DATABASE_URL=postgresql://orqestra:orqestra_password@db:5432/legal_service
       - ENVIRONMENT=development
       - CORS_ORIGINS=["http://localhost:3000"]
       - WEAVIATE_URL=http://weaviate:8080
+      # Collection com chunks por seção
+      - WEAVIATE_CLASS_NAME=LegalDocuments
       - REDIS_URL=redis://redis:6379/0
       - CACHE_ENABLED=true
+      # Reranking: defina como false se não tiver COHERE_APIKEY
+      - RERANK_ENABLED=${RERANK_ENABLED:-true}
+      # API Keys
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - LLM_MODEL=gpt-5-nano
+      - MARITACA_API_KEY=${MARITACA_API_KEY}
+      - COHERE_APIKEY=${COHERE_APIKEY:-}
       - EMBEDDING_MODEL=text-embedding-3-small
     depends_on:
       db:
@@ -175,7 +188,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      documents-ingestion:
+      weaviate-init:
         condition: service_completed_successfully
     restart: unless-stopped
 
@@ -247,9 +260,9 @@ services:
       - AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED=true
       - PERSISTENCE_DATA_PATH=/var/lib/weaviate
       - DEFAULT_VECTORIZER_MODULE=none
-      - ENABLE_MODULES=text2vec-openai,reranker-cohere
+      # Módulo de reranking (requer COHERE_APIKEY)
+      - ENABLE_MODULES=reranker-cohere
       - COHERE_APIKEY=${COHERE_APIKEY:-}
-      - NVIDIA_APIKEY=${NVIDIA_APIKEY:-}
       - CLUSTER_HOSTNAME=node1
     volumes:
       - weaviate_data:/var/lib/weaviate
@@ -273,27 +286,19 @@ services:
       retries: 5
     restart: unless-stopped
 
-  documents-ingestion:
+  # Inicializa Weaviate com dados pré-processados (chunks + vetores)
+  # Elimina necessidade de gerar embeddings durante startup
+  weaviate-init:
     build:
-      context: ./documents-ingestion
-      dockerfile: Dockerfile
+      context: ./legal-service
+      dockerfile: scripts/Dockerfile.weaviate-init
     environment:
       - WEAVIATE_URL=http://weaviate:8080
-      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-openai}
-      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-text-embedding-3-small}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - DOCUMENTS_DIR=doc-juridico
-      - CHUNKER_TYPE=${CHUNKER_TYPE:-semantic}
-      - EMBEDDING_REQUEST_TIMEOUT=${EMBEDDING_REQUEST_TIMEOUT:-60}
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      # Limpa todos os dados do Weaviate antes de ingerir (evita duplicação)
-      - CLEAR_BEFORE_INGEST=${CLEAR_BEFORE_INGEST:-true}
+      - DATA_DIR=/app/data
     depends_on:
       weaviate:
         condition: service_healthy
     restart: "no"
-    volumes:
-      - ./documents-ingestion/doc-juridico:/app/doc-juridico:ro
 
 volumes:
   postgres_data:

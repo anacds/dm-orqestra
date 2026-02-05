@@ -8,7 +8,7 @@ Create Date: 2024-01-02
 import sys
 import os
 import uuid
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from alembic import op
 import sqlalchemy as sa
 import psycopg2
@@ -117,6 +117,43 @@ def upgrade() -> None:
                 "created_by": user_id
             }
         )
+        
+        # Add status history for campaign 1 (DRAFT -> CREATIVE_STAGE)
+        now = datetime.now(timezone.utc)
+        draft_time = now - timedelta(days=3, hours=2)
+        creative_time = now - timedelta(days=2)
+        
+        # Event 1: Creation (DRAFT)
+        connection.execute(
+            sa.text("""
+                INSERT INTO campaign_status_event (id, campaign_id, from_status, to_status, actor_id, created_at)
+                VALUES (:id, :campaign_id, :from_status, :to_status, :actor_id, :created_at)
+            """),
+            {
+                "id": str(uuid.uuid4()),
+                "campaign_id": campaign1_id,
+                "from_status": None,
+                "to_status": "DRAFT",
+                "actor_id": user_id,
+                "created_at": draft_time
+            }
+        )
+        
+        # Event 2: DRAFT -> CREATIVE_STAGE
+        connection.execute(
+            sa.text("""
+                INSERT INTO campaign_status_event (id, campaign_id, from_status, to_status, actor_id, created_at)
+                VALUES (:id, :campaign_id, :from_status, :to_status, :actor_id, :created_at)
+            """),
+            {
+                "id": str(uuid.uuid4()),
+                "campaign_id": campaign1_id,
+                "from_status": "DRAFT",
+                "to_status": "CREATIVE_STAGE",
+                "actor_id": user_id,
+                "created_at": creative_time
+            }
+        )
     
     campaign2_exists = connection.execute(
         sa.text("SELECT 1 FROM campaigns WHERE name = :name"),
@@ -171,6 +208,25 @@ def upgrade() -> None:
                 "created_by": user_id
             }
         )
+        
+        # Add status history for campaign 2 (just DRAFT)
+        now = datetime.now(timezone.utc)
+        draft_time = now - timedelta(hours=5)
+        
+        connection.execute(
+            sa.text("""
+                INSERT INTO campaign_status_event (id, campaign_id, from_status, to_status, actor_id, created_at)
+                VALUES (:id, :campaign_id, :from_status, :to_status, :actor_id, :created_at)
+            """),
+            {
+                "id": str(uuid.uuid4()),
+                "campaign_id": campaign2_id,
+                "from_status": None,
+                "to_status": "DRAFT",
+                "actor_id": user_id,
+                "created_at": draft_time
+            }
+        )
     
     if not campaign1_exists or not campaign2_exists:
         connection.commit()
@@ -185,6 +241,21 @@ def downgrade() -> None:
     ]
     
     for name in default_campaign_names:
+        # Get campaign ID first
+        result = connection.execute(
+            sa.text("SELECT id FROM campaigns WHERE name = :name"),
+            {"name": name}
+        ).first()
+        
+        if result:
+            campaign_id = result[0]
+            # Delete status events first (due to FK cascade this might be automatic, but let's be explicit)
+            connection.execute(
+                sa.text("DELETE FROM campaign_status_event WHERE campaign_id = :campaign_id"),
+                {"campaign_id": campaign_id}
+            )
+        
+        # Delete campaign
         connection.execute(
             sa.text("DELETE FROM campaigns WHERE name = :name"),
             {"name": name}

@@ -1,3 +1,13 @@
+import warnings
+
+# Suprime deprecation warning da biblioteca a2a (HTTP_413_REQUEST_ENTITY_TOO_LARGE)
+# TODO: Remover quando a2a for atualizada
+warnings.filterwarnings(
+    "ignore",
+    message=".*HTTP_413_REQUEST_ENTITY_TOO_LARGE.*",
+    category=DeprecationWarning,
+)
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager

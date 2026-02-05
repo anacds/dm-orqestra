@@ -10,6 +10,7 @@ langchain-openai>=0.1.0  # OpenAI embeddings for LangChain
 
 # Utilities
 python-dotenv>=1.0.0  # Environment variable management
+pyyaml>=6.0.0  # YAML config parsing
 
 # Optional: For advanced PDF parsing
 # pdfplumber>=0.10.0  # Alternative PDF extractor

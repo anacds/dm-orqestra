@@ -1,55 +1,78 @@
-version: '3.8'
+# =============================================================================
+# DOCUMENTS INGESTION - Docker Compose (Standalone)
+# =============================================================================
+#
+# Use este docker-compose para regenerar os dados do Weaviate manualmente.
+# O docker-compose principal (raiz do projeto) usa dados pré-processados.
+#
+# IMPORTANTE: O Weaviate principal deve estar rodando!
+#   cd .. && docker compose up weaviate -d
+#
+# Uso:
+#   # Ingestão com chunking por seção (Collection: LegalDocuments)
+#   docker compose up ingestion-section
+#
+#   # Ingestão com chunking semântico (Collection: LegalDocumentsSemanticChunks)
+#   docker compose up ingestion-semantic
+#
+#   # Ingerir ambas as estratégias (sequencialmente)
+#   docker compose up ingestion-section && docker compose up ingestion-semantic
+#
+#   # Ou use o script helper:
+#   ./scripts/ingest_all_strategies.sh
+#
+# Variáveis de ambiente necessárias:
+#   - OPENAI_API_KEY: Para gerar embeddings
+#
+# =============================================================================
 
-networks:
-  legal-agent-network:
-    name: legal-agent-network
-    driver: bridge
+x-ingestion-common: &ingestion-common
+  build: .
+  environment:
+    - WEAVIATE_URL=http://host.docker.internal:8080
+    - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-openai}
+    - EMBEDDING_MODEL=${EMBEDDING_MODEL:-text-embedding-3-small}
+    - OPENAI_API_KEY=${OPENAI_API_KEY}
+    - DOCUMENTS_DIR=${DOCUMENTS_DIR:-doc-juridico}
+    - EMBEDDING_REQUEST_TIMEOUT=${EMBEDDING_REQUEST_TIMEOUT:-60}
+    - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    - CLEAR_BEFORE_INGEST=${CLEAR_BEFORE_INGEST:-true}
+  volumes:
+    - ./doc-juridico:/app/doc-juridico:ro
+    - ./config:/app/config:ro
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  restart: "no"
 
 services:
-  weaviate:
-    image: semitechnologies/weaviate:latest
-    container_name: weaviate
-    ports:
-      - "8080:8080"
-      - "50051:50051"
+  # Ingestão com chunking por seção (LegalDocuments)
+  ingestion-section:
+    <<: *ingestion-common
+    container_name: doc-ingestion-section
     environment:
-      - AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED=true
-      - PERSISTENCE_DATA_PATH=/var/lib/weaviate
-      - DEFAULT_VECTORIZER_MODULE=none
-      - ENABLE_MODULES=
-      - CLUSTER_HOSTNAME=node1
-    volumes:
-      - weaviate_data:/var/lib/weaviate
-    networks:
-      - legal-agent-network
-    restart: on-failure:0
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/v1/.well-known/ready"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
-  ingestion:
-    build: .
-    container_name: doc-ingestion
-    depends_on:
-      weaviate:
-        condition: service_healthy
-    environment:
-      - WEAVIATE_URL=http://weaviate:8080
+      - WEAVIATE_URL=http://host.docker.internal:8080
       - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-openai}
-      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-}
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-text-embedding-3-small}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
       - DOCUMENTS_DIR=${DOCUMENTS_DIR:-doc-juridico}
-      - CHUNKER_TYPE=${CHUNKER_TYPE:-section}
+      - CHUNKER_TYPE=section
+      - WEAVIATE_CLASS_NAME=LegalDocuments
       - EMBEDDING_REQUEST_TIMEOUT=${EMBEDDING_REQUEST_TIMEOUT:-60}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
-    volumes:
-      - ./doc-juridico:/app/doc-juridico:ro
-    networks:
-      - legal-agent-network
-    restart: "no"
+      - CLEAR_BEFORE_INGEST=${CLEAR_BEFORE_INGEST:-true}
 
-volumes:
-  weaviate_data:
-
+  # Ingestão com chunking semântico (LegalDocumentsSemanticChunks)
+  ingestion-semantic:
+    <<: *ingestion-common
+    container_name: doc-ingestion-semantic
+    environment:
+      - WEAVIATE_URL=http://host.docker.internal:8080
+      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-openai}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-text-embedding-3-small}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - DOCUMENTS_DIR=${DOCUMENTS_DIR:-doc-juridico}
+      - CHUNKER_TYPE=semantic
+      - WEAVIATE_CLASS_NAME=LegalDocumentsSemanticChunks
+      - EMBEDDING_REQUEST_TIMEOUT=${EMBEDDING_REQUEST_TIMEOUT:-120}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - CLEAR_BEFORE_INGEST=${CLEAR_BEFORE_INGEST:-true}

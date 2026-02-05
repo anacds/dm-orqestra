@@ -2,7 +2,7 @@ import json
 import uuid
 from typing import Dict, List, Optional
 from fastapi import UploadFile, HTTPException, status
-from app.core.s3_client import upload_file, delete_file
+from app.core.s3_client import upload_file, delete_file, get_file
 from app.models.campaign import Campaign
 from sqlalchemy.orm import Session
 
@@ -141,4 +141,23 @@ def extract_file_key_from_url(file_url: str, bucket_name: str) -> Optional[str]:
         pass
     
     return None
+
+
+def download_file_from_url(file_url: str, bucket_name: str) -> tuple[bytes, str]:
+    """Download file from S3 using the file URL. Returns (content, content_type)."""
+    file_key = extract_file_key_from_url(file_url, bucket_name)
+    if not file_key:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid file URL"
+        )
+    
+    try:
+        content, content_type = get_file(file_key)
+        return content, content_type
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to download file: {str(e)}"
+        )
 

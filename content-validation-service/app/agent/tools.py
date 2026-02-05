@@ -142,6 +142,13 @@ async def validate_legal_compliance(
     url = f"{base}/a2a/v1/message:send"
     inner = _build_legal_content(channel, content)
 
+    request_data = {
+        "task": task,
+        "channel": channel,
+        "payload_type": "INLINE",
+        "content": inner,
+    }
+
     payload = {
         "message": {
             "messageId": f"cvs-{uuid.uuid4().hex[:12]}",
@@ -149,12 +156,7 @@ async def validate_legal_compliance(
             "content": [
                 {
                     "data": {
-                        "data": {
-                            "task": task,
-                            "channel": channel,
-                            "payload_type": "INLINE",
-                            "content": inner,
-                        }
+                        "data": request_data
                     }
                 }
             ],
@@ -191,6 +193,50 @@ def _parse_a2a_response(data: dict[str, Any]) -> dict[str, Any] | None:
                 return nested
             return inner
     return None
+
+
+@tool
+async def validate_brand_compliance(
+    html: str,
+) -> dict:
+    """
+    Valida conformidade de marca em HTML de email via branding-service (MCP).
+
+    Executa validações determinísticas (sem IA/LLM) contra as diretrizes
+    de marca da Orqestra: cores, tipografia, logo, layout, CTAs, footer.
+
+    Args:
+        html: Conteúdo HTML do email a ser validado
+
+    Returns:
+        Dict com:
+        - compliant: bool - se está em conformidade
+        - score: int - pontuação 0-100
+        - violations: lista de violações encontradas
+        - summary: contagem por severidade
+    """
+    url = f"{settings.BRANDING_MCP_URL.rstrip('/')}/mcp"
+    arguments: dict[str, Any] = {"html": html}
+
+    logger.info("validate_brand_compliance: html_length=%d", len(html))
+
+    async with streamable_http_client(url) as (read_stream, write_stream, _):
+        async with ClientSession(read_stream, write_stream) as session:
+            await session.initialize()
+            result = await session.call_tool("validate_email_brand", arguments=arguments)
+
+    if getattr(result, "is_error", False):
+        err_msg = _format_mcp_error(result)
+        logger.warning("validate_brand_compliance MCP error: %s", err_msg)
+        raise RuntimeError(err_msg)
+
+    data = _parse_mcp_result(result)
+    return {
+        "compliant": data.get("compliant", False),
+        "score": data.get("score", 0),
+        "violations": data.get("violations", []),
+        "summary": data.get("summary", {}),
+    }
 
 
 @tool

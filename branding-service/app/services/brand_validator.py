@@ -1,9 +1,3 @@
-"""
-Brand Validator Service - Validates HTML email against Orqestra brand guidelines.
-
-This is a deterministic validation service (no AI/LLM).
-"""
-
 import re
 from typing import List, Dict, Any
 from dataclasses import dataclass
@@ -63,7 +57,17 @@ class BrandValidator:
         'impact',
         'papyrus', 'brush script'
     ]
-    
+
+    # Prohibited URL shorteners
+    PROHIBITED_SHORTENERS = (
+        'bit.ly', 'bitly.com',
+        'tinyurl.com', 'tiny.cc',
+        'goo.gl', 'g.co',
+        't.co', 'ow.ly',
+        'is.gd', 'buff.ly',
+        'adf.ly', 'j.mp',
+    )
+
     def __init__(self):
         self.violations: List[Violation] = []
     
@@ -92,8 +96,9 @@ class BrandValidator:
         self._validate_layout(soup)
         self._validate_ctas(soup)
         self._validate_footer(soup)
+        self._validate_links(soup)
         self._validate_prohibited_elements(all_styles, html)
-        
+
         return self._generate_report()
     
     def _extract_inline_styles(self, soup: BeautifulSoup) -> str:
@@ -394,6 +399,61 @@ class BrandValidator:
                 message='Link de descadastro não encontrado no footer'
             ))
     
+    def _validate_links(self, soup: BeautifulSoup) -> None:
+        """Validate links: official domains, no generic shorteners, transparency."""
+        anchors = soup.find_all('a', href=True)
+
+        for anchor in anchors:
+            href = anchor.get('href', '').strip()
+            if not href:
+                continue
+
+            # Skip non-http(s) links (mailto, tel, #anchor, relative)
+            href_lower = href.lower()
+            if href_lower.startswith(('mailto:', 'tel:', '#', 'javascript:')):
+                continue
+            if href.startswith('/') and not href.startswith('//'):
+                continue
+
+            # Resolve protocol-relative (//example.com)
+            if href_lower.startswith('//'):
+                href = 'https:' + href
+                href_lower = href.lower()
+
+            # Extract domain from http(s) URL
+            domain_match = re.search(r'https?://([^/:\s]+)', href_lower)
+            if not domain_match:
+                continue
+
+            domain = domain_match.group(1).lower()
+
+            # Check prohibited shorteners
+            for shortener in self.PROHIBITED_SHORTENERS:
+                if shortener in domain or domain in shortener:
+                    self.violations.append(Violation(
+                        rule='prohibited_url_shortener',
+                        category='links',
+                        severity='critical',
+                        value=href[:100],
+                        message=f'Encurtador de URL proibido: {shortener}. Links devem apontar para domínios oficiais da Orqestra.'
+                    ))
+                    break
+            else:
+                # Check if domain is allowed (Orqestra official)
+                is_allowed = (
+                    'orqestra.com.br' in domain
+                    or 'orqestra.ai' in domain
+                    or 'orqestra.com' in domain
+                )
+                if not is_allowed:
+                    self.violations.append(Violation(
+                        rule='unapproved_link_domain',
+                        category='links',
+                        severity='critical',
+                        value=href[:100],
+                        message=f'Link aponta para domínio não aprovado: {domain}. Use apenas domínios oficiais da Orqestra.'
+                    ))
+
     def _validate_prohibited_elements(self, css: str, html: str):
         """Validate prohibited styling elements."""
         if re.search(r'@keyframes.*blink', css, re.IGNORECASE | re.DOTALL):

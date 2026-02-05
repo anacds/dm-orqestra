@@ -1,7 +1,3 @@
-"""
-MCP Server configuration and tools for branding validation.
-"""
-
 import logging
 from typing import Dict, Any
 
@@ -10,7 +6,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 from starlette.applications import Starlette
 from starlette.routing import Mount
 
-from app.services import validate_email_branding
+from app.services import validate_email_branding, validate_image_branding
 
 logger = logging.getLogger(__name__)
 
@@ -24,12 +20,8 @@ mcp = FastMCP(
     no brand guideline da Orqestra.
     
     Validações incluem:
-    - Cores: paleta aprovada, presença de cor primária
-    - Tipografia: fontes aprovadas, tamanhos mínimos
-    - Logo: presença, tamanho, alt text
-    - Layout: largura do container, background
-    - CTAs: cores corretas nos botões
-    - Footer: copyright, link de descadastro
+    - HTML: cores, tipografia, logo, layout, CTAs, footer, links
+    - Imagem: extração de cores dominantes e validação contra paleta
     - Elementos proibidos: animações blink, rotações excessivas
     """,
     json_response=True,
@@ -50,6 +42,7 @@ async def validate_email_brand(html: str) -> Dict[str, Any]:
     - Layout: largura máxima 600px, background neutro
     - CTAs: cor primária no background, texto branco
     - Footer: copyright "© Orqestra", link de descadastro
+    - Links: domínios oficiais Orqestra, sem encurtadores (bit.ly, tinyurl, etc.)
     - Proibidos: animações blink, text-shadow, rotações > 2°
     
     Args:
@@ -86,6 +79,56 @@ async def validate_email_brand(html: str) -> Dict[str, Any]:
                 'message': f'Erro ao validar HTML: {str(e)}'
             }],
             'summary': {'critical': 1, 'warning': 0, 'info': 0, 'total': 1}
+        }
+
+
+@mcp.tool()
+async def validate_image_brand(image: str) -> Dict[str, Any]:
+    """
+    Valida as cores dominantes de uma imagem contra a paleta da marca Orqestra.
+
+    Extrai as cores principais da imagem e verifica se estão na paleta aprovada.
+    Validação 100% determinística (sem IA/LLM).
+    Útil para banners, telas in-app ou qualquer peça visual.
+
+    Args:
+        image: Imagem em base64 ou data URL (data:image/png;base64,...)
+
+    Returns:
+        Dict com:
+        - compliant: bool - se está em conformidade
+        - score: int - pontuação 0-100
+        - violations: lista de violações (cores não aprovadas)
+        - summary: contagem por severidade
+        - dominant_colors: cores principais extraídas [{color, count}]
+    """
+    logger.info("validate_image_brand: validating image (%d chars)", len(image))
+
+    try:
+        result = validate_image_branding(image)
+        logger.info(
+            "validate_image_brand: compliant=%s, score=%d, violations=%d",
+            result["compliant"],
+            result["score"],
+            result["summary"]["total"],
+        )
+        return result
+    except Exception as e:
+        logger.error("validate_image_brand error: %s", e)
+        return {
+            "compliant": False,
+            "score": 0,
+            "violations": [
+                {
+                    "rule": "validation_error",
+                    "category": "system",
+                    "severity": "critical",
+                    "value": "",
+                    "message": f"Erro ao validar imagem: {str(e)}",
+                }
+            ],
+            "summary": {"critical": 1, "warning": 0, "info": 0, "total": 1},
+            "dominant_colors": [],
         }
 
 
@@ -138,6 +181,11 @@ async def get_brand_guidelines() -> Dict[str, Any]:
             'blink_animations': True,
             'text_shadow': True,
             'max_rotation': '2deg'
+        },
+        'links': {
+            'allowed_domains': ['orqestra.com.br', 'orqestra.ai', 'orqestra.com'],
+            'prohibited_shorteners': ['bit.ly', 'tinyurl.com', 'goo.gl', 't.co', 'ow.ly', 'is.gd', 'buff.ly', 'adf.ly', 'j.mp'],
+            'allowed_schemes': ['mailto:', 'tel:', 'relative (/)', 'anchor (#)']
         }
     }
 

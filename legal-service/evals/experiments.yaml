@@ -1,0 +1,220 @@
+# =============================================================================
+# CONFIGURAÇÃO DE EXPERIMENTOS - Legal Service
+# =============================================================================
+# Execute com: python evals/run_experiments.py
+# Liste experimentos: python evals/run_experiments.py --list
+# =============================================================================
+
+defaults:
+  dataset: "evals/eval_retrieval_dataset.csv"
+  weaviate_url: null  # usa settings.WEAVIATE_URL se null
+  disable_cache: true
+  output_dir: "evals/results"
+
+# =============================================================================
+# ESTRATÉGIAS DE RETRIEVAL
+# =============================================================================
+retrieval_strategies:
+  hybrid:
+    description: "Hybrid search (BM25 + Vector, alpha=0.5)"
+    alpha: 0.5
+  bm25:
+    description: "BM25 only (keyword search, alpha=0.0)"
+    alpha: 0.0
+  semantic:
+    description: "Semantic only (vector search, alpha=1.0)"
+    alpha: 1.0
+
+# =============================================================================
+# COLLECTIONS (ESTRATÉGIAS DE CHUNKING)
+# =============================================================================
+chunking_collections:
+  section:
+    description: "Chunking por seção (estrutura do documento)"
+    collection_name: "LegalDocuments"
+  semantic:
+    description: "Chunking semântico (baseado em significado)"
+    collection_name: "LegalDocumentsSemanticChunks"
+
+# =============================================================================
+# MODELOS LLM
+# =============================================================================
+llm_models:
+  maritaca:
+    description: "Maritaca sabiazinho-4 (otimizado para português)"
+    model_name: "sabiazinho-4"
+    provider: "maritaca"
+    base_url: "https://chat.maritaca.ai/api"
+  gpt_nano:
+    description: "OpenAI GPT-5-nano (multilingual)"
+    model_name: "gpt-5-nano"
+    provider: "openai"
+    base_url: "https://api.openai.com/v1"
+
+# =============================================================================
+# EXPERIMENTOS
+# =============================================================================
+# Cada experimento combina: retrieval + chunking + llm + reranking
+#
+# Nomenclatura: [Chunking]_[Retrieval]_[LLM]_[Rerank]
+#   - Chunking: Sec (section) ou Sem (semantic)
+#   - Retrieval: Hyb (hybrid), BM25, Vec (vector/semantic)
+#   - LLM: Mar (maritaca) ou GPT
+#   - Rerank: RR (com rerank) ou NoRR (sem rerank)
+# =============================================================================
+
+experiments:
+  # ---------------------------------------------------------------------------
+  # BASELINE: Configuração de Produção
+  # ---------------------------------------------------------------------------
+  baseline_producao:
+    name: "Sec + Hybrid + Maritaca + Rerank"
+    description: "Configuração atual de produção: section chunking, hybrid search, Maritaca, com reranking"
+    enabled: true
+    retrieval_strategy: "hybrid"
+    chunking: "section"
+    llm_model: "maritaca"
+    rerank_enabled: true
+
+  # ---------------------------------------------------------------------------
+  # EXPERIMENTOS: Impacto do Reranking
+  # ---------------------------------------------------------------------------
+  sec_hyb_mar_no_rerank:
+    name: "Sec + Hybrid + Maritaca (sem Rerank)"
+    description: "Baseline sem reranking - mede impacto do Cohere reranker"
+    enabled: true
+    retrieval_strategy: "hybrid"
+    chunking: "section"
+    llm_model: "maritaca"
+    rerank_enabled: false
+
+  # ---------------------------------------------------------------------------
+  # EXPERIMENTOS: Estratégias de Retrieval (com rerank)
+  # ---------------------------------------------------------------------------
+  sec_bm25_mar_rerank:
+    name: "Sec + BM25 + Maritaca + Rerank"
+    description: "Apenas busca por keywords com reranking"
+    enabled: true
+    retrieval_strategy: "bm25"
+    chunking: "section"
+    llm_model: "maritaca"
+    rerank_enabled: true
+
+  sec_vec_mar_rerank:
+    name: "Sec + Vector + Maritaca + Rerank"
+    description: "Apenas busca vetorial com reranking"
+    enabled: true
+    retrieval_strategy: "semantic"
+    chunking: "section"
+    llm_model: "maritaca"
+    rerank_enabled: true
+
+  # ---------------------------------------------------------------------------
+  # EXPERIMENTOS: Estratégias de Retrieval (sem rerank)
+  # ---------------------------------------------------------------------------
+  sec_bm25_mar_no_rerank:
+    name: "Sec + BM25 + Maritaca (sem Rerank)"
+    description: "Apenas busca por keywords sem reranking"
+    enabled: true
+    retrieval_strategy: "bm25"
+    chunking: "section"
+    llm_model: "maritaca"
+    rerank_enabled: false
+
+  sec_vec_mar_no_rerank:
+    name: "Sec + Vector + Maritaca (sem Rerank)"
+    description: "Apenas busca vetorial sem reranking"
+    enabled: true
+    retrieval_strategy: "semantic"
+    chunking: "section"
+    llm_model: "maritaca"
+    rerank_enabled: false
+
+  # ---------------------------------------------------------------------------
+  # EXPERIMENTOS: Chunking Semântico (vencedor anterior)
+  # ---------------------------------------------------------------------------
+  sem_hyb_mar_rerank:
+    name: "Semantic + Hybrid + Maritaca + Rerank"
+    description: "Chunking semântico com hybrid search e reranking"
+    enabled: true
+    retrieval_strategy: "hybrid"
+    chunking: "semantic"
+    llm_model: "maritaca"
+    rerank_enabled: true
+
+  sem_hyb_mar_no_rerank:
+    name: "Semantic + Hybrid + Maritaca (sem Rerank)"
+    description: "Chunking semântico com hybrid search sem reranking"
+    enabled: true
+    retrieval_strategy: "hybrid"
+    chunking: "semantic"
+    llm_model: "maritaca"
+    rerank_enabled: false
+
+  # ---------------------------------------------------------------------------
+  # EXPERIMENTOS: Variações de LLM (GPT-5-nano)
+  # ---------------------------------------------------------------------------
+  sec_hyb_gpt_rerank:
+    name: "Sec + Hybrid + GPT + Rerank"
+    description: "Section chunking com GPT-5-nano e reranking"
+    enabled: true
+    retrieval_strategy: "hybrid"
+    chunking: "section"
+    llm_model: "gpt_nano"
+    rerank_enabled: true
+
+  sec_hyb_gpt_no_rerank:
+    name: "Sec + Hybrid + GPT (sem Rerank)"
+    description: "Section chunking com GPT-5-nano sem reranking"
+    enabled: true
+    retrieval_strategy: "hybrid"
+    chunking: "section"
+    llm_model: "gpt_nano"
+    rerank_enabled: false
+
+  sem_hyb_gpt_rerank:
+    name: "Semantic + Hybrid + GPT + Rerank"
+    description: "Chunking semântico com GPT-5-nano e reranking"
+    enabled: true
+    retrieval_strategy: "hybrid"
+    chunking: "semantic"
+    llm_model: "gpt_nano"
+    rerank_enabled: true
+
+  # ---------------------------------------------------------------------------
+  # EXPERIMENTOS: Combinações Extremas (para análise)
+  # ---------------------------------------------------------------------------
+  sec_bm25_gpt_rerank:
+    name: "Sec + BM25 + GPT + Rerank"
+    description: "BM25 com GPT-5-nano e reranking"
+    enabled: false  # Desabilitado por padrão - habilite se quiser testar
+    retrieval_strategy: "bm25"
+    chunking: "section"
+    llm_model: "gpt_nano"
+    rerank_enabled: true
+
+  sec_vec_gpt_rerank:
+    name: "Sec + Vector + GPT + Rerank"
+    description: "Vector search com GPT-5-nano e reranking"
+    enabled: false  # Desabilitado por padrão
+    retrieval_strategy: "semantic"
+    chunking: "section"
+    llm_model: "gpt_nano"
+    rerank_enabled: true
+
+# =============================================================================
+# CONFIGURAÇÃO DE RELATÓRIO
+# =============================================================================
+report:
+  generate_comparison: true
+  formats:
+    - json
+    - csv
+  metrics:
+    - accuracy_decision
+    - precision_APROVADO
+    - recall_APROVADO
+    - f1_APROVADO
+    - precision_REPROVADO
+    - recall_REPROVADO
+    - f1_REPROVADO

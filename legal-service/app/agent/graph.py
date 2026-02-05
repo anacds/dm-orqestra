@@ -1,3 +1,4 @@
+import atexit
 import hashlib
 import logging
 import os
@@ -27,10 +28,21 @@ class LegalAgent:
         redis_url: Optional[str] = None,
         cache_enabled: Optional[bool] = None,
         cache_ttl: Optional[int] = None,
+        alpha_override: Optional[float] = None,
+        collection_override: Optional[str] = None,
+        rerank_override: Optional[bool] = None,
     ):
+        # Armazena overrides para logging/metadata
+        self.alpha_override = alpha_override
+        self.collection_override = collection_override
+        self.rerank_override = rerank_override
+        
         self.retriever = HybridWeaviateRetriever(
             weaviate_url=weaviate_url,
             embedding_model=embedding_model,
+            class_name=collection_override,  # Usa collection override se fornecido
+            alpha_override=alpha_override,
+            rerank_override=rerank_override,
         )
 
         config = load_models_config()
@@ -118,6 +130,15 @@ class LegalAgent:
             for ch, cfg in channels_config.items()
         )
         logger.info("Legal agent initialized: llm por canal: %s", summary)
+        
+        # Log overrides se ativos (para experimentos)
+        if alpha_override is not None:
+            alpha_desc = "BM25 only" if alpha_override == 0.0 else ("Semantic only" if alpha_override == 1.0 else f"Hybrid")
+            logger.info(f"[EXPERIMENT] Alpha override: {alpha_override} ({alpha_desc})")
+        if collection_override:
+            logger.info(f"[EXPERIMENT] Collection override: {collection_override}")
+        if rerank_override is not None:
+            logger.info(f"[EXPERIMENT] Rerank override: {rerank_override}")
 
     def _build_graph(self) -> StateGraph:
         """Build LangGraph workflow for legal validation."""
@@ -259,5 +280,37 @@ class LegalAgent:
 # Requires: WEAVIATE_URL, OPENAI_API_KEY (and optionally MARITACA_API_KEY, REDIS_URL).
 # Input example: {"task": "VALIDATE_COMMUNICATION", "channel": "SMS", "content": "Orqestra: ..."}
 # -----------------------------------------------------------------------------
-graph = LegalAgent().app
+# Lazy initialization para evitar criar conexão Weaviate ao importar módulo
+_global_agent = None
+
+
+def get_graph():
+    """Retorna o graph compilado (lazy initialization)."""
+    global _global_agent
+    if _global_agent is None:
+        _global_agent = LegalAgent()
+    return _global_agent.app
+
+
+def _cleanup_global_agent():
+    """Fecha conexões do agent global ao encerrar o processo."""
+    global _global_agent
+    if _global_agent is not None:
+        try:
+            _global_agent.close()
+            logger.debug("Global agent closed successfully")
+        except Exception as e:
+            logger.warning(f"Error closing global agent: {e}")
+
+
+# Registra cleanup para quando o processo terminar
+atexit.register(_cleanup_global_agent)
+
+
+# Para compatibilidade com LangGraph Studio que espera 'graph' no nível do módulo
+# Usa property-like pattern via __getattr__
+def __getattr__(name):
+    if name == "graph":
+        return get_graph()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 

@@ -114,6 +114,9 @@ def evaluate_generation_dataset(
     weaviate_url_explicit: bool = False,
     forced_model: str = None,
     forced_model_base_url: str = None,
+    alpha_override: float = None,
+    collection_override: str = None,
+    rerank_override: bool = None,
 ) -> Dict:
     """
     Avalia a geração (decision APROVADO/REPROVADO) usando o dataset CSV.
@@ -123,6 +126,11 @@ def evaluate_generation_dataset(
         weaviate_url: URL do Weaviate (default: settings.WEAVIATE_URL)
         output_path: Caminho opcional para salvar resultados detalhados
         disable_cache: Se True, desabilita cache para avaliação justa
+        forced_model: Força uso de um modelo LLM específico
+        forced_model_base_url: Base URL do modelo (opcional)
+        alpha_override: Sobrescreve alpha do hybrid search (0.0=BM25, 0.5=hybrid, 1.0=semantic)
+        collection_override: Sobrescreve nome da collection no Weaviate
+        rerank_override: Sobrescreve rerank_enabled (True/False, None=usa config)
     
     Returns:
         Dicionário com métricas agregadas
@@ -142,14 +150,33 @@ def evaluate_generation_dataset(
     llm_config = config.get("models", {}).get("llm", {})
     embeddings_config = config.get("models", {}).get("embeddings", {})
     retrieval_config = config.get("models", {}).get("retrieval", {})
-    rerank_enabled = retrieval_config.get("rerank_enabled", False)
+    
+    # Reranking: usa override se fornecido, senão usa config
+    if rerank_override is not None:
+        rerank_enabled = rerank_override
+        logger.info(f"[EXPERIMENT] Rerank override: {rerank_enabled}")
+    else:
+        rerank_enabled = retrieval_config.get("rerank_enabled", False)
     
     # Inicializa agente sem cache
     cache_enabled = not disable_cache
-    agent = LegalAgent(
-        weaviate_url=weaviate_url,
-        cache_enabled=cache_enabled,
-    )
+    
+    # Preparar kwargs para LegalAgent com overrides de experimento
+    agent_kwargs = {
+        "weaviate_url": weaviate_url,
+        "rerank_override": rerank_override,
+        "cache_enabled": cache_enabled,
+    }
+    
+    # Override de alpha para hybrid search
+    if alpha_override is not None:
+        agent_kwargs["alpha_override"] = alpha_override
+    
+    # Override de collection name
+    if collection_override:
+        agent_kwargs["collection_override"] = collection_override
+    
+    agent = LegalAgent(**agent_kwargs)
     
     if forced_model:
         if forced_model_base_url:
@@ -204,6 +231,13 @@ def evaluate_generation_dataset(
         logger.info(f"Modelo LLM: {llm_config.get('name', 'N/A')} (fallback: {llm_config.get('fallback_model_name', 'N/A')})")
     logger.info(f"Modelo embeddings: {embeddings_config.get('model', 'N/A')}")
     logger.info(f"Weaviate URL: {weaviate_url}")
+    if alpha_override is not None:
+        alpha_desc = "BM25 only" if alpha_override == 0.0 else ("Semantic only" if alpha_override == 1.0 else f"Hybrid ({alpha_override})")
+        logger.info(f"Retrieval Alpha: {alpha_override} ({alpha_desc}) [OVERRIDE]")
+    else:
+        logger.info(f"Retrieval Alpha: {retrieval_config.get('alpha', 0.5)} (config)")
+    if collection_override:
+        logger.info(f"Collection: {collection_override} [OVERRIDE]")
     logger.info("="*80)
     
     logger.info(f"Agent inicializado (cache={'enabled' if cache_enabled else 'disabled'})")
@@ -284,6 +318,8 @@ def evaluate_generation_dataset(
                 "embedding_model": embeddings_config.get("model", "N/A"),
                 "cache_enabled": cache_enabled,
                 "rerank_enabled": rerank_enabled,
+                "alpha": alpha_override if alpha_override is not None else retrieval_config.get("alpha", 0.5),
+                "collection": collection_override if collection_override else settings.WEAVIATE_CLASS_NAME,
             },
         }
         
@@ -309,6 +345,16 @@ def print_summary(summary: Dict):
     print(f"  Embeddings: {summary['config']['embedding_model']}")
     print(f"  Cache: {'enabled' if summary['config']['cache_enabled'] else 'disabled'}")
     print(f"  Reranking: {'enabled' if summary['config'].get('rerank_enabled', False) else 'disabled'}")
+    
+    # Mostrar alpha e collection se disponíveis
+    alpha = summary['config'].get('alpha')
+    if alpha is not None:
+        alpha_desc = "BM25 only" if alpha == 0.0 else ("Semantic only" if alpha == 1.0 else f"Hybrid")
+        print(f"  Retrieval: {alpha_desc} (alpha={alpha})")
+    
+    collection = summary['config'].get('collection')
+    if collection:
+        print(f"  Collection: {collection}")
     
     print(f"\nTotal de exemplos: {summary['total_examples']}")
     print(f"\nAccuracy (Decision): {summary['accuracy_decision']:.4f} ({summary['accuracy_decision']*100:.2f}%)")
@@ -378,6 +424,18 @@ if __name__ == "__main__":
         default=None,
         help="Base URL do modelo (opcional). Se não especificado, detecta automaticamente baseado no nome do modelo ou usa defaults."
     )
+    parser.add_argument(
+        "--alpha",
+        type=float,
+        default=None,
+        help="Sobrescreve alpha do hybrid search (0.0=BM25 only, 0.5=hybrid, 1.0=semantic only)"
+    )
+    parser.add_argument(
+        "--collection",
+        type=str,
+        default=None,
+        help="Sobrescreve nome da collection no Weaviate"
+    )
     
     args = parser.parse_args()
     
@@ -397,6 +455,8 @@ if __name__ == "__main__":
             weaviate_url_explicit=(args.weaviate_url is not None),
             forced_model=args.model,
             forced_model_base_url=args.model_base_url,
+            alpha_override=args.alpha,
+            collection_override=args.collection,
         )
         
         print_summary(summary)

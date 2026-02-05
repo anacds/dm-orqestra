@@ -2,8 +2,9 @@ import logging
 import os
 import uuid
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict, Any
 from dotenv import load_dotenv
+import yaml
 load_dotenv()
 from src.chunkers.semantic_chunker import SemanticChunker
 from src.chunkers.section_chunker import SectionChunker
@@ -13,6 +14,34 @@ from src.indexers.weaviate_indexer import create_weaviate_indexer
 from src.utils.logging_config import setup_logging
 
 logger = logging.getLogger(__name__)
+
+# Caminho do arquivo de configuração
+CONFIG_PATH = Path(__file__).parent.parent / "config" / "ingestion.yaml"
+
+
+def load_ingestion_config() -> Dict[str, Any]:
+    """Carrega configuração de ingestão do YAML."""
+    if CONFIG_PATH.exists():
+        with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
+            return yaml.safe_load(f)
+    return {}
+
+
+def get_collection_name(chunker_type: str, config: Optional[Dict] = None) -> str:
+    """Retorna o nome da collection baseado no tipo de chunker."""
+    if config is None:
+        config = load_ingestion_config()
+    
+    strategies = config.get("strategies", {})
+    strategy_config = strategies.get(chunker_type, {})
+    
+    # Retorna collection configurada ou padrão baseado no tipo
+    default_collections = {
+        "section": "LegalDocuments",
+        "semantic": "LegalDocumentsSemanticChunks",
+    }
+    
+    return strategy_config.get("collection_name", default_collections.get(chunker_type, "LegalDocuments"))
 
 
 class IngestionPipeline:
@@ -26,11 +55,16 @@ class IngestionPipeline:
         chunk_max_size: int = 800,
         chunker_type: str = "semantic",
         clear_before_ingest: bool = False,
+        collection_name: Optional[str] = None,
     ):
         self.documents_dir = Path(documents_dir)
         self.ingestion_run_id = str(uuid.uuid4())
         self.chunker_type = chunker_type
         self.clear_before_ingest = clear_before_ingest
+        
+        # Carrega configuração e determina collection name
+        self.config = load_ingestion_config()
+        self.collection_name = collection_name or get_collection_name(chunker_type, self.config)
 
         if chunker_type == "section":
             self.chunker = SectionChunker(min_chunk_size=chunk_min_size)
@@ -44,15 +78,21 @@ class IngestionPipeline:
         self.embedding_service = create_embedding_service(
             provider=embedding_provider, model=embedding_model
         )
-        self.indexer = create_weaviate_indexer(url=weaviate_url)
+        
+        # Passa collection_name para o indexer
+        self.indexer = create_weaviate_indexer(
+            url=weaviate_url,
+            class_name=self.collection_name,
+        )
 
         # Limpa todos os dados antes de ingerir (evita duplicação)
         if self.clear_before_ingest:
-            logger.info("Clearing all existing data from Weaviate before ingestion...")
+            logger.info(f"Clearing all existing data from {self.collection_name} before ingestion...")
             self.indexer.delete_all_objects()
 
         logger.info(
-            f"The ingestion pipeline has been initialized (run_id: {self.ingestion_run_id})"
+            f"Pipeline initialized: run_id={self.ingestion_run_id}, "
+            f"chunker={chunker_type}, collection={self.collection_name}"
         )
 
     def process_document(self, file_path: Path) -> dict:
@@ -174,7 +214,21 @@ def main():
     chunker_type = os.getenv("CHUNKER_TYPE", "section")
     clear_before_ingest = os.getenv("CLEAR_BEFORE_INGEST", "true").lower() == "true"
 
-    logger.info(f"Starting the ingestion pipeline (chunker: {chunker_type}, clear_before_ingest: {clear_before_ingest})")
+    # Collection name pode ser sobrescrito via env var
+    collection_name = os.getenv("WEAVIATE_CLASS_NAME")
+    
+    # Determina collection baseado no chunker_type se não especificado
+    if not collection_name:
+        collection_name = get_collection_name(chunker_type)
+    
+    logger.info("="*60)
+    logger.info("INGESTION PIPELINE CONFIGURATION")
+    logger.info("="*60)
+    logger.info(f"  Chunker Type: {chunker_type}")
+    logger.info(f"  Collection: {collection_name}")
+    logger.info(f"  Clear Before Ingest: {clear_before_ingest}")
+    logger.info(f"  Documents Dir: {documents_dir}")
+    logger.info("="*60)
 
     pipeline = IngestionPipeline(
         documents_dir=documents_dir,
@@ -183,6 +237,7 @@ def main():
         weaviate_url=weaviate_url,
         chunker_type=chunker_type,
         clear_before_ingest=clear_before_ingest,
+        collection_name=collection_name,
     )
 
     try:

@@ -1,0 +1,14 @@
+# Dockerfile para inicialização do Weaviate com dados pré-processados
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Instala dependências mínimas
+RUN pip install --no-cache-dir weaviate-client>=4.0.0
+
+# Copia script e dados
+COPY scripts/load_weaviate_data.py /app/load_weaviate_data.py
+COPY data/ /app/data/
+
+# Executa o script de carga
+CMD ["python", "load_weaviate_data.py"]

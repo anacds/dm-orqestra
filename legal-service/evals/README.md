@@ -197,3 +197,123 @@ Métricas por Decision:
 - Por padrão, o **cache está desabilitado** para garantir uma avaliação justa (sem resultados de execuções anteriores).
 - O script usa o mesmo `LegalAgent` e configurações do serviço em produção (mesmo LLM: `sabiazinho-4` ou `gpt-5-nano` fallback).
 - A avaliação é **simples**: compara apenas se a decisão está correta, não avalia a qualidade do `summary` (justificativa).
+
+---
+
+## Sistema de Experimentos
+
+O sistema de experimentos permite comparar diferentes configurações do agente de forma sistemática.
+
+### Arquivos
+
+- `experiments.yaml`: Arquivo de configuração que define todos os experimentos disponíveis.
+- `run_experiments.py`: Script para executar experimentos com base no YAML.
+- `results/`: Diretório onde os resultados são salvos.
+
+### Configuração de Experimentos
+
+O arquivo `experiments.yaml` define três dimensões de variação:
+
+1. **Retrieval Strategy** (`retrieval_strategies`):
+   - `hybrid`: Busca híbrida (BM25 + Vector, alpha=0.5) - **padrão**
+   - `bm25`: Apenas busca por keywords (alpha=0.0)
+   - `semantic`: Apenas busca vetorial (alpha=1.0)
+
+2. **Chunking Strategy** (`chunking_collections`):
+   - `section`: Chunking por seção do documento - **padrão** (collection: `LegalDocuments`)
+   - `semantic`: Chunking semântico (collection: `LegalDocumentsSemanticChunks`)
+
+3. **LLM Model** (`llm_models`):
+   - `maritaca`: Maritaca sabiazinho-4 - **padrão**
+   - `gpt_nano`: OpenAI GPT-5-nano
+
+### Execução de Experimentos
+
+```bash
+# Listar experimentos disponíveis
+docker compose exec legal-service python evals/run_experiments.py --list
+
+# Executar todos os experimentos habilitados
+docker compose exec legal-service python evals/run_experiments.py
+
+# Executar um experimento específico
+docker compose exec legal-service python evals/run_experiments.py --experiment baseline
+
+# Usar arquivo de configuração customizado
+docker compose exec legal-service python evals/run_experiments.py --config evals/my_experiments.yaml
+```
+
+### Experimentos Pré-configurados
+
+| ID | Nome | Retrieval | Chunking | LLM | Habilitado |
+|----|------|-----------|----------|-----|------------|
+| `baseline` | Baseline (produção) | hybrid | section | maritaca | ✓ |
+| `bm25_only` | BM25 Only | bm25 | section | maritaca | ✓ |
+| `semantic_only` | Semantic Only | semantic | section | maritaca | ✓ |
+| `semantic_chunking` | Semantic Chunking | hybrid | semantic | maritaca | ✗* |
+| `gpt_nano` | GPT-5-nano | hybrid | section | gpt_nano | ✓ |
+| `bm25_gpt_nano` | BM25 + GPT-nano | bm25 | section | gpt_nano | ✓ |
+| `semantic_gpt_nano` | Semantic + GPT-nano | semantic | section | gpt_nano | ✓ |
+
+*Requer collection com chunking semântico pré-indexada.
+
+### Parâmetros via Linha de Comando
+
+O script `evaluate_generation.py` também aceita parâmetros de experimento diretamente:
+
+```bash
+# Testar com alpha diferente (0.0=BM25, 0.5=hybrid, 1.0=semantic)
+docker compose exec legal-service python evals/evaluate_generation.py --alpha 0.0
+
+# Testar com modelo específico
+docker compose exec legal-service python evals/evaluate_generation.py --model gpt-5-nano
+
+# Combinar parâmetros
+docker compose exec legal-service python evals/evaluate_generation.py \
+  --alpha 1.0 \
+  --model sabiazinho-4 \
+  --output evals/results/semantic_maritaca.json
+```
+
+### Relatório Comparativo
+
+Ao executar múltiplos experimentos, um relatório comparativo é gerado automaticamente:
+
+```
+================================================================================
+RELATÓRIO COMPARATIVO DE EXPERIMENTOS
+================================================================================
+
+Experimento                    Retrieval    Alpha   LLM             Accuracy  
+----------------------------------------------------------------------------------------------------
+Baseline (produção)            hybrid       0.5     maritaca        87.50%
+GPT-5-nano                     hybrid       0.5     gpt_nano        85.00%
+BM25 Only                      bm25         0.0     maritaca        82.50%
+Semantic Only                  semantic     1.0     maritaca        80.00%
+================================================================================
+
+🏆 MELHOR RESULTADO: Baseline (produção) (87.50%)
+```
+
+Os resultados são salvos em `evals/results/` nos formatos JSON e CSV.
+
+### Criando Novos Experimentos
+
+Para adicionar um novo experimento, edite `experiments.yaml`:
+
+```yaml
+experiments:
+  meu_experimento:
+    name: "Meu Experimento"
+    description: "Descrição do experimento"
+    enabled: true
+    retrieval_strategy: "hybrid"  # hybrid, bm25, ou semantic
+    chunking: "section"           # section ou semantic
+    llm_model: "maritaca"         # maritaca ou gpt_nano
+```
+
+### Notas sobre Experimentos
+
+- **Chunking Semântico**: Requer que a collection `LegalDocumentsSemanticChunks` exista no Weaviate com os documentos indexados usando chunking semântico.
+- **Tempo de Execução**: Cada experimento leva aproximadamente o mesmo tempo que uma avaliação completa (~40 exemplos × ~1s/exemplo = ~40s).
+- **Custo de API**: Cada experimento consome tokens de API (embeddings + LLM). Considere isso ao executar múltiplos experimentos.

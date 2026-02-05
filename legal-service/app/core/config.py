@@ -1,5 +1,6 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List
+
 
 class Settings(BaseSettings):
     # Service metadata
@@ -25,7 +26,8 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""
     
     # Infrastructure configuration
-    WEAVIATE_CLASS_NAME: str = "DocumentChunk"
+    # Collection com chunks por seção
+    WEAVIATE_CLASS_NAME: str = "LegalDocuments"
     CACHE_ENABLED: bool = True
     CACHE_TTL: int = 3600
     
@@ -35,10 +37,12 @@ class Settings(BaseSettings):
     # Model configurations are loaded from config/models.yaml
     # See app.core.models_config.load_models_config()
     
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
-        extra = "ignore"
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        case_sensitive=True,
+        extra="ignore",
+    )
+
 
 settings = Settings()
 

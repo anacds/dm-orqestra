@@ -163,9 +163,85 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_creative_pieces_campaign_id'), 'creative_pieces', ['campaign_id'], unique=False)
+    
+    # Create piece_review table (for CONTENT_REVIEW workflow)
+    op.create_table(
+        'piece_review',
+        sa.Column('id', sa.String(), nullable=False),
+        sa.Column('campaign_id', sa.String(), nullable=False),
+        sa.Column('channel', sa.String(), nullable=False),
+        sa.Column('piece_id', sa.String(), nullable=False),
+        sa.Column('commercial_space', sa.String(), nullable=False, server_default=''),
+        sa.Column('ia_verdict', sa.String(), nullable=False),
+        sa.Column('human_verdict', sa.String(), nullable=False, server_default='pending'),
+        sa.Column('reviewed_at', sa.DateTime(timezone=True), nullable=True),
+        sa.Column('reviewed_by', sa.String(), nullable=True),
+        sa.Column('rejection_reason', sa.Text(), nullable=True),
+        sa.ForeignKeyConstraint(['campaign_id'], ['campaigns.id'], ondelete='CASCADE'),
+        sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index('ix_piece_review_campaign_id', 'piece_review', ['campaign_id'], unique=False)
+    op.create_index('ix_piece_review_channel', 'piece_review', ['channel'], unique=False)
+    op.create_index('ix_piece_review_piece_id', 'piece_review', ['piece_id'], unique=False)
+    op.create_index(
+        'ix_piece_review_lookup',
+        'piece_review',
+        ['campaign_id', 'channel', 'piece_id', 'commercial_space'],
+        unique=True,
+    )
+    
+    # Create piece_review_event table (immutable audit log)
+    op.create_table(
+        'piece_review_event',
+        sa.Column('id', sa.String(), nullable=False),
+        sa.Column('campaign_id', sa.String(), nullable=False),
+        sa.Column('channel', sa.String(), nullable=False),
+        sa.Column('piece_id', sa.String(), nullable=False),
+        sa.Column('commercial_space', sa.String(), nullable=False, server_default=''),
+        sa.Column('event_type', sa.String(), nullable=False),
+        sa.Column('ia_verdict', sa.String(), nullable=True),
+        sa.Column('rejection_reason', sa.Text(), nullable=True),
+        sa.Column('actor_id', sa.String(), nullable=False),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+        sa.ForeignKeyConstraint(['campaign_id'], ['campaigns.id'], ondelete='CASCADE'),
+        sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index('ix_piece_review_event_campaign_id', 'piece_review_event', ['campaign_id'], unique=False)
+    op.create_index(
+        'ix_piece_review_event_piece_lookup',
+        'piece_review_event',
+        ['campaign_id', 'channel', 'piece_id', 'commercial_space'],
+        unique=False,
+    )
+    
+    # Create campaign_status_event table (immutable audit log of status transitions)
+    op.create_table(
+        'campaign_status_event',
+        sa.Column('id', sa.String(), nullable=False),
+        sa.Column('campaign_id', sa.String(), nullable=False),
+        sa.Column('from_status', sa.String(), nullable=True),
+        sa.Column('to_status', sa.String(), nullable=False),
+        sa.Column('actor_id', sa.String(), nullable=False),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+        sa.ForeignKeyConstraint(['campaign_id'], ['campaigns.id'], ondelete='CASCADE'),
+        sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index('ix_campaign_status_event_campaign_id', 'campaign_status_event', ['campaign_id'], unique=False)
+    op.create_index('ix_campaign_status_event_campaign_created', 'campaign_status_event', ['campaign_id', 'created_at'], unique=False)
 
 
 def downgrade() -> None:
+    op.drop_index('ix_campaign_status_event_campaign_created', table_name='campaign_status_event')
+    op.drop_index('ix_campaign_status_event_campaign_id', table_name='campaign_status_event')
+    op.drop_table('campaign_status_event')
+    op.drop_index('ix_piece_review_event_piece_lookup', table_name='piece_review_event')
+    op.drop_index('ix_piece_review_event_campaign_id', table_name='piece_review_event')
+    op.drop_table('piece_review_event')
+    op.drop_index('ix_piece_review_lookup', table_name='piece_review')
+    op.drop_index('ix_piece_review_piece_id', table_name='piece_review')
+    op.drop_index('ix_piece_review_channel', table_name='piece_review')
+    op.drop_index('ix_piece_review_campaign_id', table_name='piece_review')
+    op.drop_table('piece_review')
     op.drop_index(op.f('ix_creative_pieces_campaign_id'), table_name='creative_pieces')
     op.drop_table('creative_pieces')
     op.drop_index(op.f('ix_comments_campaign_id'), table_name='comments')

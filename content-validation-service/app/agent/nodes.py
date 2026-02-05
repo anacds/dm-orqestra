@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Any, Dict
 
 from app.agent.state import ValidationGraphState
-from app.agent.tools import retrieve_piece_content, validate_legal_compliance, convert_html_to_image
+from app.agent.tools import retrieve_piece_content, validate_legal_compliance, convert_html_to_image, validate_brand_compliance
 from app.agent.validate_piece import validate_piece_format_and_size
 
 logger = logging.getLogger(__name__)
@@ -155,6 +155,9 @@ async def retrieve_content_node(state: ValidationGraphState) -> Dict[str, Any]:
             "human_approval_reason": f"Conteúdo da peça indisponível (MCP/campaigns): {err}",
         }
 
+    # Inicializa html_for_branding (só usado para EMAIL)
+    html_for_branding = None
+
     if channel == "APP":
         if not _is_data_url_image(raw):
             logger.warning("retrieve_content APP image is not a data URL: %.80s...", raw)
@@ -205,6 +208,9 @@ async def retrieve_content_node(state: ValidationGraphState) -> Dict[str, Any]:
             # Envia HTML + imagem para o Legal Service (análise visual + textual)
             content_for_compliance = {"html": raw, "image": data_url}
             
+            # Guarda HTML original para validação de branding (paralela)
+            html_for_branding = raw
+            
         except Exception as e:
             err = str(e)
             logger.warning("HTML to image conversion error: %s", err)
@@ -220,6 +226,7 @@ async def retrieve_content_node(state: ValidationGraphState) -> Dict[str, Any]:
     return {
         "retrieve_ok": True,
         "content_for_compliance": content_for_compliance,
+        "html_for_branding": html_for_branding,
     }
 
 
@@ -272,29 +279,127 @@ async def validate_compliance_node(state: ValidationGraphState) -> Dict[str, Any
     }
 
 
+async def validate_branding_node(state: ValidationGraphState) -> Dict[str, Any]:
+    """
+    Valida conformidade de marca via branding-service (MCP).
+    
+    Executado em paralelo com validate_compliance para EMAIL.
+    Validação 100% determinística (sem IA/LLM).
+    """
+    html_for_branding = state.get("html_for_branding")
+    channel = (state.get("channel") or "").upper()
+    
+    # Só executa para EMAIL com HTML disponível
+    if channel != "EMAIL" or not html_for_branding:
+        logger.info("validate_branding: skipping (channel=%s, has_html=%s)", channel, bool(html_for_branding))
+        return {
+            "branding_ok": True,
+            "branding_result": None,
+            "branding_error": None,
+        }
+    
+    try:
+        result = await validate_brand_compliance.ainvoke({"html": html_for_branding})
+    except Exception as e:
+        err = str(e)
+        logger.warning("validate_branding MCP error: %s", err)
+        return {
+            "branding_ok": False,
+            "branding_error": err,
+            "branding_result": {
+                "compliant": False,
+                "score": 0,
+                "violations": [],
+                "summary": {"critical": 0, "warning": 0, "info": 0, "total": 0},
+                "error": err,
+            },
+        }
+    
+    compliant = result.get("compliant", False)
+    score = result.get("score", 0)
+    violations = result.get("violations", [])
+    summary = result.get("summary", {})
+    
+    logger.info(
+        "validate_branding: compliant=%s, score=%d, violations=%d",
+        compliant, score, summary.get("total", 0)
+    )
+    
+    return {
+        "branding_ok": True,
+        "branding_result": {
+            "compliant": compliant,
+            "score": score,
+            "violations": violations,
+            "summary": summary,
+        },
+    }
+
+
 def issue_final_verdict_node(state: ValidationGraphState) -> Dict[str, Any]:
     """
     4) issue_final_verdict: consolida resultado final.
+    
+    Combina:
+    - Legal compliance (IA): decisão jurídica
+    - Branding compliance (determinístico): conformidade de marca
     """
     compliance_result = state.get("compliance_result") or {}
+    branding_result = state.get("branding_result")
     validation_result = state.get("validation_result") or {}
     requires_human = state.get("requires_human_approval", False)
     human_reason = state.get("human_approval_reason")
 
-    decision = compliance_result.get("decision", "REPROVADO")
-    summary = compliance_result.get("summary", "")
+    # Decisão legal (IA)
+    legal_decision = compliance_result.get("decision", "REPROVADO")
+    legal_summary = compliance_result.get("summary", "")
     sources = compliance_result.get("sources", [])
 
+    # Decisão de branding (determinístico)
+    branding_compliant = True
+    branding_score = 100
+    if branding_result:
+        branding_compliant = branding_result.get("compliant", True)
+        branding_score = branding_result.get("score", 100)
+
+    # Decisão final: só aprova se ambos aprovarem
+    # Legal APROVADO + Branding compliant = APROVADO
+    # Qualquer reprovação = REPROVADO
+    if legal_decision == "APROVADO" and branding_compliant:
+        final_decision = "APROVADO"
+    elif legal_decision == "APROVADO" and not branding_compliant:
+        final_decision = "REPROVADO"
+        # Adiciona motivo de branding à revisão humana
+        if not requires_human:
+            requires_human = True
+            human_reason = f"Violações de marca detectadas (score: {branding_score}/100)"
+    else:
+        final_decision = legal_decision  # REPROVADO ou REQUER_REVISAO
+
+    # Monta summary combinado
+    combined_summary = legal_summary
+    if branding_result and not branding_compliant:
+        violations_count = branding_result.get("summary", {}).get("total", 0)
+        branding_msg = f"Branding: {violations_count} violações (score: {branding_score}/100)"
+        combined_summary = f"{legal_summary} | {branding_msg}" if legal_summary else branding_msg
+
     final_verdict = {
-        "decision": decision,
+        "decision": final_decision,
         "requires_human_review": requires_human,
-        "summary": summary,
+        "summary": combined_summary,
         "sources": sources,
+        # Detalhes separados para UI
+        "legal": {
+            "decision": legal_decision,
+            "summary": legal_summary,
+        },
+        "branding": branding_result,
     }
 
     orchestration_result = {
         "validation": validation_result,
         "compliance": compliance_result,
+        "branding": branding_result,
         "final_verdict": final_verdict,
         "requires_human_approval": requires_human,
         "human_approval_reason": human_reason,

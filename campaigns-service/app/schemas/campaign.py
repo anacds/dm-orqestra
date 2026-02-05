@@ -218,6 +218,56 @@ class ReviewPieceRequest(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+class PieceReviewEventResponse(BaseModel):
+    """Response for a single piece review event (history entry)."""
+    
+    id: str
+    campaign_id: str = Field(alias="campaignId")
+    channel: str
+    piece_id: str = Field(alias="pieceId")
+    commercial_space: str = Field(alias="commercialSpace", default="")
+    event_type: str = Field(alias="eventType")
+    ia_verdict: Optional[str] = Field(None, alias="iaVerdict")
+    rejection_reason: Optional[str] = Field(None, alias="rejectionReason")
+    actor_id: str = Field(alias="actorId")
+    actor_name: Optional[str] = Field(None, alias="actorName")
+    created_at: datetime = Field(alias="createdAt")
+    
+    model_config = {"from_attributes": True, "populate_by_name": True}
+
+
+class PieceReviewHistoryResponse(BaseModel):
+    """Response for GET /campaigns/{id}/piece-review-history."""
+    
+    events: List[PieceReviewEventResponse]
+    
+    model_config = {"populate_by_name": True}
+
+
+class CampaignStatusEventResponse(BaseModel):
+    """Response for a single campaign status transition event."""
+    
+    id: str
+    campaign_id: str = Field(alias="campaignId")
+    from_status: Optional[str] = Field(None, alias="fromStatus")
+    to_status: str = Field(alias="toStatus")
+    actor_id: str = Field(alias="actorId")
+    actor_name: Optional[str] = Field(None, alias="actorName")
+    created_at: datetime = Field(alias="createdAt")
+    duration_seconds: Optional[int] = Field(None, alias="durationSeconds")
+    
+    model_config = {"from_attributes": True, "populate_by_name": True}
+
+
+class CampaignStatusHistoryResponse(BaseModel):
+    """Response for GET /campaigns/{id}/status-history."""
+    
+    events: List[CampaignStatusEventResponse]
+    current_status: str = Field(alias="currentStatus")
+    
+    model_config = {"populate_by_name": True}
+
+
 class EnhanceObjectiveRequest(BaseModel):
     text: str = Field(..., min_length=1)
     field_name: str = Field(..., description="Name of the field to enhance (e.g., 'businessObjective', 'expectedResult', 'targetAudienceDescription', 'exclusionCriteria')")
@@ -259,3 +309,38 @@ class GenerateTextResponse(BaseModel):
             if self.text is not None:
                 raise ValueError("text should not be provided for Push channel")
         return self
+
+
+class TaskItem(BaseModel):
+    """A single task item for the dashboard."""
+    
+    id: str
+    campaign_id: str = Field(alias="campaignId")
+    campaign_name: str = Field(alias="campaignName")
+    task_type: str = Field(alias="taskType")
+    description: str
+    priority: str
+    created_at: datetime = Field(alias="createdAt")
+    
+    model_config = {"populate_by_name": True}
+
+
+class TaskGroup(BaseModel):
+    """A group of tasks by type."""
+    
+    task_type: str = Field(alias="taskType")
+    title: str
+    description: str
+    count: int
+    tasks: List[TaskItem]
+    
+    model_config = {"populate_by_name": True}
+
+
+class MyTasksResponse(BaseModel):
+    """Response for GET /campaigns/my-tasks."""
+    
+    total_tasks: int = Field(alias="totalTasks")
+    task_groups: List[TaskGroup] = Field(alias="taskGroups")
+    
+    model_config = {"populate_by_name": True}

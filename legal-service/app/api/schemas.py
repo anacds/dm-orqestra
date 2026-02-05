@@ -1,5 +1,5 @@
 import re
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from typing import List, Literal, Optional, Union
 
 
@@ -149,8 +149,8 @@ class ValidationInput(BaseModel):
                 data["content"] = _parse_content_by_channel(channel, content)
         return data
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "examples": [
                 {
                     "task": "VALIDATE_COMMUNICATION",
@@ -181,6 +181,7 @@ class ValidationInput(BaseModel):
                 }
             ]
         }
+    )
 
 
 class ValidationOutput(BaseModel):

@@ -2,6 +2,18 @@
 
 Pipeline para carregar, quebrar em chunks semânticos e indexar documentos jurídicos no Weaviate. Desenvolvido para ser usado por um agente de IA especialista em guidelines de comunicações de CRM.
 
+## ⚠️ Nota Importante
+
+**O Orqestra já vem com dados pré-processados!**
+
+O `docker-compose.yml` principal (na raiz do projeto) carrega automaticamente os chunks e vetores pré-gerados a partir dos JSONs em `legal-service/data/`. Isso:
+
+- ✅ Elimina necessidade de tokens OpenAI para ingestão
+- ✅ Reduz tempo de startup (~segundos vs ~2-3 minutos)
+- ✅ Garante reprodutibilidade para avaliadores
+
+**Use este serviço apenas se quiser regenerar os dados** (ex: novos documentos, experimentos com chunking).
+
 ## 🏗️ Arquitetura
 
 O pipeline segue uma arquitetura modular e madura:
@@ -12,40 +24,40 @@ O pipeline segue uma arquitetura modular e madura:
 - **Indexers**: Indexação no Weaviate com versionamento e idempotência
 - **Orquestração**: Pipeline Python idempotente e observável
 
-## 🚀 Execução Rápida com Docker
+## 🚀 Execução (Regeneração de Dados)
 
-### 1. Configure as variáveis de ambiente
+### Pré-requisitos
+
+1. O Weaviate principal deve estar rodando:
+   ```bash
+   cd ..  # raiz do projeto
+   docker compose up weaviate -d
+   ```
+
+2. Configure a variável de ambiente:
+   ```bash
+   export OPENAI_API_KEY=sua-chave-aqui
+   ```
+
+### Regenerar dados
 
 ```bash
-cp .env.example .env
+# Dentro de documents-ingestion/
+
+# Section chunking → LegalDocuments
+docker compose up ingestion-section
+
+# Semantic chunking → LegalDocumentsSemanticChunks
+docker compose up ingestion-semantic
+
+# Ou ambos sequencialmente
+docker compose up ingestion-section && docker compose up ingestion-semantic
 ```
 
-Edite o `.env` e configure principalmente:
-- `OPENAI_API_KEY`: Sua chave da API OpenAI (se usando OpenAI)
-- `EMBEDDING_PROVIDER`: `openai` ou `ollama`
-
-### 2. Execute tudo com Docker Compose
+### Script helper
 
 ```bash
-docker-compose up
-```
-
-Isso irá:
-1. Iniciar o Weaviate
-2. Aguardar o Weaviate ficar pronto
-3. Executar a pipeline de ingestão
-4. Processar todos os PDFs em `doc-juridico/`
-
-### 3. Executar apenas o Weaviate (para testes)
-
-```bash
-docker-compose up weaviate
-```
-
-### 4. Re-executar apenas a ingestão
-
-```bash
-docker-compose up ingestion
+./scripts/ingest_all_strategies.sh
 ```
 
 ## 📋 Pré-requisitos
@@ -87,6 +99,41 @@ EMBEDDING_MODEL=nomic-embed-text
 
 ```bash
 docker-compose up
+```
+
+### Estratégias de Chunking
+
+O pipeline suporta duas estratégias de chunking, cada uma criando uma collection diferente no Weaviate:
+
+| Estratégia | Collection | Descrição |
+|------------|------------|-----------|
+| `section` | `LegalDocuments` | Chunking por seções numeradas do documento |
+| `semantic` | `LegalDocumentsSemanticChunks` | Chunking baseado em similaridade semântica |
+
+#### Ingestão com estratégia específica
+
+```bash
+# Section chunking (padrão) → LegalDocuments
+docker compose up ingestion-section
+
+# Semantic chunking → LegalDocumentsSemanticChunks
+docker compose up ingestion-semantic
+
+# Ou via variável de ambiente
+CHUNKER_TYPE=semantic docker compose up ingestion
+```
+
+#### Ingestão de todas as estratégias (para experimentos)
+
+```bash
+# Indexa em ambas as collections
+./scripts/ingest_all_strategies.sh
+
+# Apenas section
+./scripts/ingest_all_strategies.sh --section-only
+
+# Apenas semantic
+./scripts/ingest_all_strategies.sh --semantic-only
 ```
 
 ### Executar Apenas Weaviate
@@ -136,15 +183,23 @@ docker run --rm \
 
 ## 🔧 Características Principais
 
-### Chunking Semântico
+### Estratégias de Chunking
 
-O chunker não divide por contagem fixa de tokens. Em vez disso, divide baseado em:
+O pipeline oferece duas estratégias de chunking configuráveis:
 
-- Títulos e cabeçalhos (detecção automática)
-- Seções numeradas
-- Quebras de seção (linhas separadoras, espaços)
-- Listas e exemplos
-- Preservação de contexto estrutural
+#### Section Chunker
+Divide documentos por seções numeradas (ex: "1. Introdução", "2. Diretrizes"). 
+- Preserva a estrutura original do documento
+- Ideal para documentos com formatação consistente
+- Collection: `LegalDocuments`
+
+#### Semantic Chunker
+Usa embeddings para identificar pontos de quebra semântica.
+- Chunks mais coesos semanticamente
+- Usa LangChain SemanticChunker
+- Collection: `LegalDocumentsSemanticChunks`
+
+Ambos detectam automaticamente o canal (SMS, EMAIL, PUSH, APP) a partir do nome do arquivo.
 
 ### Versionamento e Idempotência
 

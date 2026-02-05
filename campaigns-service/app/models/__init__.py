@@ -2,6 +2,8 @@ from app.models.campaign import Campaign, CampaignStatus, CampaignCategory, Requ
 from app.models.comment import Comment
 from app.models.creative_piece import CreativePiece, CreativePieceType
 from app.models.piece_review import PieceReview, HumanVerdict, IaVerdict
+from app.models.piece_review_event import PieceReviewEvent, PieceReviewEventType
+from app.models.campaign_status_event import CampaignStatusEvent
 from app.models.user_role import UserRole
 
 __all__ = [
@@ -21,6 +23,9 @@ __all__ = [
     "PieceReview",
     "HumanVerdict",
     "IaVerdict",
+    "PieceReviewEvent",
+    "PieceReviewEventType",
+    "CampaignStatusEvent",
     "UserRole",
 ]
 

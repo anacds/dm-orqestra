@@ -9,6 +9,8 @@ from app.models.campaign import Campaign, CampaignStatus
 from app.models.comment import Comment
 from app.models.creative_piece import CreativePiece
 from app.models.piece_review import PieceReview, HumanVerdict
+from app.models.piece_review_event import PieceReviewEvent, PieceReviewEventType
+from app.models.campaign_status_event import CampaignStatusEvent
 from app.models.user_role import UserRole
 from app.schemas.campaign import (
     CampaignCreate,
@@ -287,6 +289,16 @@ class CampaignService:
         )
         
         db.add(campaign)
+        
+        # Record initial status event
+        status_event = CampaignStatusEvent(
+            campaign_id=campaign.id,
+            from_status=None,
+            to_status=CampaignStatus.DRAFT.value,
+            actor_id=current_user.get("id") or "",
+        )
+        db.add(status_event)
+        
         db.commit()
         db.refresh(campaign)
         
@@ -390,6 +402,15 @@ class CampaignService:
                     )
             
             update_data['status'] = new_status.value
+            
+            # Record status change event
+            status_event = CampaignStatusEvent(
+                campaign_id=campaign_id,
+                from_status=current_status.value if hasattr(current_status, 'value') else current_status,
+                to_status=new_status.value,
+                actor_id=current_user.get("id") or "",
+            )
+            db.add(status_event)
         
         enum_fields = ['category', 'requesting_area', 'priority', 'communication_tone', 'execution_model', 'trigger_event']
         array_enum_fields = ['communication_channels', 'commercial_spaces']
@@ -570,6 +591,7 @@ class CampaignService:
                 detail="Submit for review only allowed when campaign is CREATIVE_STAGE or CONTENT_ADJUSTMENT",
             )
         db.query(PieceReview).filter(PieceReview.campaign_id == campaign_id).delete()
+        actor_id = current_user.get("id") or ""
         for item in body.piece_reviews:
             ch = (item.channel or "").upper().replace("-", "").replace(" ", "")
             if ch == "E-MAIL":
@@ -578,6 +600,7 @@ class CampaignService:
             ia = (item.ia_verdict or "warning").lower()
             if ia not in ("approved", "rejected", "warning"):
                 ia = "warning"
+            # Create current state record
             pr = PieceReview(
                 campaign_id=campaign_id,
                 channel=ch,
@@ -587,7 +610,29 @@ class CampaignService:
                 human_verdict=HumanVerdict.PENDING.value,
             )
             db.add(pr)
+            # Create history event (immutable)
+            event = PieceReviewEvent(
+                campaign_id=campaign_id,
+                channel=ch,
+                piece_id=item.piece_id,
+                commercial_space=space,
+                event_type=PieceReviewEventType.SUBMITTED.value,
+                ia_verdict=ia,
+                actor_id=actor_id,
+            )
+            db.add(event)
+        
+        # Record status change event
+        old_status = campaign.status
         campaign.status = CampaignStatus.CONTENT_REVIEW.value
+        status_event = CampaignStatusEvent(
+            campaign_id=campaign_id,
+            from_status=old_status,
+            to_status=CampaignStatus.CONTENT_REVIEW.value,
+            actor_id=actor_id,
+        )
+        db.add(status_event)
+        
         db.commit()
         db.refresh(campaign)
         return await campaign_to_response(campaign, auth_token, db)
@@ -640,21 +685,284 @@ class CampaignService:
                 detail="Piece review not found for this campaign/channel/piece",
             )
         human = HumanVerdict.PENDING.value
+        event_type = PieceReviewEventType.APPROVED.value
         if action == "approve":
             human = HumanVerdict.APPROVED.value
+            event_type = PieceReviewEventType.APPROVED.value
         elif action == "reject":
             human = HumanVerdict.REJECTED.value
+            event_type = PieceReviewEventType.REJECTED.value
         else:
             human = HumanVerdict.MANUALLY_REJECTED.value
-        pr.human_verdict = human
-        pr.reviewed_at = datetime.now(timezone.utc)
-        pr.reviewed_by = current_user.get("id") or ""
+            event_type = PieceReviewEventType.MANUALLY_REJECTED.value
+        
+        actor_id = current_user.get("id") or ""
+        rejection_reason = None
         if action in ("reject", "manually_reject") and body.rejection_reason is not None:
             reason = (body.rejection_reason or "").strip()
-            pr.rejection_reason = reason if reason else None
-        else:
-            pr.rejection_reason = None
+            rejection_reason = reason if reason else None
+        
+        # Update current state
+        pr.human_verdict = human
+        pr.reviewed_at = datetime.now(timezone.utc)
+        pr.reviewed_by = actor_id
+        pr.rejection_reason = rejection_reason
+        
+        # Create history event (immutable)
+        event = PieceReviewEvent(
+            campaign_id=campaign_id,
+            channel=ch,
+            piece_id=body.piece_id,
+            commercial_space=space,
+            event_type=event_type,
+            rejection_reason=rejection_reason,
+            actor_id=actor_id,
+        )
+        db.add(event)
         db.commit()
         db.refresh(campaign)
         return await campaign_to_response(campaign, auth_token, db)
+
+    @staticmethod
+    async def get_piece_review_history(
+        db: Session,
+        campaign_id: str,
+        auth_token: Optional[str] = None,
+    ) -> List[dict]:
+        """Get the full history of piece review events for a campaign."""
+        from app.schemas.campaign import PieceReviewEventResponse
+        
+        campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
+        if not campaign:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
+        
+        events = (
+            db.query(PieceReviewEvent)
+            .filter(PieceReviewEvent.campaign_id == campaign_id)
+            .order_by(PieceReviewEvent.created_at.asc())
+            .all()
+        )
+        
+        result = []
+        for ev in events:
+            ev_dict = {
+                "id": ev.id,
+                "campaignId": ev.campaign_id,
+                "channel": ev.channel,
+                "pieceId": ev.piece_id,
+                "commercialSpace": ev.commercial_space or "",
+                "eventType": ev.event_type,
+                "iaVerdict": ev.ia_verdict,
+                "rejectionReason": ev.rejection_reason,
+                "actorId": ev.actor_id,
+                "actorName": None,
+                "createdAt": ev.created_at,
+            }
+            # Fetch actor name from auth service
+            if auth_token and ev.actor_id:
+                try:
+                    user = await auth_client.get_user_by_id(ev.actor_id, auth_token)
+                    if user:
+                        ev_dict["actorName"] = user.get("full_name") or user.get("email") or ev.actor_id
+                except Exception:
+                    pass
+            result.append(PieceReviewEventResponse.model_validate(ev_dict))
+        
+        return result
+
+    @staticmethod
+    async def get_status_history(
+        db: Session,
+        campaign_id: str,
+        auth_token: Optional[str] = None,
+    ) -> List[dict]:
+        """Get the full history of status transitions for a campaign."""
+        from app.schemas.campaign import CampaignStatusEventResponse
+        
+        campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
+        if not campaign:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
+        
+        events = (
+            db.query(CampaignStatusEvent)
+            .filter(CampaignStatusEvent.campaign_id == campaign_id)
+            .order_by(CampaignStatusEvent.created_at.asc())
+            .all()
+        )
+        
+        result = []
+        for i, ev in enumerate(events):
+            # Calculate duration: time until next event, or None if current
+            duration_seconds = None
+            if i < len(events) - 1:
+                next_event = events[i + 1]
+                duration_seconds = int((next_event.created_at - ev.created_at).total_seconds())
+            
+            ev_dict = {
+                "id": ev.id,
+                "campaignId": ev.campaign_id,
+                "fromStatus": ev.from_status,
+                "toStatus": ev.to_status,
+                "actorId": ev.actor_id,
+                "actorName": None,
+                "createdAt": ev.created_at,
+                "durationSeconds": duration_seconds,
+            }
+            # Fetch actor name from auth service
+            if auth_token and ev.actor_id:
+                try:
+                    user = await auth_client.get_user_by_id(ev.actor_id, auth_token)
+                    if user:
+                        ev_dict["actorName"] = user.get("full_name") or user.get("email") or ev.actor_id
+                except Exception:
+                    pass
+            result.append(CampaignStatusEventResponse.model_validate(ev_dict))
+        
+        return result
+
+    @staticmethod
+    async def get_my_tasks(
+        db: Session,
+        current_user: Dict,
+    ) -> Dict:
+        """Get personalized task list based on user role."""
+        from app.schemas.campaign import TaskItem, TaskGroup
+        
+        user_id = current_user.get("id") or ""
+        role = current_user.get("role") or ""
+        
+        task_groups = []
+        
+        if role == UserRole.BUSINESS_ANALYST.value:
+            # 1. Drafts created by this user that need to be sent to creative
+            drafts = (
+                db.query(Campaign)
+                .filter(
+                    Campaign.status == CampaignStatus.DRAFT.value,
+                    Campaign.created_by == user_id
+                )
+                .order_by(Campaign.created_date.desc())
+                .all()
+            )
+            if drafts:
+                task_groups.append(TaskGroup(
+                    taskType="send_to_creative",
+                    title="Enviar para Criação",
+                    description="Campanhas em rascunho prontas para enviar à equipe de criação",
+                    count=len(drafts),
+                    tasks=[TaskItem(
+                        id=f"send_{c.id}",
+                        campaignId=c.id,
+                        campaignName=c.name,
+                        taskType="send_to_creative",
+                        description="Enviar para etapa criativa",
+                        priority=c.priority or "Normal",
+                        createdAt=c.created_date,
+                    ) for c in drafts]
+                ))
+            
+            # 2. Campaigns in content review that need piece approval
+            in_review = (
+                db.query(Campaign)
+                .filter(Campaign.status == CampaignStatus.CONTENT_REVIEW.value)
+                .order_by(Campaign.created_date.desc())
+                .all()
+            )
+            if in_review:
+                task_groups.append(TaskGroup(
+                    taskType="review_content",
+                    title="Aprovar Conteúdo",
+                    description="Campanhas com peças criativas aguardando sua aprovação",
+                    count=len(in_review),
+                    tasks=[TaskItem(
+                        id=f"review_{c.id}",
+                        campaignId=c.id,
+                        campaignName=c.name,
+                        taskType="review_content",
+                        description="Revisar e aprovar peças criativas",
+                        priority=c.priority or "Normal",
+                        createdAt=c.created_date,
+                    ) for c in in_review]
+                ))
+        
+        elif role == UserRole.CREATIVE_ANALYST.value:
+            # 1. Campaigns in creative stage that need pieces
+            creative_stage = (
+                db.query(Campaign)
+                .filter(Campaign.status == CampaignStatus.CREATIVE_STAGE.value)
+                .order_by(Campaign.created_date.desc())
+                .all()
+            )
+            if creative_stage:
+                task_groups.append(TaskGroup(
+                    taskType="create_pieces",
+                    title="Criar Peças",
+                    description="Campanhas aguardando criação de peças criativas",
+                    count=len(creative_stage),
+                    tasks=[TaskItem(
+                        id=f"create_{c.id}",
+                        campaignId=c.id,
+                        campaignName=c.name,
+                        taskType="create_pieces",
+                        description=f"Criar peças para {', '.join(c.communication_channels or [])}",
+                        priority=c.priority or "Normal",
+                        createdAt=c.created_date,
+                    ) for c in creative_stage]
+                ))
+            
+            # 2. Campaigns in content adjustment that need fixes
+            adjustments = (
+                db.query(Campaign)
+                .filter(Campaign.status == CampaignStatus.CONTENT_ADJUSTMENT.value)
+                .order_by(Campaign.created_date.desc())
+                .all()
+            )
+            if adjustments:
+                task_groups.append(TaskGroup(
+                    taskType="adjust_pieces",
+                    title="Ajustar Peças",
+                    description="Campanhas com peças rejeitadas que precisam de ajustes",
+                    count=len(adjustments),
+                    tasks=[TaskItem(
+                        id=f"adjust_{c.id}",
+                        campaignId=c.id,
+                        campaignName=c.name,
+                        taskType="adjust_pieces",
+                        description="Corrigir peças rejeitadas",
+                        priority=c.priority or "Normal",
+                        createdAt=c.created_date,
+                    ) for c in adjustments]
+                ))
+        
+        elif role == UserRole.CAMPAIGN_ANALYST.value:
+            # Campaigns ready to publish
+            ready_to_publish = (
+                db.query(Campaign)
+                .filter(Campaign.status == CampaignStatus.CAMPAIGN_BUILDING.value)
+                .order_by(Campaign.created_date.desc())
+                .all()
+            )
+            if ready_to_publish:
+                task_groups.append(TaskGroup(
+                    taskType="publish_campaign",
+                    title="Publicar Campanha",
+                    description="Campanhas aprovadas prontas para publicação",
+                    count=len(ready_to_publish),
+                    tasks=[TaskItem(
+                        id=f"publish_{c.id}",
+                        campaignId=c.id,
+                        campaignName=c.name,
+                        taskType="publish_campaign",
+                        description="Publicar campanha",
+                        priority=c.priority or "Normal",
+                        createdAt=c.created_date,
+                    ) for c in ready_to_publish]
+                ))
+        
+        total_tasks = sum(g.count for g in task_groups)
+        
+        return {
+            "totalTasks": total_tasks,
+            "taskGroups": task_groups,
+        }
 

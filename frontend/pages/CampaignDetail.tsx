@@ -1,18 +1,26 @@
 import { useParams, useNavigate } from "react-router-dom";
 import Header from "@/components/Header";
-import { ArrowLeft, Plus, MessageSquare, Send, AlertCircle, Edit2, Save, X, Loader2, CheckCircle, FileText, Sparkles, Smartphone, MessageSquare as MessageSquareIcon, Upload, Image, FileCode, Trash2, AlertTriangle, ChevronUp, User } from "lucide-react";
+import { ValidationLoadingOverlay } from "@/components/ValidationLoadingOverlay";
+import { PieceReviewTimeline } from "@/components/PieceReviewTimeline";
+import { CampaignStatusTimeline } from "@/components/CampaignStatusTimeline";
+import { NextActionBanner } from "@/components/NextActionBanner";
+import { ArrowLeft, Plus, MessageSquare, Send, AlertCircle, Edit2, Save, X, Loader2, CheckCircle, FileText, Sparkles, Smartphone, MessageSquare as MessageSquareIcon, Upload, Image, FileCode, Trash2, AlertTriangle, ChevronUp, ChevronDown, User, History, Download } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { campaignsAPI, authAPI, aiAPI, creativePiecesAPI, type AnalyzePieceInput } from "@/lib/api";
-import { Campaign, Comment, CampaignStatus, AnalyzePieceResponse } from "@shared/api";
+import { Campaign, Comment, CampaignStatus, AnalyzePieceResponse, PieceReviewEvent, CampaignStatusEvent } from "@shared/api";
 import { format, formatDistanceToNow } from "date-fns";
 
 // Helper function to calculate content hash (same logic as backend)
+// SMS: uses "body" field (same as backend content_hash_sms)
+// Push: uses "title" and "body" fields (same as backend content_hash_push)
 async function calculateContentHash(channel: "SMS" | "Push", content: { text?: string; title?: string; body?: string }): Promise<string> {
   let contentStr = "";
   if (channel === "SMS") {
-    contentStr = `SMS:${content.text || ""}`;
+    // Backend uses ch.get("body") for SMS, so we use content.body (or content.text as fallback)
+    const smsBody = content.body || content.text || "";
+    contentStr = `SMS:${smsBody}`;
   } else if (channel === "Push") {
     contentStr = `Push:${content.title || ""}:${content.body || ""}`;
   }
@@ -24,6 +32,46 @@ async function calculateContentHash(channel: "SMS" | "Push", content: { text?: s
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
+
+// Helper function to download a creative piece via backend proxy
+async function downloadCreativePiece(
+  campaignId: string,
+  channel: "EMAIL" | "APP",
+  filename: string,
+  commercialSpace?: string
+): Promise<void> {
+  try {
+    const params = new URLSearchParams({
+      channel,
+      filename,
+    });
+    if (commercialSpace) {
+      params.set("commercial_space", commercialSpace);
+    }
+    
+    const response = await fetch(`/api/campaigns/${campaignId}/download-piece?${params.toString()}`, {
+      credentials: "include",
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Download failed: ${response.status}`);
+    }
+    
+    const blob = await response.blob();
+    const blobUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = blobUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(blobUrl);
+  } catch (error) {
+    console.error("Download failed:", error);
+    alert("Erro ao baixar arquivo. Tente novamente.");
+  }
+}
+
 import {
   Dialog,
   DialogContent,
@@ -37,6 +85,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 export default function CampaignDetail() {
   const { id } = useParams<{ id: string }>();
@@ -100,6 +154,22 @@ export default function CampaignDetail() {
     queryFn: () => campaignsAPI.getById(id!),
     enabled: !!id,
   });
+
+  // Query for piece review history (timeline)
+  const { data: reviewHistory = [] } = useQuery({
+    queryKey: ["pieceReviewHistory", id],
+    queryFn: () => campaignsAPI.getPieceReviewHistory(id!),
+    enabled: !!id && (campaign?.status === "CONTENT_REVIEW" || campaign?.status === "CONTENT_ADJUSTMENT" || campaign?.status === "CAMPAIGN_BUILDING" || campaign?.status === "CAMPAIGN_PUBLISHED"),
+  });
+
+  // Query for status history (horizontal timeline)
+  const { data: statusHistoryData } = useQuery({
+    queryKey: ["statusHistory", id],
+    queryFn: () => campaignsAPI.getStatusHistory(id!),
+    enabled: !!id,
+  });
+
+  const [showHistoryTimeline, setShowHistoryTimeline] = useState(false);
 
   
   useEffect(() => {
@@ -167,7 +237,7 @@ export default function CampaignDetail() {
       
       if (smsPiece && smsPiece.text) {
         try {
-          const contentHash = await calculateContentHash("SMS", { text: smsPiece.text });
+          const contentHash = await calculateContentHash("SMS", { body: smsPiece.text });
           const analysis = await aiAPI.getAnalysis(id, "SMS", { contentHash });
           setSubmittedSmsAnalysis(analysis);
         } catch {
@@ -317,29 +387,36 @@ export default function CampaignDetail() {
         setSmsSubmitted(true);
         setTimeout(() => setSmsSubmitted(false), 3000);
 
-        // Use current validation if available (user validated before submit); else try GET (content-validation has no GET, so often null)
-        let analysis: AnalyzePieceResponse | null = smsAnalysis;
-        if (!analysis) {
-          try {
-            const contentHash = await calculateContentHash("SMS", { text: variables.text || "" });
-            analysis = await aiAPI.getAnalysis(id!, "SMS", { contentHash });
-          } catch {
-            /* no stored analysis */
-          }
+        // Always calculate hash from submitted values (don't rely on smsAnalysis state)
+        let analysis: AnalyzePieceResponse | null = null;
+        try {
+          const contentHash = await calculateContentHash("SMS", { body: variables.text || "" });
+          analysis = await aiAPI.getAnalysis(id!, "SMS", { contentHash });
+        } catch {
+          /* no stored analysis */
+        }
+        // If no cached analysis found but we have a current smsAnalysis, use it as fallback
+        if (!analysis && smsAnalysis) {
+          analysis = smsAnalysis;
         }
         setSubmittedSmsAnalysis(analysis);
       } else {
         setPushSubmitted(true);
         setTimeout(() => setPushSubmitted(false), 3000);
 
-        let analysis: AnalyzePieceResponse | null = pushAnalysis;
-        if (!analysis) {
-          try {
-            const contentHash = await calculateContentHash("Push", { title: variables.title, body: variables.body });
-            analysis = await aiAPI.getAnalysis(id!, "Push", { contentHash });
-          } catch {
-            /* no stored analysis */
-          }
+        // Always calculate hash from submitted values (don't rely on pushAnalysis state)
+        // This ensures we get the correct cached analysis for what was actually submitted
+        let analysis: AnalyzePieceResponse | null = null;
+        try {
+          const contentHash = await calculateContentHash("Push", { title: variables.title, body: variables.body });
+          analysis = await aiAPI.getAnalysis(id!, "Push", { contentHash });
+        } catch {
+          /* no stored analysis */
+        }
+        // If no cached analysis found but we have a current pushAnalysis for the same content, use it
+        if (!analysis && pushAnalysis) {
+          // Only use pushAnalysis if it matches what we just submitted
+          analysis = pushAnalysis;
         }
         setSubmittedPushAnalysis(analysis);
       }
@@ -901,10 +978,19 @@ export default function CampaignDetail() {
   };
 
   
-  const getAvailableActions = (): { kind: "status" | "submit_for_review"; label: string; status?: CampaignStatus; variant: string; disabled?: boolean }[] => {
+  type ActionItem = { 
+    kind: "status" | "submit_for_review"; 
+    label: string; 
+    status?: CampaignStatus; 
+    variant: string; 
+    disabled?: boolean;
+    disabledReason?: string;
+  };
+
+  const getAvailableActions = (): ActionItem[] => {
     if (!campaign || !currentUser) return [];
 
-    const actions: { kind: "status" | "submit_for_review"; label: string; status?: CampaignStatus; variant: string; disabled?: boolean }[] = [];
+    const actions: ActionItem[] = [];
     const userRole = currentUser.role;
 
     if (userRole === "Analista de negócios") {
@@ -913,21 +999,53 @@ export default function CampaignDetail() {
       }
       if (campaign.status === "CONTENT_REVIEW") {
         const { allApproved, anyRejected } = computeReviewState(campaign);
+        const pieceReviews = campaign.pieceReviews || [];
+        const approvedCount = pieceReviews.filter(r => {
+          const ia = (r.iaVerdict || "").toLowerCase();
+          const hu = (r.humanVerdict || "").toLowerCase();
+          return hu === "approved" || (hu === "pending" && ia === "approved");
+        }).length;
+        const totalCount = pieceReviews.length;
+        
         actions.push(
-          { kind: "status", label: "Aprovar Conteúdo", status: "CAMPAIGN_BUILDING" as CampaignStatus, variant: "success", disabled: !allApproved },
-          { kind: "status", label: "Solicitar Ajustes", status: "CONTENT_ADJUSTMENT" as CampaignStatus, variant: "warning", disabled: !anyRejected }
+          { 
+            kind: "status", 
+            label: "Aprovar Conteúdo", 
+            status: "CAMPAIGN_BUILDING" as CampaignStatus, 
+            variant: "success", 
+            disabled: !allApproved,
+            disabledReason: !allApproved 
+              ? `Todas as peças precisam estar aprovadas (${approvedCount}/${totalCount} aprovadas)`
+              : undefined
+          },
+          { 
+            kind: "status", 
+            label: "Solicitar Ajustes", 
+            status: "CONTENT_ADJUSTMENT" as CampaignStatus, 
+            variant: "warning", 
+            disabled: !anyRejected,
+            disabledReason: !anyRejected 
+              ? "Só é possível solicitar ajustes quando há peças rejeitadas"
+              : undefined
+          }
         );
       }
     }
 
     if (userRole === "Analista de criação") {
-      const noPieces = buildPieceReviewsForSubmit().length === 0;
+      const pieces = buildPieceReviewsForSubmit();
+      const noPieces = pieces.length === 0;
+      const channels = campaign.communicationChannels || [];
+      
       if (campaign.status === "CREATIVE_STAGE") {
         actions.push({
           kind: "submit_for_review",
           label: "Enviar para Revisão",
           variant: "primary",
           disabled: noPieces,
+          disabledReason: noPieces 
+            ? `Crie pelo menos uma peça criativa para os canais: ${channels.join(", ")}`
+            : undefined
         });
       }
       if (campaign.status === "CONTENT_ADJUSTMENT") {
@@ -936,6 +1054,9 @@ export default function CampaignDetail() {
           label: "Reenviar para Revisão",
           variant: "primary",
           disabled: noPieces,
+          disabledReason: noPieces 
+            ? "Não há peças criativas para reenviar"
+            : undefined
         });
       }
     }
@@ -989,9 +1110,28 @@ export default function CampaignDetail() {
 
   const currentStatusConfig = statusConfig[campaign.status] || statusConfig.DRAFT;
 
+  // Determine which channel is currently being analyzed
+  const currentAnalyzingChannel = isAnalyzingEmail
+    ? "EMAIL"
+    : isAnalyzingSms
+    ? "SMS"
+    : isAnalyzingPush
+    ? "PUSH"
+    : isAnalyzingAnyApp
+    ? "APP"
+    : null;
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
+
+      {/* Validation Loading Overlay */}
+      {currentAnalyzingChannel && (
+        <ValidationLoadingOverlay
+          isLoading={true}
+          channel={currentAnalyzingChannel}
+        />
+      )}
 
       {/* Header */}
       <div className="border-b border-border/40 bg-card/50">
@@ -1080,6 +1220,37 @@ export default function CampaignDetail() {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col gap-8">
+        {/* Status Timeline - Horizontal */}
+        <div className="p-4 rounded-lg border border-border/50 bg-card">
+          <h3 className="text-sm font-semibold text-foreground mb-4">Jornada da Campanha</h3>
+          <CampaignStatusTimeline 
+            events={statusHistoryData?.events || []} 
+            currentStatus={statusHistoryData?.currentStatus || campaign.status} 
+          />
+        </div>
+
+        {/* Next Action Banner - Shows what the user should do next */}
+        <NextActionBanner
+          campaign={campaign}
+          currentUser={currentUser}
+          pieceCount={campaign.creativePieces?.length || 0}
+          approvedPieceCount={
+            (campaign.pieceReviews || []).filter(r => {
+              const hu = (r.humanVerdict || "").toLowerCase();
+              const ia = (r.iaVerdict || "").toLowerCase();
+              return hu === "approved" || (hu === "pending" && ia === "approved");
+            }).length
+          }
+          totalPieceCount={(campaign.pieceReviews || []).length}
+          hasRejectedPieces={
+            (campaign.pieceReviews || []).some(r => {
+              const hu = (r.humanVerdict || "").toLowerCase();
+              const ia = (r.iaVerdict || "").toLowerCase();
+              return hu === "rejected" || hu === "manually_rejected" || (hu === "pending" && ia === "rejected");
+            })
+          }
+        />
+        
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 order-2">
           {/* Briefing Content */}
           <div className="lg:col-span-2 space-y-4">
@@ -1314,32 +1485,50 @@ export default function CampaignDetail() {
                 </div>
               )}
               <div className="space-y-2">
-                {getAvailableActions().map((action, index) => {
-                  const variantClasses = {
-                    primary: "bg-blue-500/10 text-blue-700 hover:bg-blue-500/20",
-                    success: "bg-green-500/10 text-green-700 hover:bg-green-500/20",
-                    warning: "bg-orange-500/10 text-orange-700 hover:bg-orange-500/20",
-                  };
-                  const isSubmit = action.kind === "submit_for_review";
-                  const pending = isSubmit ? submitForReviewMutation.isPending : updateStatusMutation.isPending;
-                  const disabled = pending || !!action.disabled;
-                  return (
-                    <button
-                      key={index}
-                      onClick={() => {
-                        if (isSubmit) submitForReviewMutation.mutate(buildPieceReviewsForSubmit());
-                        else if (action.status) handleStatusTransition(action.status);
-                      }}
-                      disabled={disabled}
-                      className={cn(
-                        "w-full px-4 py-2 rounded-lg font-medium transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed",
-                        variantClasses[action.variant as keyof typeof variantClasses] || variantClasses.primary
-                      )}
-                    >
-                      {pending ? "Processando..." : action.label}
-                    </button>
-                  );
-                })}
+                <TooltipProvider>
+                  {getAvailableActions().map((action, index) => {
+                    const variantClasses = {
+                      primary: "bg-blue-500/10 text-blue-700 hover:bg-blue-500/20",
+                      success: "bg-green-500/10 text-green-700 hover:bg-green-500/20",
+                      warning: "bg-orange-500/10 text-orange-700 hover:bg-orange-500/20",
+                    };
+                    const isSubmit = action.kind === "submit_for_review";
+                    const pending = isSubmit ? submitForReviewMutation.isPending : updateStatusMutation.isPending;
+                    const disabled = pending || !!action.disabled;
+                    
+                    const buttonElement = (
+                      <button
+                        onClick={() => {
+                          if (isSubmit) submitForReviewMutation.mutate(buildPieceReviewsForSubmit());
+                          else if (action.status) handleStatusTransition(action.status);
+                        }}
+                        disabled={disabled}
+                        className={cn(
+                          "w-full px-4 py-2 rounded-lg font-medium transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed",
+                          variantClasses[action.variant as keyof typeof variantClasses] || variantClasses.primary
+                        )}
+                      >
+                        {pending ? "Processando..." : action.label}
+                      </button>
+                    );
+                    
+                    // Wrap in tooltip if disabled with reason
+                    if (disabled && action.disabledReason) {
+                      return (
+                        <Tooltip key={index}>
+                          <TooltipTrigger asChild>
+                            <span className="block">{buttonElement}</span>
+                          </TooltipTrigger>
+                          <TooltipContent side="left" className="max-w-xs">
+                            <p className="text-sm">{action.disabledReason}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      );
+                    }
+                    
+                    return <div key={index}>{buttonElement}</div>;
+                  })}
+                </TooltipProvider>
               </div>
             </div>
           </div>
@@ -1391,6 +1580,25 @@ export default function CampaignDetail() {
                       ? "Peças Criativas"
                       : "Peças Criativas"}
                   </span>
+                  {/* History toggle button */}
+                  {reviewHistory.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowHistoryTimeline(!showHistoryTimeline);
+                      }}
+                      className={cn(
+                        "ml-2 flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors",
+                        showHistoryTimeline
+                          ? "bg-primary/20 text-primary"
+                          : "bg-muted text-foreground/70 hover:bg-muted/80"
+                      )}
+                    >
+                      <History size={14} />
+                      Histórico
+                    </button>
+                  )}
                 </div>
                 <button
                   type="button"
@@ -1418,6 +1626,27 @@ export default function CampaignDetail() {
 
               <Collapsible open={studioOpen} onOpenChange={setStudioOpen}>
                 <CollapsibleContent>
+                  {/* History Timeline */}
+                  {showHistoryTimeline && reviewHistory.length > 0 && (
+                    <div className="px-4 py-4 border-t border-border/40 bg-muted/30">
+                      <div className="flex items-center justify-between mb-4">
+                        <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                          <History size={16} />
+                          Histórico de Revisões
+                        </h4>
+                        <button
+                          type="button"
+                          onClick={() => setShowHistoryTimeline(false)}
+                          className="text-xs text-foreground/60 hover:text-foreground"
+                        >
+                          Fechar
+                        </button>
+                      </div>
+                      <div className="max-h-96 overflow-y-auto">
+                        <PieceReviewTimeline events={reviewHistory} />
+                      </div>
+                    </div>
+                  )}
                   <div className="px-4 pb-6 pt-2 border-t border-border/40">
               {/* Tabs by Channel */}
               {campaign.communicationChannels && campaign.communicationChannels.length > 0 && (
@@ -2320,15 +2549,35 @@ export default function CampaignDetail() {
                                             }}
                                           />
                                         </div>
-                                        <a
-                                          href={fileUrls[space]}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          className="text-xs text-primary hover:underline flex items-center gap-1"
-                                        >
-                                          <Image size={12} />
-                                          Abrir imagem em nova aba
-                                        </a>
+                                        <div className="flex items-center gap-3">
+                                          <a
+                                            href={fileUrls[space]}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-xs text-primary hover:underline flex items-center gap-1"
+                                          >
+                                            <Image size={12} />
+                                            Abrir imagem em nova aba
+                                          </a>
+                                          {(currentUser?.role === "Analista de negócios" || currentUser?.role === "Analista de campanhas") && (
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                const spaceName = space.replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_]/g, "");
+                                                downloadCreativePiece(
+                                                  campaign.id,
+                                                  "APP",
+                                                  `app-${campaign.name.replace(/\s+/g, "_")}-${spaceName}.png`,
+                                                  space
+                                                );
+                                              }}
+                                              className="text-xs text-primary hover:underline flex items-center gap-1"
+                                            >
+                                              <Download size={12} />
+                                              Baixar imagem
+                                            </button>
+                                          )}
+                                        </div>
                                         {/* Warning if this piece was submitted without validation */}
                                         {!appAnalysis[space] && (
                                           <div className="p-3 rounded-lg border-2 bg-yellow-50 border-yellow-200 dark:bg-yellow-950/20 dark:border-yellow-800">
@@ -2384,15 +2633,31 @@ export default function CampaignDetail() {
                                     sandbox="allow-same-origin"
                                   />
                                 </div>
-                                <a
-                                  href={piece.htmlFileUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-sm text-primary hover:underline flex items-center gap-2"
-                                >
-                                  <FileCode size={14} />
-                                  Abrir arquivo HTML em nova aba
-                                </a>
+                                <div className="flex items-center gap-4">
+                                  <a
+                                    href={piece.htmlFileUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-sm text-primary hover:underline flex items-center gap-2"
+                                  >
+                                    <FileCode size={14} />
+                                    Abrir arquivo HTML em nova aba
+                                  </a>
+                                  {(currentUser?.role === "Analista de negócios" || currentUser?.role === "Analista de campanhas") && (
+                                    <button
+                                      type="button"
+                                      onClick={() => downloadCreativePiece(
+                                        campaign.id,
+                                        "EMAIL",
+                                        `email-${campaign.name.replace(/\s+/g, "_")}.html`
+                                      )}
+                                      className="text-sm text-primary hover:underline flex items-center gap-2"
+                                    >
+                                      <Download size={14} />
+                                      Baixar HTML
+                                    </button>
+                                  )}
+                                </div>
                               </div>
                               {/* Warning if piece was submitted without validation */}
                               {!emailAnalysis && (

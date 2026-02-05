@@ -22,7 +22,8 @@ class Settings(BaseSettings):
     LEGAL_SERVICE_URL: str = "http://legal-service:8005"
     CAMPAIGNS_MCP_URL: str = "http://campaigns-mcp-server:8010"
     HTML_CONVERTER_MCP_URL: str = "http://html-converter-service:8011"
-    HTTP_TIMEOUT: float = 30.0
+    BRANDING_MCP_URL: str = "http://branding-service:8012"
+    HTTP_TIMEOUT: float = 120.0
     A2A_BASE_URL: str = "http://localhost:8004"
     DATABASE_URL: str = "postgresql://orqestra:orqestra_password@localhost:5432/content_validation"
     model_config = {"env_file": ".env", "extra": "ignore"}

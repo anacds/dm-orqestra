@@ -1,5 +1,5 @@
 import base64
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Query
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Query, Response
 from sqlalchemy.orm import Session
 from typing import Dict, Optional
 from uuid import uuid4
@@ -13,11 +13,14 @@ from app.schemas.campaign import (
     CampaignUpdate,
     CampaignResponse,
     CampaignsResponse,
+    CampaignStatusHistoryResponse,
     CommentCreate,
     CommentResponse,
     CreativePieceCreate,
     CreativePieceResponse,
+    MyTasksResponse,
     PieceContentResponse,
+    PieceReviewHistoryResponse,
     ReviewPieceRequest,
     SubmitForReviewRequest,
 )
@@ -32,6 +35,7 @@ from app.services.file_upload import (
     update_app_file_urls,
     extract_file_key_from_url,
     get_app_file_urls_dict,
+    download_file_from_url,
 )
 from app.core.s3_client import normalize_file_url, delete_file, get_file
 from app.core.config import settings
@@ -109,6 +113,15 @@ async def get_campaigns(
     auth_token: str = Depends(get_token_from_cookie_or_header),
 ):
     return await CampaignService.get_campaigns(db, current_user, auth_token, skip, limit)
+
+
+@router.get("/my-tasks", response_model=MyTasksResponse)
+async def get_my_tasks(
+    db: Session = Depends(get_db),
+    current_user: Dict = Depends(get_current_user),
+):
+    """Get personalized task list for the current user based on their role."""
+    return await CampaignService.get_my_tasks(db, current_user)
 
 
 @router.get("/{campaign_id}", response_model=CampaignResponse)
@@ -189,6 +202,32 @@ async def review_piece(
     require_business_analyst(current_user)
     _get_campaign_or_404(db, campaign_id)
     return await CampaignService.review_piece(db, campaign_id, body, current_user, auth_token)
+
+
+@router.get("/{campaign_id}/piece-review-history", response_model=PieceReviewHistoryResponse)
+async def get_piece_review_history(
+    campaign_id: str,
+    db: Session = Depends(get_db),
+    current_user: Dict = Depends(get_current_user),
+    auth_token: str = Depends(get_token_from_cookie_or_header),
+):
+    """Get the full history of piece review events for a campaign (timeline)."""
+    _get_campaign_or_404(db, campaign_id)
+    events = await CampaignService.get_piece_review_history(db, campaign_id, auth_token)
+    return PieceReviewHistoryResponse(events=events)
+
+
+@router.get("/{campaign_id}/status-history", response_model=CampaignStatusHistoryResponse)
+async def get_status_history(
+    campaign_id: str,
+    db: Session = Depends(get_db),
+    current_user: Dict = Depends(get_current_user),
+    auth_token: str = Depends(get_token_from_cookie_or_header),
+):
+    """Get the full history of status transitions for a campaign (horizontal timeline)."""
+    campaign = _get_campaign_or_404(db, campaign_id)
+    events = await CampaignService.get_status_history(db, campaign_id, auth_token)
+    return CampaignStatusHistoryResponse(events=events, currentStatus=campaign.status)
 
 
 @router.post("/{campaign_id}/creative-pieces", response_model=CreativePieceResponse, status_code=status.HTTP_201_CREATED)
@@ -492,4 +531,97 @@ async def delete_email_creative_piece(
     db.delete(email_piece)
     db.commit()
     return None
+
+
+@router.get("/{campaign_id}/download-piece")
+async def download_creative_piece(
+    campaign_id: str,
+    channel: str = Query(..., description="Channel: EMAIL or APP"),
+    commercial_space: Optional[str] = Query(None, description="Commercial space (required for APP)"),
+    filename: Optional[str] = Query(None, description="Suggested filename for download"),
+    db: Session = Depends(get_db),
+    current_user: Dict = Depends(get_current_user),
+):
+    """
+    Download a creative piece file. 
+    Available only for business analysts and campaign analysts.
+    """
+    # Check role
+    if current_user.get("role") not in [UserRole.BUSINESS_ANALYST.value, UserRole.CAMPAIGN_ANALYST.value]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only business analysts and campaign analysts can download pieces"
+        )
+    
+    campaign = _get_campaign_or_404(db, campaign_id)
+    
+    channel_upper = channel.upper().replace("-", "").replace(" ", "")
+    if channel_upper == "E-MAIL":
+        channel_upper = "EMAIL"
+    
+    if channel_upper == "EMAIL":
+        # Download email HTML
+        piece = (
+            db.query(CreativePiece)
+            .filter(
+                CreativePiece.campaign_id == campaign_id,
+                CreativePiece.piece_type == "E-mail"
+            )
+            .first()
+        )
+        if not piece or not piece.html_file_url:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Email creative piece not found"
+            )
+        
+        content, content_type = download_file_from_url(piece.html_file_url, settings.S3_BUCKET_NAME)
+        download_filename = filename or f"email-{campaign.name.replace(' ', '_')}.html"
+        
+    elif channel_upper == "APP":
+        if not commercial_space:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="commercial_space is required for APP channel"
+            )
+        
+        piece = (
+            db.query(CreativePiece)
+            .filter(
+                CreativePiece.campaign_id == campaign_id,
+                CreativePiece.piece_type == "App"
+            )
+            .first()
+        )
+        if not piece or not piece.file_urls:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="App creative piece not found"
+            )
+        
+        file_urls = get_app_file_urls_dict(piece.file_urls)
+        file_url = file_urls.get(commercial_space)
+        if not file_url:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No file found for commercial space: {commercial_space}"
+            )
+        
+        content, content_type = download_file_from_url(file_url, settings.S3_BUCKET_NAME)
+        safe_space = commercial_space.replace(" ", "_").replace("/", "_")
+        download_filename = filename or f"app-{campaign.name.replace(' ', '_')}-{safe_space}.png"
+        
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only EMAIL and APP channels support file download"
+        )
+    
+    return Response(
+        content=content,
+        media_type=content_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{download_filename}"'
+        }
+    )
 

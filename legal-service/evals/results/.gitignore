@@ -1,0 +1,7 @@
+# Ignora resultados de experimentos (são gerados dinamicamente)
+*.json
+*.csv
+
+# Mantém o diretório
+!.gitkeep
+!.gitignore

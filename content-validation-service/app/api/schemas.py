@@ -39,6 +39,10 @@ class AnalyzePieceResponse(BaseModel):
         None,
         description="Parecer do Legal Service (A2A), quando aplicável",
     )
+    branding_result: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Parecer do Branding Service (MCP) - validação determinística de marca (só EMAIL)",
+    )
     requires_human_approval: bool = Field(
         False,
         description="True se retrieve ou validate_compliance falhou",
@@ -49,5 +53,5 @@ class AnalyzePieceResponse(BaseModel):
     )
     final_verdict: Optional[Dict[str, Any]] = Field(
         None,
-        description="Veredito final: status (approved|rejected), message, contributors (legal + futuros agentes)",
+        description="Veredito final: status (approved|rejected), message, contributors (legal + branding)",
     )

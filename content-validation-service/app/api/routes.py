@@ -1,12 +1,14 @@
 import logging
-from typing import Any, Optional
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.agent import ContentValidationAgent
 from app.api.schemas import AnalyzePieceRequest, AnalyzePieceResponse
+from app.core.auth_client import get_current_user
 from app.core.config import settings
+from app.core.permissions import require_creative_analyst
 from app.core.database import get_db
 from app.models.piece_validation_cache import (
     PieceValidationCache,
@@ -36,6 +38,7 @@ def _response_to_dict(resp: AnalyzePieceResponse) -> dict[str, Any]:
         "validation_result": resp.validation_result,
         "orchestration_result": resp.orchestration_result,
         "compliance_result": resp.compliance_result,
+        "branding_result": resp.branding_result,
         "requires_human_approval": resp.requires_human_approval,
         "human_approval_reason": resp.human_approval_reason,
         "final_verdict": resp.final_verdict,
@@ -59,8 +62,10 @@ async def analyze_piece(
     body: AnalyzePieceRequest,
     agent: ContentValidationAgent = Depends(get_agent),
     db: Session = Depends(get_db),
+    current_user: Dict = Depends(get_current_user),
 ):
     """Valida canal, retrieve (MCP), validate_compliance (A2A), issue_final_verdict. Persiste parecer para SMS/PUSH se campaign_id enviado."""
+    require_creative_analyst(current_user)
     try:
         result = await agent.ainvoke(
             task=body.task,
@@ -71,6 +76,7 @@ async def analyze_piece(
             validation_result=result.get("validation_result") or {},
             orchestration_result=result.get("orchestration_result"),
             compliance_result=result.get("compliance_result"),
+            branding_result=result.get("branding_result"),
             requires_human_approval=result.get("requires_human_approval", False),
             human_approval_reason=result.get("human_approval_reason"),
             final_verdict=result.get("final_verdict"),
@@ -136,8 +142,10 @@ async def get_analyze_piece(
     piece_id: Optional[str] = Query(None, description="ID da peça (E-mail ou App). Obrigatório para EMAIL/APP."),
     commercial_space: Optional[str] = Query(None, description="Espaço comercial. Obrigatório para APP."),
     db: Session = Depends(get_db),
+    current_user: Dict = Depends(get_current_user),
 ):
     """Retorna parecer persistido para SMS/PUSH/EMAIL/APP. Usado ao recarregar a página de detalhes da campanha."""
+    require_creative_analyst(current_user)
     ch = channel.upper().replace("-", "").replace(" ", "")
     if ch not in ("SMS", "PUSH", "EMAIL", "APP"):
         raise HTTPException(400, "GET suporta apenas canal SMS, PUSH, EMAIL ou APP.")
@@ -166,5 +174,8 @@ async def get_analyze_piece(
 
 
 @router_ai.post("/ai/generate-text")
-async def generate_text():
+async def generate_text(
+    current_user: Dict = Depends(get_current_user),
+):
+    require_creative_analyst(current_user)
     raise HTTPException(501, "Not implemented. Use analyze-piece or legal-service.")

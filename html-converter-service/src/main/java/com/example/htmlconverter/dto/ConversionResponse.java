@@ -13,7 +13,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ConversionResponse {
-    
+
     private String base64Image;
     private String imageFormat;
     private Integer originalWidth;

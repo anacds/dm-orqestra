@@ -6,7 +6,8 @@ from app.agent.nodes import (
     issue_final_verdict_node,
     retrieve_content_node,
     validate_channel_node,
-    validate_compliance_node
+    validate_compliance_node,
+    validate_branding_node,
 )
 
 logger = logging.getLogger(__name__)
@@ -34,9 +35,24 @@ def _route_after_retrieve(state: ValidationGraphState) -> Any:
 
 
 def _route_after_compliance(state: ValidationGraphState) -> Any:
-    if state.get("compliance_ok"):
-        return "issue_final_verdict"
-    return END
+    """Após compliance, EMAIL vai para branding; outros vão direto para verdict."""
+    if not state.get("compliance_ok"):
+        return END
+    
+    channel = (state.get("channel") or "").upper()
+    html_for_branding = state.get("html_for_branding")
+    
+    # EMAIL com HTML vai para branding validation
+    if channel == "EMAIL" and html_for_branding:
+        return "validate_branding"
+    
+    # Outros canais (SMS, PUSH, APP) vão direto para verdict
+    return "issue_final_verdict"
+
+
+def _route_after_branding(state: ValidationGraphState) -> Any:
+    """Após branding, vai para final verdict."""
+    return "issue_final_verdict"
 
 
 class ContentValidationAgent:
@@ -52,6 +68,7 @@ class ContentValidationAgent:
         workflow.add_node("validate_channel", validate_channel_node)
         workflow.add_node("retrieve_content", retrieve_content_node)
         workflow.add_node("validate_compliance", validate_compliance_node)
+        workflow.add_node("validate_branding", validate_branding_node)
         workflow.add_node("issue_final_verdict", issue_final_verdict_node)
 
         workflow.set_entry_point("validate_channel")
@@ -73,7 +90,16 @@ class ContentValidationAgent:
         workflow.add_conditional_edges(
             "validate_compliance",
             _route_after_compliance,
-            {"issue_final_verdict": "issue_final_verdict", END: "__end__"},
+            {
+                "validate_branding": "validate_branding",
+                "issue_final_verdict": "issue_final_verdict",
+                END: "__end__",
+            },
+        )
+        workflow.add_conditional_edges(
+            "validate_branding",
+            _route_after_branding,
+            {"issue_final_verdict": "issue_final_verdict"},
         )
         workflow.add_edge("issue_final_verdict", END)
 
@@ -95,9 +121,13 @@ class ContentValidationAgent:
             "retrieve_ok": False,
             "retrieve_error": None,
             "content_for_compliance": None,
+            "html_for_branding": None,
             "compliance_ok": False,
             "compliance_result": None,
             "compliance_error": None,
+            "branding_ok": False,
+            "branding_result": None,
+            "branding_error": None,
             "requires_human_approval": False,
             "human_approval_reason": None,
             "final_verdict": None,
@@ -123,9 +153,13 @@ class ContentValidationAgent:
             "retrieve_ok": False,
             "retrieve_error": None,
             "content_for_compliance": None,
+            "html_for_branding": None,
             "compliance_ok": False,
             "compliance_result": None,
             "compliance_error": None,
+            "branding_ok": False,
+            "branding_result": None,
+            "branding_error": None,
             "requires_human_approval": False,
             "human_approval_reason": None,
             "final_verdict": None,

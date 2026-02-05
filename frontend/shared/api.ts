@@ -226,3 +226,65 @@ export interface CampaignsResponse {
 }
 
 export type CampaignResponse = Campaign;
+
+// Piece Review History (Timeline)
+export type PieceReviewEventType = "SUBMITTED" | "APPROVED" | "REJECTED" | "MANUALLY_REJECTED";
+
+export interface PieceReviewEvent {
+  id: string;
+  campaignId: string;
+  channel: string;
+  pieceId: string;
+  commercialSpace: string;
+  eventType: PieceReviewEventType;
+  iaVerdict?: string;
+  rejectionReason?: string;
+  actorId: string;
+  actorName?: string;
+  createdAt: string;
+}
+
+export interface PieceReviewHistoryResponse {
+  events: PieceReviewEvent[];
+}
+
+// Campaign Status History (Horizontal Timeline)
+export interface CampaignStatusEvent {
+  id: string;
+  campaignId: string;
+  fromStatus?: string;
+  toStatus: string;
+  actorId: string;
+  actorName?: string;
+  createdAt: string;
+  durationSeconds?: number;
+}
+
+export interface CampaignStatusHistoryResponse {
+  events: CampaignStatusEvent[];
+  currentStatus: string;
+}
+
+// My Tasks (Dashboard)
+export interface TaskItem {
+  id: string;
+  campaignId: string;
+  campaignName: string;
+  taskType: string;
+  description: string;
+  priority: string;
+  createdAt: string;
+}
+
+export interface TaskGroup {
+  taskType: string;
+  title: string;
+  description: string;
+  count: number;
+  tasks: TaskItem[];
+}
+
+export interface MyTasksResponse {
+  totalTasks: number;
+  taskGroups: TaskGroup[];
+}

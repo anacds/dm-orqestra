@@ -8,13 +8,54 @@ import {
   Plus,
   TrendingUp,
   Loader2,
+  Send,
+  Palette,
+  Eye,
+  Wrench,
+  Rocket,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { campaignsAPI, authAPI } from "@/lib/api";
-import { Campaign } from "@shared/api";
+import { Campaign, TaskGroup } from "@shared/api";
 import { useMemo } from "react";
-import { format } from "date-fns";
+import { format, formatDistanceToNow } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import { isBusinessAnalyst } from "@/lib/permissions";
+import { cn } from "@/lib/utils";
+
+const TASK_CONFIG: Record<string, { icon: React.ReactNode; color: string; bgColor: string }> = {
+  send_to_creative: {
+    icon: <Send className="h-5 w-5" />,
+    color: "text-blue-600",
+    bgColor: "bg-blue-500/10",
+  },
+  review_content: {
+    icon: <Eye className="h-5 w-5" />,
+    color: "text-yellow-600",
+    bgColor: "bg-yellow-500/10",
+  },
+  create_pieces: {
+    icon: <Palette className="h-5 w-5" />,
+    color: "text-purple-600",
+    bgColor: "bg-purple-500/10",
+  },
+  adjust_pieces: {
+    icon: <Wrench className="h-5 w-5" />,
+    color: "text-orange-600",
+    bgColor: "bg-orange-500/10",
+  },
+  publish_campaign: {
+    icon: <Rocket className="h-5 w-5" />,
+    color: "text-green-600",
+    bgColor: "bg-green-500/10",
+  },
+};
+
+const PRIORITY_CONFIG: Record<string, { label: string; color: string }> = {
+  "Normal": { label: "Normal", color: "text-foreground/60" },
+  "Alta": { label: "Alta", color: "text-orange-500" },
+  "Regulatório / Obrigatório": { label: "Regulatório", color: "text-red-500" },
+};
 
 export default function Dashboard() {
   const { data: campaigns = [], isLoading, error } = useQuery({
@@ -27,6 +68,12 @@ export default function Dashboard() {
     queryFn: authAPI.getCurrentUser,
     retry: false,
     throwOnError: false,
+  });
+
+  const { data: myTasks, isLoading: isLoadingTasks } = useQuery({
+    queryKey: ["myTasks"],
+    queryFn: campaignsAPI.getMyTasks,
+    enabled: !!currentUser,
   });
   
   const canCreateCampaign = isBusinessAnalyst(currentUser?.role);
@@ -77,28 +124,23 @@ export default function Dashboard() {
     ];
   }, [campaigns]);
 
-  const recentCampaigns = useMemo(() => {
-    return campaigns
-      .filter((c) => c.createdDate) // Only include campaigns with valid dates
-      .sort((a, b) => {
-        const dateA = new Date(a.createdDate).getTime();
-        const dateB = new Date(b.createdDate).getTime();
-        // Handle invalid dates
-        if (isNaN(dateA)) return 1;
-        if (isNaN(dateB)) return -1;
-        return dateB - dateA;
-      })
-      .slice(0, 3);
-  }, [campaigns]);
+  const statusConfig: Record<string, { label: string; color: string }> = {
+    DRAFT: { label: "Rascunho", color: "text-slate-500" },
+    CREATIVE_STAGE: { label: "Etapa Criativa", color: "text-blue-500" },
+    CONTENT_REVIEW: { label: "Conteúdo em Revisão", color: "text-yellow-500" },
+    CONTENT_ADJUSTMENT: { label: "Ajuste de Conteúdo", color: "text-orange-500" },
+    CAMPAIGN_BUILDING: { label: "Campanha em Construção", color: "text-purple-500" },
+    CAMPAIGN_PUBLISHED: { label: "Campanha Publicada", color: "text-green-500" },
+  };
 
-      const statusConfig = {
-        DRAFT: { label: "Rascunho", color: "text-slate-500" },
-        CREATIVE_STAGE: { label: "Etapa Criativa", color: "text-blue-500" },
-        CONTENT_REVIEW: { label: "Conteúdo em Revisão", color: "text-yellow-500" },
-        CONTENT_ADJUSTMENT: { label: "Ajuste de Conteúdo", color: "text-orange-500" },
-        CAMPAIGN_BUILDING: { label: "Campanha em Construção", color: "text-purple-500" },
-        CAMPAIGN_PUBLISHED: { label: "Campanha Publicada", color: "text-green-500" },
-      };
+  const getRoleName = (role?: string) => {
+    switch (role) {
+      case "Analista de negócios": return "Analista de Negócios";
+      case "Analista de criação": return "Analista de Criação";
+      case "Analista de campanhas": return "Analista de Campanhas";
+      default: return role || "Usuário";
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -109,13 +151,105 @@ export default function Dashboard() {
         {/* Welcome Section */}
         <div className="mb-8">
           <h1 className="text-3xl sm:text-4xl font-bold text-foreground mb-2">
-            Meu painel
+            Olá, {currentUser?.full_name?.split(" ")[0] || "Usuário"}
           </h1>
-              <p className="text-foreground/60">
-                {campaigns.filter((c) => c.status === "CONTENT_REVIEW").length} aprovações pendentes e{" "}
-                {campaigns.filter((c) => c.status === "DRAFT").length} campanhas em rascunho
-              </p>
+          <p className="text-foreground/60">
+            {getRoleName(currentUser?.role)} • {myTasks?.totalTasks || 0} tarefas pendentes
+          </p>
         </div>
+
+        {/* My Tasks Section - Personalized */}
+        {myTasks && myTasks.taskGroups.length > 0 && (
+          <div className="mb-8">
+            <h2 className="text-xl font-bold text-foreground mb-4 flex items-center gap-2">
+              <Clock className="h-5 w-5 text-primary" />
+              Suas Tarefas
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {myTasks.taskGroups.map((group) => {
+                const config = TASK_CONFIG[group.taskType] || TASK_CONFIG.send_to_creative;
+                return (
+                  <div
+                    key={group.taskType}
+                    className="p-4 rounded-lg border border-border/50 bg-card"
+                  >
+                    <div className="flex items-start gap-3 mb-3">
+                      <div className={cn("p-2 rounded-lg", config.bgColor)}>
+                        <span className={config.color}>{config.icon}</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <h3 className="font-semibold text-foreground truncate">
+                            {group.title}
+                          </h3>
+                          <span className="flex-shrink-0 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-medium">
+                            {group.count}
+                          </span>
+                        </div>
+                        <p className="text-xs text-foreground/60 mt-0.5">
+                          {group.description}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      {group.tasks.slice(0, 3).map((task) => {
+                        const priorityConfig = PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG.Normal;
+                        return (
+                          <Link
+                            key={task.id}
+                            to={`/campaigns/${task.campaignId}`}
+                            className="block p-2 rounded-md bg-muted/50 hover:bg-muted transition-colors"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-sm font-medium text-foreground truncate">
+                                {task.campaignName}
+                              </span>
+                              <span className={cn("text-xs flex-shrink-0", priorityConfig.color)}>
+                                {priorityConfig.label}
+                              </span>
+                            </div>
+                            <p className="text-xs text-foreground/50 mt-0.5">
+                              {formatDistanceToNow(new Date(task.createdAt), { addSuffix: true, locale: ptBR })}
+                            </p>
+                          </Link>
+                        );
+                      })}
+                      {group.tasks.length > 3 && (
+                        <Link
+                          to="/campaigns"
+                          className="block text-center text-xs text-primary hover:underline py-1"
+                        >
+                          Ver mais {group.tasks.length - 3} tarefas
+                        </Link>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Empty tasks state */}
+        {myTasks && myTasks.taskGroups.length === 0 && (
+          <div className="mb-8 p-6 rounded-lg border border-border/50 bg-card text-center">
+            <CheckCircle className="mx-auto h-12 w-12 text-green-500 mb-3" />
+            <h3 className="text-lg font-semibold text-foreground mb-1">
+              Tudo em dia!
+            </h3>
+            <p className="text-sm text-foreground/60">
+              Você não tem tarefas pendentes no momento.
+            </p>
+          </div>
+        )}
+
+        {/* Loading tasks */}
+        {isLoadingTasks && (
+          <div className="mb-8 p-6 rounded-lg border border-border/50 bg-card text-center">
+            <Loader2 className="mx-auto h-8 w-8 text-primary animate-spin mb-2" />
+            <p className="text-sm text-foreground/60">Carregando suas tarefas...</p>
+          </div>
+        )}
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
@@ -145,7 +279,7 @@ export default function Dashboard() {
           {/* Recent Campaigns - Main Column */}
           <div className="lg:col-span-2">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-foreground">Todas as Campanhas</h2>
+              <h2 className="text-xl font-bold text-foreground">Campanhas Recentes</h2>
               <Link
                 to="/campaigns"
                 className="text-sm text-primary hover:underline flex items-center gap-1"
@@ -214,69 +348,42 @@ export default function Dashboard() {
             )}
           </div>
 
-          {/* Recent Campaigns - Sidebar */}
+          {/* Quick Actions - Sidebar */}
           <div>
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-foreground">
-                Campanhas Recentes
+              <h2 className="text-xl font-bold text-foreground">
+                Ações Rápidas
               </h2>
-              <Link
-                to="/campaigns/new"
-                className="p-2 hover:bg-muted rounded-lg transition-colors"
-              >
-                <Plus size={20} />
-              </Link>
             </div>
 
             <div className="space-y-3">
-              {recentCampaigns.length === 0 ? (
-                <div className="text-center py-8 text-foreground/60 text-sm">
-                  Nenhuma campanha recente
-                </div>
-              ) : (
-                recentCampaigns.map((campaign) => (
-                  <Link
-                    key={campaign.id}
-                    to={`/campaigns/${campaign.id}`}
-                    className="block p-4 rounded-lg border border-border/50 bg-card hover:border-primary/30 hover:shadow-md transition-all"
-                  >
-                    <div className="mb-3">
-                      <h3 className="font-semibold text-foreground text-sm mb-1 line-clamp-2">
-                        {campaign.name}
-                      </h3>
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`text-xs font-medium ${
-                            statusConfig[campaign.status]?.color || "text-foreground/60"
-                          }`}
-                        >
-                          {statusConfig[campaign.status]?.label || campaign.status}
-                        </span>
-                        <span className="text-xs text-foreground/50">
-                          {campaign.createdDate ? format(new Date(campaign.createdDate), "dd/MM") : "N/A"}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-foreground/60">Canal</span>
-                        <span className="text-foreground/70">
-                          {campaign.category}
-                        </span>
-                      </div>
-                    </div>
-                  </Link>
-                ))
-              )}
               {canCreateCampaign && (
                 <Link
                   to="/campaigns/new"
-                  className="block w-full p-4 rounded-lg border border-dashed border-border/50 text-center text-foreground/60 hover:text-foreground hover:border-primary/30 transition-colors"
+                  className="flex items-center gap-3 p-4 rounded-lg border border-primary/30 bg-primary/5 hover:bg-primary/10 transition-colors"
                 >
-                  <Plus size={20} className="mx-auto mb-2" />
-                  <span className="text-sm font-medium">Criar Campanha</span>
+                  <div className="p-2 rounded-lg bg-primary/20">
+                    <Plus className="h-5 w-5 text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-foreground">Nova Campanha</h3>
+                    <p className="text-xs text-foreground/60">Criar briefing de campanha</p>
+                  </div>
                 </Link>
               )}
+              
+              <Link
+                to="/campaigns"
+                className="flex items-center gap-3 p-4 rounded-lg border border-border/50 bg-card hover:border-primary/30 transition-colors"
+              >
+                <div className="p-2 rounded-lg bg-muted">
+                  <TrendingUp className="h-5 w-5 text-foreground/70" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-foreground">Ver Campanhas</h3>
+                  <p className="text-xs text-foreground/60">Listar todas as campanhas</p>
+                </div>
+              </Link>
             </div>
           </div>
         </div>

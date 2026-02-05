@@ -1,5 +1,3 @@
-"""Configuration for branding-service."""
-
 import os
 from dataclasses import dataclass
 from typing import Optional
@@ -7,8 +5,6 @@ from typing import Optional
 
 @dataclass(frozen=True)
 class Settings:
-    """Settings loaded from environment."""
-
     port: int
     log_level: str
 

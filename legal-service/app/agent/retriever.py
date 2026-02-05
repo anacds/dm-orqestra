@@ -26,7 +26,7 @@ def _truncate_for_embedding(text: str, max_chars: int = EMBEDDING_QUERY_MAX_CHAR
 
 
 class HybridWeaviateRetriever:
-    """Hybrid search retriever for Weaviate (sem reranking)."""
+    """Hybrid search retriever for Weaviate with optional reranking."""
 
     def __init__(
         self,
@@ -34,10 +34,18 @@ class HybridWeaviateRetriever:
         api_key: Optional[str] = None,
         class_name: str = None,
         embedding_model: Optional[str] = None,
+        alpha_override: Optional[float] = None,
+        rerank_override: Optional[bool] = None,
     ):
         self.weaviate_url = weaviate_url or settings.WEAVIATE_URL
         self.api_key = api_key or settings.WEAVIATE_API_KEY
         self.class_name = class_name or settings.WEAVIATE_CLASS_NAME
+        
+        # Alpha override para experimentos (0.0=BM25, 0.5=hybrid, 1.0=semantic)
+        self.alpha_override = alpha_override
+        
+        # Rerank override para experimentos (True/False, None=usa config)
+        self.rerank_override = rerank_override
         
         config = load_models_config()
         embeddings_config = config.get("models", {}).get("embeddings", {})
@@ -111,6 +119,12 @@ class HybridWeaviateRetriever:
         Returns:
             List of document chunks with metadata
         """
+        # Usa alpha_override se definido (para experimentos)
+        if self.alpha_override is not None:
+            alpha = self.alpha_override
+            alpha_desc = "BM25 only" if alpha == 0.0 else ("Semantic only" if alpha == 1.0 else f"Hybrid ({alpha})")
+            logger.info(f"[RETRIEVAL] Alpha override ativo: {alpha} ({alpha_desc})")
+        
         try:
             collection = self.client.collections.get(self.class_name)
             
@@ -125,8 +139,20 @@ class HybridWeaviateRetriever:
             config = load_models_config()
             retrieval_config = config.get("models", {}).get("retrieval", {})
             retrieval_limit = max(limit, int(retrieval_config.get("limit", limit)))
-            rerank_enabled = retrieval_config.get("rerank_enabled", False)
             rerank_property = retrieval_config.get("rerank_property", "text")
+            
+            # Reranking: prioridade é override > env var > config YAML
+            if self.rerank_override is not None:
+                rerank_enabled = self.rerank_override
+                logger.info(f"[RETRIEVAL] Rerank override ativo: {rerank_enabled}")
+            else:
+                # Verifica variável de ambiente (permite desabilitar via docker-compose)
+                env_rerank = os.getenv("RERANK_ENABLED")
+                if env_rerank is not None:
+                    rerank_enabled = env_rerank.lower() in ("true", "1", "yes")
+                    logger.info(f"[RETRIEVAL] Rerank via env RERANK_ENABLED: {rerank_enabled}")
+                else:
+                    rerank_enabled = retrieval_config.get("rerank_enabled", False)
             
             # Se reranking está habilitado, define quantos chunks retornar após reranking
             # Se não especificado, usa o limit original
