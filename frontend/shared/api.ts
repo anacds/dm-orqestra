@@ -1,4 +1,4 @@
-export type UserRole = "Analista de negócios" | "Analista de criação" | "Analista de campanhas";
+export type UserRole = "Analista de negócios" | "Analista de criação" | "Analista de campanhas" | "Gestor de marketing";
 
 export interface UserResponse {
   id: string;
@@ -107,7 +107,7 @@ export interface PieceReview {
   channel: string;
   pieceId: string;
   commercialSpace: string;
-  iaVerdict: "approved" | "rejected" | "warning";
+  iaVerdict: "approved" | "rejected" | null;
   humanVerdict: "pending" | "approved" | "rejected" | "manually_rejected";
   reviewedAt?: string;
   reviewedBy?: string;
@@ -196,11 +196,24 @@ export interface AnalyzePieceRequest {
 /** Raw response from content-validation-service. */
 export interface ContentValidationAnalyzePieceResponse {
   validation_result: Record<string, unknown>;
+  specs_result?: Record<string, unknown> | null;
   orchestration_result?: Record<string, unknown> | null;
   compliance_result?: Record<string, unknown> | null;
+  branding_result?: Record<string, unknown> | null;
   requires_human_approval: boolean;
   human_approval_reason?: string | null;
-  final_verdict?: { status?: string; message?: string; contributors?: unknown[] } | null;
+  failure_stage?: string | null;
+  stages_completed?: string[] | null;
+  final_verdict?: {
+    decision?: string;       // APROVADO | REPROVADO
+    summary?: string;
+    failure_stage?: string | null;
+    stages_completed?: string[];
+    requires_human_review?: boolean;
+    specs?: Record<string, unknown> | null;
+    legal?: { decision?: string | null; summary?: string | null } | null;
+    branding?: Record<string, unknown> | null;
+  } | null;
 }
 
 /** UI-friendly analysis result (mapped from ContentValidationAnalyzePieceResponse). */
@@ -208,7 +221,7 @@ export interface AnalyzePieceResponse {
   id: string;
   campaign_id: string;
   channel: TextChannel | "E-mail" | "App";
-  is_valid: "valid" | "invalid" | "warning";
+  is_valid: "valid" | "invalid";
   analysis_text: string;
   analyzed_by: string;
   created_at: string;
@@ -228,7 +241,7 @@ export interface CampaignsResponse {
 export type CampaignResponse = Campaign;
 
 // Piece Review History (Timeline)
-export type PieceReviewEventType = "SUBMITTED" | "APPROVED" | "REJECTED" | "MANUALLY_REJECTED";
+export type PieceReviewEventType = "SUBMITTED" | "IA_VALIDATED" | "APPROVED" | "REJECTED" | "MANUALLY_REJECTED";
 
 export interface PieceReviewEvent {
   id: string;

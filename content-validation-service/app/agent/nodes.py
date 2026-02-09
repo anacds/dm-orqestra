@@ -4,12 +4,29 @@ import base64
 import logging
 import os
 import re
+import time
 from datetime import datetime
 from typing import Any, Dict
 
 from app.agent.state import ValidationGraphState
-from app.agent.tools import retrieve_piece_content, validate_legal_compliance, convert_html_to_image, validate_brand_compliance
-from app.agent.validate_piece import validate_piece_format_and_size
+from app.agent.tools import (
+    retrieve_piece_content,
+    validate_legal_compliance,
+    convert_html_to_image,
+    validate_brand_compliance,
+    validate_image_brand_compliance,
+    fetch_channel_specs,
+)
+from app.agent.validate_piece import validate_piece_format_and_size, validate_piece_specs
+from app.core.metrics import (
+    NODE_DURATION,
+    MCP_CALLS,
+    MCP_DURATION,
+    A2A_CALLS,
+    A2A_DURATION,
+    SPECS_RESULT,
+    BRANDING_RESULT,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -66,11 +83,17 @@ def _is_data_url_image(raw: str) -> bool:
     return bool(_DATA_URL_IMAGE.match(raw.strip()))
 
 
+# ===========================================================================
+# NODE 1: validate_channel
+# ===========================================================================
+
 def validate_channel_node(state: ValidationGraphState) -> Dict[str, Any]:
     """
-    1) validate_channel:
-    - SMS/PUSH: valida formato obrigatório; se OK -> validate_compliance_node.
-    - EMAIL/APP: vai para o retrieve_content_node.
+    1) validate_channel: valida estrutura (canal, campos, tipos).
+    
+    - SMS/PUSH: campos existem e são do tipo certo → [specs, branding] em paralelo.
+    - EMAIL/APP: canal reconhecido → retrieve_content.
+    - Limites numéricos (chars, KB, pixels) ficam no validate_specs.
     """
     channel = (state.get("channel") or "").upper()
     content = state.get("content") or {}
@@ -98,10 +121,14 @@ def validate_channel_node(state: ValidationGraphState) -> Dict[str, Any]:
     }
 
 
+# ===========================================================================
+# NODE 2: retrieve_content
+# ===========================================================================
+
 async def retrieve_content_node(state: ValidationGraphState) -> Dict[str, Any]:
     """
-    2) retrieve_content: chama campaigns-mcp-server (MCP).
-    Sucesso -> validate_compliance. Erro -> peça necessita aprovação humana.
+    2) retrieve_content: chama campaigns-service (MCP).
+    Sucesso -> validate_specs. Erro -> peça necessita aprovação humana.
     """
     channel = (state.get("channel") or "").upper()
     content = state.get("content") or {}
@@ -155,8 +182,10 @@ async def retrieve_content_node(state: ValidationGraphState) -> Dict[str, Any]:
             "human_approval_reason": f"Conteúdo da peça indisponível (MCP/campaigns): {err}",
         }
 
-    # Inicializa html_for_branding (só usado para EMAIL)
+    # Inicializa campos
     html_for_branding = None
+    image_for_branding = None
+    conversion_metadata = None
 
     if channel == "APP":
         if not _is_data_url_image(raw):
@@ -168,6 +197,8 @@ async def retrieve_content_node(state: ValidationGraphState) -> Dict[str, Any]:
                 "human_approval_reason": "Resposta do download da peça App inválida.",
             }
         content_for_compliance = {"image": raw}
+        # Guarda imagem para validação de branding (paralela a specs)
+        image_for_branding = raw
     elif channel == "EMAIL":
         # --- CÓDIGO LEGADO: enviava HTML direto para o Legal Service ---
         # content_for_compliance = {"html": raw}
@@ -195,11 +226,20 @@ async def retrieve_content_node(state: ValidationGraphState) -> Dict[str, Any]:
             image_format = conversion_result.get("imageFormat", "PNG").lower()
             data_url = f"data:image/{image_format};base64,{base64_image}"
             
+            # Guarda metadados da conversão para validate_specs
+            conversion_metadata = {
+                "originalWidth": conversion_result.get("originalWidth", 0),
+                "originalHeight": conversion_result.get("originalHeight", 0),
+                "reducedWidth": conversion_result.get("reducedWidth", 0),
+                "reducedHeight": conversion_result.get("reducedHeight", 0),
+                "fileSizeBytes": conversion_result.get("fileSizeBytes", 0),
+            }
+            
             logger.info(
                 "EMAIL HTML converted to image: %dx%d, %d bytes",
-                conversion_result.get("reducedWidth", 0),
-                conversion_result.get("reducedHeight", 0),
-                conversion_result.get("fileSizeBytes", 0),
+                conversion_metadata["reducedWidth"],
+                conversion_metadata["reducedHeight"],
+                conversion_metadata["fileSizeBytes"],
             )
             
             # Salva imagem para debug
@@ -227,44 +267,142 @@ async def retrieve_content_node(state: ValidationGraphState) -> Dict[str, Any]:
         "retrieve_ok": True,
         "content_for_compliance": content_for_compliance,
         "html_for_branding": html_for_branding,
+        "image_for_branding": image_for_branding,
+        "conversion_metadata": conversion_metadata,
     }
 
 
+# ===========================================================================
+# NODE 3: validate_specs (NEW — determinístico, pós-retrieve)
+# ===========================================================================
+
+async def validate_specs_node(state: ValidationGraphState) -> Dict[str, Any]:
+    """
+    3) validate_specs: validação determinística de specs técnicos.
+
+    Busca specs via MCP (campaigns-service) e valida dimensões de imagem,
+    peso de arquivos e limites de caracteres. Fail-fast: se specs inválidos,
+    bloqueia antes de gastar tokens no legal-service.
+
+    Fallback: se MCP indisponível, usa channel_specs.yaml local.
+    """
+    _node_start = time.perf_counter()
+    channel = (state.get("channel") or "").upper()
+    content = state.get("content") or {}
+    content_for_compliance = state.get("content_for_compliance") or {}
+    conversion_metadata = state.get("conversion_metadata")
+
+    # Determina o conteúdo real para validar specs
+    if channel in ("SMS", "PUSH"):
+        specs_content = content
+    else:
+        specs_content = content_for_compliance
+
+    # Determina commercial_space (para APP)
+    commercial_space = None
+    if channel == "APP":
+        commercial_space = (
+            content.get("commercial_space")
+            or content.get("commercialSpace")
+        )
+
+    # Busca specs via MCP (campaigns-service)
+    remote_specs = None
+    try:
+        remote_specs = await fetch_channel_specs.ainvoke({
+            "channel": channel,
+            "commercial_space": commercial_space,
+        })
+        if remote_specs.get("error"):
+            logger.warning("fetch_channel_specs returned error: %s — using local fallback", remote_specs["error"])
+            remote_specs = None
+        else:
+            logger.info(
+                "fetch_channel_specs: channel=%s, space=%s, specs_fields=%s",
+                channel, commercial_space,
+                list(remote_specs.get("specs", {}).keys()),
+            )
+    except Exception as e:
+        logger.warning("fetch_channel_specs MCP failed: %s — using local fallback", e)
+
+    specs_result = validate_piece_specs(
+        channel=channel,
+        content=specs_content,
+        commercial_space=commercial_space,
+        conversion_metadata=conversion_metadata,
+        remote_specs=remote_specs,
+    )
+
+    specs_valid = specs_result.get("valid", True)
+    specs_errors = specs_result.get("errors")
+    specs_warnings = specs_result.get("warnings")
+
+    logger.info(
+        "validate_specs: channel=%s, valid=%s, errors=%d, warnings=%d, source=%s",
+        channel,
+        specs_valid,
+        len(specs_errors) if specs_errors else 0,
+        len(specs_warnings) if specs_warnings else 0,
+        specs_result.get("details", {}).get("specs_source", "unknown"),
+    )
+
+    NODE_DURATION.labels(node="validate_specs", channel=channel).observe(time.perf_counter() - _node_start)
+    SPECS_RESULT.labels(channel=channel, result="pass" if specs_valid else "fail").inc()
+
+    return {
+        "specs_ok": specs_valid,
+        "specs_result": specs_result,
+    }
+
+
+# ===========================================================================
+# NODE 4: validate_compliance (legal-service via A2A)
+# ===========================================================================
+
 async def validate_compliance_node(state: ValidationGraphState) -> Dict[str, Any]:
     """
-    3) validate_compliance: chama legal-service via A2A.
+    4) validate_compliance: chama legal-service via A2A.
+
+    Roda em paralelo com specs e branding — sem guards.
+    Depende apenas de content_for_compliance (preenchido por validate_channel ou retrieve_content).
     """
+    _node_start = time.perf_counter()
     channel = (state.get("channel") or "").upper()
     content_for_compliance = state.get("content_for_compliance") or {}
 
     if not content_for_compliance:
+        NODE_DURATION.labels(node="validate_compliance", channel=channel).observe(time.perf_counter() - _node_start)
         return {
             "compliance_ok": False,
             "compliance_error": "Nenhum conteúdo para validar.",
-            "requires_human_approval": True,
-            "human_approval_reason": "content_for_compliance vazio.",
         }
 
+    a2a_start = time.perf_counter()
     try:
         result = await validate_legal_compliance.ainvoke({
             "channel": channel,
             "content": content_for_compliance,
             "task": "VALIDATE_COMMUNICATION",
         })
+        A2A_DURATION.labels(channel=channel).observe(time.perf_counter() - a2a_start)
+        A2A_CALLS.labels(channel=channel, status="success").inc()
     except Exception as e:
+        A2A_DURATION.labels(channel=channel).observe(time.perf_counter() - a2a_start)
+        A2A_CALLS.labels(channel=channel, status="error").inc()
         err = str(e)
         logger.warning("validate_compliance A2A error: %s", err)
+        NODE_DURATION.labels(node="validate_compliance", channel=channel).observe(time.perf_counter() - _node_start)
         return {
             "compliance_ok": False,
             "compliance_error": err,
-            "requires_human_approval": True,
-            "human_approval_reason": f"Erro ao validar via Legal Service: {err}",
         }
 
     decision = result.get("decision", "REPROVADO")
     requires_human = result.get("requires_human_review", True)
     summary = result.get("summary", "")
     sources = result.get("sources", [])
+
+    NODE_DURATION.labels(node="validate_compliance", channel=channel).observe(time.perf_counter() - _node_start)
 
     return {
         "compliance_ok": True,
@@ -274,24 +412,33 @@ async def validate_compliance_node(state: ValidationGraphState) -> Dict[str, Any
             "summary": summary,
             "sources": sources,
         },
-        "requires_human_approval": requires_human,
-        "human_approval_reason": summary if requires_human else None,
     }
 
 
+# ===========================================================================
+# NODE 5: validate_branding (branding-service via MCP)
+# Roda em paralelo com validate_specs
+# ===========================================================================
+
 async def validate_branding_node(state: ValidationGraphState) -> Dict[str, Any]:
     """
-    Valida conformidade de marca via branding-service (MCP).
+    5) validate_branding: valida conformidade de marca via branding-service (MCP).
     
-    Executado em paralelo com validate_compliance para EMAIL.
-    Validação 100% determinística (sem IA/LLM).
+    Roda em paralelo com validate_specs (ambos determinísticos).
+    
+    - EMAIL: valida HTML (cores, tipografia, logo, layout, CTAs, footer, links)
+    - APP: valida imagem (cores dominantes contra paleta aprovada)
+    - SMS/PUSH: skip (sem conteúdo visual para validar)
     """
-    html_for_branding = state.get("html_for_branding")
+    _node_start = time.perf_counter()
     channel = (state.get("channel") or "").upper()
+    html_for_branding = state.get("html_for_branding")
+    image_for_branding = state.get("image_for_branding")
     
-    # Só executa para EMAIL com HTML disponível
-    if channel != "EMAIL" or not html_for_branding:
-        logger.info("validate_branding: skipping (channel=%s, has_html=%s)", channel, bool(html_for_branding))
+    # SMS/PUSH: sem conteúdo visual → skip
+    if channel in ("SMS", "PUSH") or (not html_for_branding and not image_for_branding):
+        logger.info("validate_branding: skipping (channel=%s, has_html=%s, has_image=%s)",
+                     channel, bool(html_for_branding), bool(image_for_branding))
         return {
             "branding_ok": True,
             "branding_result": None,
@@ -299,10 +446,22 @@ async def validate_branding_node(state: ValidationGraphState) -> Dict[str, Any]:
         }
     
     try:
-        result = await validate_brand_compliance.ainvoke({"html": html_for_branding})
+        if channel == "EMAIL" and html_for_branding:
+            # Valida HTML de email (cores, fontes, logo, layout, CTAs, footer, links)
+            result = await validate_brand_compliance.ainvoke({"html": html_for_branding})
+        elif image_for_branding:
+            # Valida imagem (cores dominantes contra paleta)
+            result = await validate_image_brand_compliance.ainvoke({"image": image_for_branding})
+        else:
+            logger.info("validate_branding: no content to validate")
+            return {
+                "branding_ok": True,
+                "branding_result": None,
+                "branding_error": None,
+            }
     except Exception as e:
         err = str(e)
-        logger.warning("validate_branding MCP error: %s", err)
+        logger.warning("validate_branding MCP error (channel=%s): %s", channel, err)
         return {
             "branding_ok": False,
             "branding_error": err,
@@ -320,92 +479,252 @@ async def validate_branding_node(state: ValidationGraphState) -> Dict[str, Any]:
     violations = result.get("violations", [])
     summary = result.get("summary", {})
     
+    branding_result = {
+        "compliant": compliant,
+        "score": score,
+        "violations": violations,
+        "summary": summary,
+        "validation_type": "html" if (channel == "EMAIL" and html_for_branding) else "image",
+    }
+    # Inclui cores dominantes para imagem (APP)
+    if "dominant_colors" in result:
+        branding_result["dominant_colors"] = result["dominant_colors"]
+    
     logger.info(
-        "validate_branding: compliant=%s, score=%d, violations=%d",
-        compliant, score, summary.get("total", 0)
+        "validate_branding: channel=%s, type=%s, compliant=%s, score=%d, violations=%d",
+        channel, branding_result["validation_type"],
+        compliant, score, summary.get("total", 0),
     )
     
+    NODE_DURATION.labels(node="validate_branding", channel=channel).observe(time.perf_counter() - _node_start)
+    BRANDING_RESULT.labels(channel=channel, compliant=str(compliant).lower()).inc()
+
     return {
         "branding_ok": True,
-        "branding_result": {
-            "compliant": compliant,
-            "score": score,
-            "violations": violations,
-            "summary": summary,
-        },
+        "branding_result": branding_result,
     }
 
 
+# ===========================================================================
+# NODE 6: issue_final_verdict
+# ===========================================================================
+
 def issue_final_verdict_node(state: ValidationGraphState) -> Dict[str, Any]:
     """
-    4) issue_final_verdict: consolida resultado final.
-    
-    Combina:
-    - Legal compliance (IA): decisão jurídica
-    - Branding compliance (determinístico): conformidade de marca
+    issue_final_verdict: agrega os resultados de specs, branding e compliance.
+
+    Não usa LLM — apenas consolida os retornos dos 3 nós paralelos em um
+    único payload com decisão final.
+
+    Possíveis cenários de entrada (early-fail):
+    - validate_channel falhou → specs/branding/compliance não executaram
+    - retrieve_content falhou → specs/branding/compliance não executaram
+    - Os 3 executaram (paralelo) → agrega tudo
     """
-    compliance_result = state.get("compliance_result") or {}
-    branding_result = state.get("branding_result")
     validation_result = state.get("validation_result") or {}
-    requires_human = state.get("requires_human_approval", False)
-    human_reason = state.get("human_approval_reason")
+    validation_valid = state.get("validation_valid", False)
+    retrieve_ok = state.get("retrieve_ok", False)
+    retrieve_error = state.get("retrieve_error")
+    channel = (state.get("channel") or "").upper()
 
-    # Decisão legal (IA)
-    legal_decision = compliance_result.get("decision", "REPROVADO")
-    legal_summary = compliance_result.get("summary", "")
-    sources = compliance_result.get("sources", [])
+    # Resultados dos 3 nós paralelos (None = não executou)
+    specs_ok = state.get("specs_ok")              # None | True | False
+    specs_result = state.get("specs_result")
 
-    # Decisão de branding (determinístico)
-    branding_compliant = True
+    branding_ok = state.get("branding_ok")          # None | True | False
+    branding_result = state.get("branding_result")
+    branding_error = state.get("branding_error")
+
+    compliance_ok = state.get("compliance_ok", False)
+    compliance_result = state.get("compliance_result") or {}
+    compliance_error = state.get("compliance_error")
+
+    stages_completed: list[str] = []
+    failure_stage: str | None = None
+
+    # ── Early-fail 1: validate_channel ────────────────────────────────
+    if not validation_valid:
+        failure_stage = "validate_channel"
+        validation_msg = validation_result.get("message", "Formato ou canal inválido")
+        return _build_verdict(
+            decision="REPROVADO",
+            summary=f"Formato: {validation_msg}",
+            requires_human=True,
+            human_reason=validation_msg,
+            failure_stage=failure_stage,
+            stages_completed=stages_completed,
+            validation_result=validation_result,
+        )
+
+    stages_completed.append("validate_channel")
+
+    # ── Early-fail 2: retrieve_content (EMAIL/APP) ────────────────────
+    if channel in ("EMAIL", "APP") and not retrieve_ok:
+        failure_stage = "retrieve_content"
+        err = retrieve_error or "Falha ao buscar conteúdo da peça"
+        return _build_verdict(
+            decision="REPROVADO",
+            summary=f"Retrieve: {err}",
+            requires_human=True,
+            human_reason=err,
+            failure_stage=failure_stage,
+            stages_completed=stages_completed,
+            validation_result=validation_result,
+        )
+
+    if channel in ("EMAIL", "APP"):
+        stages_completed.append("retrieve_content")
+
+    # ── Agregação dos 3 nós paralelos ─────────────────────────────────
+    # Cada nó contribui: aprovação/reprovação + mensagens + fontes.
+
+    sources: list[dict] = []
+    requires_human = False
+
+    # Cada seção contribui uma linha rotulada para o summary.
+    # Formato: "[Specs] ...", "[Marca] ...", "[Legal] ..."
+    summary_lines: list[str] = []
+
+    # --- Specs ---
+    specs_passed = True
+    specs_warnings: list[str] = []
+    if specs_ok is not None:
+        stages_completed.append("validate_specs")
+    if specs_ok is False:
+        specs_passed = False
+        specs_errors = specs_result.get("errors", []) if specs_result else []
+        detail = "; ".join(specs_errors[:3]) if specs_errors else "Specs técnicos inválidos"
+        summary_lines.append(f"[Specs] {detail}")
+    elif specs_result:
+        specs_warnings = specs_result.get("warnings") or []
+        if specs_warnings:
+            summary_lines.append(f"[Specs] {len(specs_warnings)} aviso(s)")
+
+    # --- Branding ---
+    branding_passed = True
+    branding_has_critical = False
     branding_score = 100
+    if branding_ok is not None or branding_result:
+        stages_completed.append("validate_branding")
     if branding_result:
-        branding_compliant = branding_result.get("compliant", True)
         branding_score = branding_result.get("score", 100)
+        branding_compliant = branding_result.get("compliant", True)
+        branding_has_critical = branding_result.get("summary", {}).get("critical", 0) > 0
+        if not branding_compliant:
+            branding_passed = False
+            violations = branding_result.get("violations") or []
+            violations_total = branding_result.get("summary", {}).get("total", 0)
+            header = f"[Marca] {violations_total} violação(ões), score {branding_score}/100"
+            if violations:
+                details = "; ".join(
+                    v.get("message", v.get("rule", "?")) for v in violations[:5]
+                )
+                summary_lines.append(f"{header}: {details}")
+            else:
+                summary_lines.append(header)
+    if branding_error and not branding_result:
+        summary_lines.append(f"[Marca] Erro — {branding_error[:120]}")
 
-    # Decisão final: só aprova se ambos aprovarem
-    # Legal APROVADO + Branding compliant = APROVADO
-    # Qualquer reprovação = REPROVADO
-    if legal_decision == "APROVADO" and branding_compliant:
-        final_decision = "APROVADO"
-    elif legal_decision == "APROVADO" and not branding_compliant:
-        final_decision = "REPROVADO"
-        # Adiciona motivo de branding à revisão humana
-        if not requires_human:
-            requires_human = True
-            human_reason = f"Violações de marca detectadas (score: {branding_score}/100)"
+    # --- Compliance (legal) ---
+    legal_passed = True
+    legal_decision = None
+    legal_summary = ""
+    if compliance_ok:
+        stages_completed.append("validate_compliance")
+        legal_decision = compliance_result.get("decision", "REPROVADO")
+        legal_summary = compliance_result.get("summary", "")
+        legal_sources = compliance_result.get("sources", [])
+        sources.extend(legal_sources)
+        requires_human = compliance_result.get("requires_human_review", False)
+
+        if legal_decision != "APROVADO":
+            legal_passed = False
+            summary_lines.append(f"[Legal] {legal_summary}" if legal_summary else "[Legal] Reprovado")
+        elif legal_summary:
+            # Legal aprovou mas pode ter observações
+            summary_lines.append(f"[Legal] {legal_summary}")
+    elif compliance_error:
+        legal_passed = False
+        summary_lines.append(f"[Legal] Erro — {compliance_error[:200]}")
+        requires_human = True
+
+    # ── Decisão final: binária — APROVADO ou REPROVADO ───────────────
+    all_passed = specs_passed and branding_passed and legal_passed and legal_decision == "APROVADO"
+    final_decision = "APROVADO" if all_passed else "REPROVADO"
+
+    if summary_lines:
+        summary = "\n".join(summary_lines)
+    elif final_decision == "APROVADO":
+        summary = "Todas as validações passaram."
     else:
-        final_decision = legal_decision  # REPROVADO ou REQUER_REVISAO
+        summary = "Reprovado."
 
-    # Monta summary combinado
-    combined_summary = legal_summary
-    if branding_result and not branding_compliant:
-        violations_count = branding_result.get("summary", {}).get("total", 0)
-        branding_msg = f"Branding: {violations_count} violações (score: {branding_score}/100)"
-        combined_summary = f"{legal_summary} | {branding_msg}" if legal_summary else branding_msg
+    return _build_verdict(
+        decision=final_decision,
+        summary=summary,
+        requires_human=requires_human,
+        human_reason=summary if requires_human else None,
+        failure_stage=None,
+        stages_completed=stages_completed,
+        validation_result=validation_result,
+        specs_result=specs_result,
+        branding_result=branding_result,
+        compliance_result=compliance_result if compliance_ok else None,
+        compliance_error=compliance_error,
+        sources=sources,
+    )
 
+
+def _build_verdict(
+    *,
+    decision: str,
+    summary: str,
+    requires_human: bool = False,
+    human_reason: str | None = None,
+    failure_stage: str | None,
+    stages_completed: list[str],
+    validation_result: dict | None = None,
+    specs_result: dict | None = None,
+    branding_result: dict | None = None,
+    compliance_result: dict | None = None,
+    compliance_error: str | None = None,
+    sources: list | None = None,
+) -> Dict[str, Any]:
+    """Monta o payload padronizado de final_verdict + orchestration_result.
+    
+    Decisão binária: APROVADO ou REPROVADO.
+    requires_human é metadado do legal-service (independente da decisão).
+    """
     final_verdict = {
-        "decision": final_decision,
+        "decision": decision,
         "requires_human_review": requires_human,
-        "summary": combined_summary,
-        "sources": sources,
-        # Detalhes separados para UI
+        "summary": summary,
+        "sources": sources or [],
+        "failure_stage": failure_stage,
+        "stages_completed": stages_completed,
+        "specs": specs_result,
         "legal": {
-            "decision": legal_decision,
-            "summary": legal_summary,
-        },
+            "decision": compliance_result.get("decision"),
+            "summary": compliance_result.get("summary"),
+        } if compliance_result else None,
         "branding": branding_result,
     }
 
     orchestration_result = {
         "validation": validation_result,
-        "compliance": compliance_result,
+        "specs": specs_result,
         "branding": branding_result,
+        "compliance": compliance_result if compliance_result else {"error": compliance_error},
         "final_verdict": final_verdict,
         "requires_human_approval": requires_human,
         "human_approval_reason": human_reason,
+        "failure_stage": failure_stage,
+        "stages_completed": stages_completed,
     }
 
     return {
         "final_verdict": final_verdict,
         "orchestration_result": orchestration_result,
+        "requires_human_approval": requires_human,
+        "human_approval_reason": human_reason,
     }

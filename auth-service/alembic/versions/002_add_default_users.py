@@ -52,6 +52,11 @@ def upgrade() -> None:
             "email": "jose@email.com",
             "full_name": "José",
             "role": "Analista de campanhas"
+        },
+        {
+            "email": "eric@email.com",
+            "full_name": "Eric",
+            "role": "Gestor de marketing"
         }
     ]
     
@@ -89,7 +94,7 @@ def downgrade() -> None:
     # Remove default users (optional - can be left empty if you don't want to remove users on downgrade)
     connection = op.get_bind()
     
-    default_emails = ["ana@email.com", "maria@email.com", "jose@email.com"]
+    default_emails = ["ana@email.com", "maria@email.com", "jose@email.com", "eric@email.com"]
     
     for email in default_emails:
         connection.execute(

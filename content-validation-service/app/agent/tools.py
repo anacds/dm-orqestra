@@ -20,7 +20,7 @@ async def retrieve_piece_content(
     commercial_space: Optional[str] = None,
 ) -> dict:
     """
-    Busca conteúdo de uma peça criativa via campaigns-mcp-server (MCP).
+    Busca conteúdo de uma peça criativa via campaigns-service (MCP).
 
     Use esta tool para obter o conteúdo de peças EMAIL ou APP que estão
     armazenadas no S3/LocalStack.
@@ -165,7 +165,7 @@ async def validate_legal_compliance(
 
     logger.info("validate_legal_compliance: channel=%s, task=%s", channel, task)
 
-    async with httpx.AsyncClient(timeout=settings.HTTP_TIMEOUT) as client:
+    async with httpx.AsyncClient(timeout=settings.A2A_TIMEOUT) as client:
         resp = await client.post(url, json=payload)
         resp.raise_for_status()
         data = resp.json()
@@ -203,7 +203,7 @@ async def validate_brand_compliance(
     Valida conformidade de marca em HTML de email via branding-service (MCP).
 
     Executa validações determinísticas (sem IA/LLM) contra as diretrizes
-    de marca da Orqestra: cores, tipografia, logo, layout, CTAs, footer.
+    de marca da Orqestra: cores, tipografia, logo, layout, CTAs, footer, links.
 
     Args:
         html: Conteúdo HTML do email a ser validado
@@ -237,6 +237,91 @@ async def validate_brand_compliance(
         "violations": data.get("violations", []),
         "summary": data.get("summary", {}),
     }
+
+
+@tool
+async def validate_image_brand_compliance(
+    image: str,
+) -> dict:
+    """
+    Valida conformidade de marca em imagem via branding-service (MCP).
+
+    Extrai cores dominantes da imagem e verifica se estão na paleta aprovada.
+    Validação 100% determinística (sem IA/LLM).
+    Usado para peças APP (banners, telas in-app).
+
+    Args:
+        image: Imagem em base64 ou data URL (data:image/png;base64,...)
+
+    Returns:
+        Dict com:
+        - compliant: bool - se está em conformidade
+        - score: int - pontuação 0-100
+        - violations: lista de violações encontradas
+        - summary: contagem por severidade
+        - dominant_colors: cores principais extraídas
+    """
+    url = f"{settings.BRANDING_MCP_URL.rstrip('/')}/mcp"
+    arguments: dict[str, Any] = {"image": image}
+
+    logger.info("validate_image_brand_compliance: image_length=%d", len(image))
+
+    async with streamable_http_client(url) as (read_stream, write_stream, _):
+        async with ClientSession(read_stream, write_stream) as session:
+            await session.initialize()
+            result = await session.call_tool("validate_image_brand", arguments=arguments)
+
+    if getattr(result, "is_error", False):
+        err_msg = _format_mcp_error(result)
+        logger.warning("validate_image_brand_compliance MCP error: %s", err_msg)
+        raise RuntimeError(err_msg)
+
+    data = _parse_mcp_result(result)
+    return {
+        "compliant": data.get("compliant", False),
+        "score": data.get("score", 0),
+        "violations": data.get("violations", []),
+        "summary": data.get("summary", {}),
+        "dominant_colors": data.get("dominant_colors", []),
+    }
+
+
+@tool
+async def fetch_channel_specs(
+    channel: str,
+    commercial_space: Optional[str] = None,
+) -> dict:
+    """
+    Busca especificações técnicas de um canal via campaigns-service (MCP).
+
+    Retorna limites de caracteres, peso e dimensões para o canal/espaço comercial.
+
+    Args:
+        channel: Canal (SMS, PUSH, EMAIL ou APP)
+        commercial_space: Espaço comercial (opcional, para APP)
+
+    Returns:
+        Dict com specs por field_name, generic_specs, channel e commercial_space.
+    """
+    url = f"{settings.CAMPAIGNS_MCP_URL.rstrip('/')}/mcp"
+    arguments: dict[str, Any] = {"channel": channel}
+    if commercial_space is not None:
+        arguments["commercial_space"] = commercial_space
+
+    logger.info("fetch_channel_specs: channel=%s, commercial_space=%s", channel, commercial_space)
+
+    async with streamable_http_client(url) as (read_stream, write_stream, _):
+        async with ClientSession(read_stream, write_stream) as session:
+            await session.initialize()
+            result = await session.call_tool("get_channel_specs", arguments=arguments)
+
+    if getattr(result, "is_error", False):
+        err_msg = _format_mcp_error(result)
+        logger.warning("fetch_channel_specs MCP error: %s", err_msg)
+        raise RuntimeError(err_msg)
+
+    data = _parse_mcp_result(result)
+    return data
 
 
 @tool

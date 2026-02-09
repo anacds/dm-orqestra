@@ -1,10 +1,3 @@
-"""Initial schema for campaigns service
-
-Revision ID: 001
-Revises: 
-Create Date: 2024-01-01
-
-"""
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
@@ -172,7 +165,7 @@ def upgrade() -> None:
         sa.Column('channel', sa.String(), nullable=False),
         sa.Column('piece_id', sa.String(), nullable=False),
         sa.Column('commercial_space', sa.String(), nullable=False, server_default=''),
-        sa.Column('ia_verdict', sa.String(), nullable=False),
+        sa.Column('ia_verdict', sa.String(), nullable=True),  # null = não validado por IA
         sa.Column('human_verdict', sa.String(), nullable=False, server_default='pending'),
         sa.Column('reviewed_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('reviewed_by', sa.String(), nullable=True),
@@ -229,8 +222,44 @@ def upgrade() -> None:
     op.create_index('ix_campaign_status_event_campaign_id', 'campaign_status_event', ['campaign_id'], unique=False)
     op.create_index('ix_campaign_status_event_campaign_created', 'campaign_status_event', ['campaign_id', 'created_at'], unique=False)
 
+    # Create channel_specs table (specs técnicos por canal/espaço comercial)
+    op.create_table(
+        'channel_specs',
+        sa.Column('id', sa.String(), nullable=False),
+        sa.Column('channel', sa.String(), nullable=False),
+        sa.Column('commercial_space', sa.String(), nullable=True),
+        sa.Column('field_name', sa.String(), nullable=False),
+        sa.Column('min_chars', sa.Integer(), nullable=True),
+        sa.Column('max_chars', sa.Integer(), nullable=True),
+        sa.Column('warn_chars', sa.Integer(), nullable=True),
+        sa.Column('max_weight_kb', sa.Integer(), nullable=True),
+        sa.Column('min_width', sa.Integer(), nullable=True),
+        sa.Column('min_height', sa.Integer(), nullable=True),
+        sa.Column('max_width', sa.Integer(), nullable=True),
+        sa.Column('max_height', sa.Integer(), nullable=True),
+        sa.Column('expected_width', sa.Integer(), nullable=True),
+        sa.Column('expected_height', sa.Integer(), nullable=True),
+        sa.Column('tolerance_pct', sa.Integer(), nullable=True, server_default='5'),
+        sa.Column('active', sa.Boolean(), nullable=False, server_default='true'),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+        sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index('ix_channel_specs_channel', 'channel_specs', ['channel'], unique=False)
+    op.create_index('ix_channel_specs_commercial_space', 'channel_specs', ['commercial_space'], unique=False)
+    op.create_index(
+        'ix_channel_specs_lookup',
+        'channel_specs',
+        ['channel', 'commercial_space', 'field_name'],
+        unique=True,
+    )
+
 
 def downgrade() -> None:
+    op.drop_index('ix_channel_specs_lookup', table_name='channel_specs')
+    op.drop_index('ix_channel_specs_commercial_space', table_name='channel_specs')
+    op.drop_index('ix_channel_specs_channel', table_name='channel_specs')
+    op.drop_table('channel_specs')
     op.drop_index('ix_campaign_status_event_campaign_created', table_name='campaign_status_event')
     op.drop_index('ix_campaign_status_event_campaign_id', table_name='campaign_status_event')
     op.drop_table('campaign_status_event')

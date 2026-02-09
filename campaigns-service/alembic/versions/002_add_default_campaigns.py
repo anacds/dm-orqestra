@@ -1,10 +1,3 @@
-"""Add default campaigns
-
-Revision ID: 002
-Revises: 001
-Create Date: 2024-01-02
-
-"""
 import sys
 import os
 import uuid
@@ -118,12 +111,10 @@ def upgrade() -> None:
             }
         )
         
-        # Add status history for campaign 1 (DRAFT -> CREATIVE_STAGE)
         now = datetime.now(timezone.utc)
         draft_time = now - timedelta(days=3, hours=2)
         creative_time = now - timedelta(days=2)
         
-        # Event 1: Creation (DRAFT)
         connection.execute(
             sa.text("""
                 INSERT INTO campaign_status_event (id, campaign_id, from_status, to_status, actor_id, created_at)
@@ -139,7 +130,6 @@ def upgrade() -> None:
             }
         )
         
-        # Event 2: DRAFT -> CREATIVE_STAGE
         connection.execute(
             sa.text("""
                 INSERT INTO campaign_status_event (id, campaign_id, from_status, to_status, actor_id, created_at)
@@ -231,9 +221,102 @@ def upgrade() -> None:
     if not campaign1_exists or not campaign2_exists:
         connection.commit()
 
+    # -----------------------------------------------------------------------
+    # Seed default channel specs
+    # -----------------------------------------------------------------------
+    specs_exist = connection.execute(
+        sa.text("SELECT 1 FROM channel_specs LIMIT 1")
+    ).first()
+
+    if not specs_exist:
+        default_specs = [
+            # SMS
+            {"id": str(uuid.uuid4()), "channel": "SMS", "commercial_space": None, "field_name": "body",
+             "min_chars": 1, "max_chars": 160, "warn_chars": None,
+             "max_weight_kb": None, "min_width": None, "min_height": None,
+             "max_width": None, "max_height": None, "expected_width": None, "expected_height": None,
+             "tolerance_pct": None},
+
+            # PUSH
+            {"id": str(uuid.uuid4()), "channel": "PUSH", "commercial_space": None, "field_name": "title",
+             "min_chars": 1, "max_chars": 50, "warn_chars": None,
+             "max_weight_kb": None, "min_width": None, "min_height": None,
+             "max_width": None, "max_height": None, "expected_width": None, "expected_height": None,
+             "tolerance_pct": None},
+            {"id": str(uuid.uuid4()), "channel": "PUSH", "commercial_space": None, "field_name": "body",
+             "min_chars": 1, "max_chars": 120, "warn_chars": None,
+             "max_weight_kb": None, "min_width": None, "min_height": None,
+             "max_width": None, "max_height": None, "expected_width": None, "expected_height": None,
+             "tolerance_pct": None},
+
+            # EMAIL
+            {"id": str(uuid.uuid4()), "channel": "EMAIL", "commercial_space": None, "field_name": "html",
+             "min_chars": 1, "max_chars": None, "warn_chars": None,
+             "max_weight_kb": 100, "min_width": None, "min_height": None,
+             "max_width": None, "max_height": None, "expected_width": None, "expected_height": None,
+             "tolerance_pct": None},
+            {"id": str(uuid.uuid4()), "channel": "EMAIL", "commercial_space": None, "field_name": "rendered_image",
+             "min_chars": None, "max_chars": None, "warn_chars": None,
+             "max_weight_kb": 500, "min_width": None, "min_height": None,
+             "max_width": None, "max_height": None, "expected_width": None, "expected_height": None,
+             "tolerance_pct": None},
+
+            # APP — specs genéricos (sem espaço comercial)
+            {"id": str(uuid.uuid4()), "channel": "APP", "commercial_space": None, "field_name": "image",
+             "min_chars": None, "max_chars": None, "warn_chars": None,
+             "max_weight_kb": 1024, "min_width": 300, "min_height": 300,
+             "max_width": 4096, "max_height": 4096, "expected_width": None, "expected_height": None,
+             "tolerance_pct": None},
+
+            # APP — espaços comerciais com dimensões específicas
+            {"id": str(uuid.uuid4()), "channel": "APP", "commercial_space": "Banner superior da Home", "field_name": "image",
+             "min_chars": None, "max_chars": None, "warn_chars": None,
+             "max_weight_kb": 300, "min_width": None, "min_height": None,
+             "max_width": None, "max_height": None, "expected_width": 1200, "expected_height": 628,
+             "tolerance_pct": 5},
+            {"id": str(uuid.uuid4()), "channel": "APP", "commercial_space": "Área do Cliente", "field_name": "image",
+             "min_chars": None, "max_chars": None, "warn_chars": None,
+             "max_weight_kb": 500, "min_width": None, "min_height": None,
+             "max_width": None, "max_height": None, "expected_width": 1080, "expected_height": 1920,
+             "tolerance_pct": 5},
+            {"id": str(uuid.uuid4()), "channel": "APP", "commercial_space": "Página de ofertas", "field_name": "image",
+             "min_chars": None, "max_chars": None, "warn_chars": None,
+             "max_weight_kb": 300, "min_width": None, "min_height": None,
+             "max_width": None, "max_height": None, "expected_width": 600, "expected_height": 314,
+             "tolerance_pct": 5},
+            {"id": str(uuid.uuid4()), "channel": "APP", "commercial_space": "Comprovante do Pix", "field_name": "image",
+             "min_chars": None, "max_chars": None, "warn_chars": None,
+             "max_weight_kb": 400, "min_width": None, "min_height": None,
+             "max_width": None, "max_height": None, "expected_width": 800, "expected_height": 600,
+             "tolerance_pct": 10},
+        ]
+
+        for spec in default_specs:
+            connection.execute(
+                sa.text("""
+                    INSERT INTO channel_specs (
+                        id, channel, commercial_space, field_name,
+                        min_chars, max_chars, warn_chars, max_weight_kb,
+                        min_width, min_height, max_width, max_height,
+                        expected_width, expected_height, tolerance_pct
+                    ) VALUES (
+                        :id, :channel, :commercial_space, :field_name,
+                        :min_chars, :max_chars, :warn_chars, :max_weight_kb,
+                        :min_width, :min_height, :max_width, :max_height,
+                        :expected_width, :expected_height, :tolerance_pct
+                    )
+                """),
+                spec,
+            )
+        connection.commit()
+        print(f"Seeded {len(default_specs)} default channel specs")
+
 
 def downgrade() -> None:
     connection = op.get_bind()
+
+    # Delete seeded channel specs
+    connection.execute(sa.text("DELETE FROM channel_specs"))
     
     default_campaign_names = [
         "Campanha de Aquisição - Conta Corrente Digital",

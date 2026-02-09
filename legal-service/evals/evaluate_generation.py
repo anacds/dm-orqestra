@@ -1,6 +1,7 @@
 import csv
 import os
 import sys
+import time
 from pathlib import Path
 from typing import List, Dict
 import logging
@@ -78,10 +79,25 @@ def calculate_metrics(results: List[Dict]) -> Dict:
             "f1": f1,
             "support": tp + fn,
         }
+    # Latency metrics
+    latencies = sorted([r["latency_s"] for r in results if "error" not in r and "latency_s" in r])
+    if latencies:
+        avg_latency = round(sum(latencies) / len(latencies), 2)
+        p50_latency = round(latencies[len(latencies) // 2], 2)
+        p95_idx = min(int(len(latencies) * 0.95), len(latencies) - 1)
+        p95_latency = round(latencies[p95_idx], 2)
+    else:
+        avg_latency = p50_latency = p95_latency = 0
+
     return {
         "total_examples": total,
         "accuracy_decision": accuracy_decision,
         "metrics_by_class": metrics_by_class,
+        "latency": {
+            "avg_s": avg_latency,
+            "p50_s": p50_latency,
+            "p95_s": p95_latency,
+        },
     }
 
 
@@ -267,11 +283,13 @@ def evaluate_generation_dataset(
                 
                 try:
                     # Chama agente completo (retrieval + geração)
+                    t0 = time.perf_counter()
                     result = agent.invoke(
                         task="VALIDATE_COMMUNICATION",
                         channel=channel if channel else None,
                         content=content,
                     )
+                    latency_s = round(time.perf_counter() - t0, 2)
                     
                     predicted_decision = result.get("decision", "UNKNOWN")
                     
@@ -286,12 +304,13 @@ def evaluate_generation_dataset(
                         "correct_decision": predicted_decision == expected_decision,
                         "num_sources": len(result.get("sources", [])),
                         "rerank_enabled": rerank_enabled,
+                        "latency_s": latency_s,
                     }
                     results.append(result_row)
                     
                     status = "✓" if result_row["correct_decision"] else "✗"
                     logger.info(
-                        f"  {status} Predicted: {predicted_decision} | Expected: {expected_decision}"
+                        f"  {status} Predicted: {predicted_decision} | Expected: {expected_decision} | {latency_s}s"
                     )
                     
                 except Exception as e:
@@ -358,6 +377,11 @@ def print_summary(summary: Dict):
     
     print(f"\nTotal de exemplos: {summary['total_examples']}")
     print(f"\nAccuracy (Decision): {summary['accuracy_decision']:.4f} ({summary['accuracy_decision']*100:.2f}%)")
+    
+    latency = summary.get("latency", {})
+    if latency.get("avg_s"):
+        print(f"\nLatência (segundos):")
+        print(f"  Média: {latency['avg_s']}s  |  p50: {latency['p50_s']}s  |  p95: {latency['p95_s']}s")
     
     print(f"\nMétricas por Decision:")
     for cls, metrics_cls in sorted(summary['metrics_by_class'].items()):

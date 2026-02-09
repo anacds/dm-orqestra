@@ -3,6 +3,10 @@
 # =============================================================================
 # Execute com: python evals/run_experiments.py
 # Liste experimentos: python evals/run_experiments.py --list
+#
+# Filtrar por grupo:
+#   python evals/run_experiments.py --group round2       # só novos
+#   python evals/run_experiments.py --report-all          # relatório consolidado
 # =============================================================================
 
 defaults:
@@ -52,112 +56,49 @@ llm_models:
     base_url: "https://api.openai.com/v1"
 
 # =============================================================================
-# EXPERIMENTOS
+# EXPERIMENTOS — Fatorial completo: 2 chunking × 3 retrieval × 2 LLM × 2 rerank = 24
 # =============================================================================
-# Cada experimento combina: retrieval + chunking + llm + reranking
-#
 # Nomenclatura: [Chunking]_[Retrieval]_[LLM]_[Rerank]
-#   - Chunking: Sec (section) ou Sem (semantic)
-#   - Retrieval: Hyb (hybrid), BM25, Vec (vector/semantic)
-#   - LLM: Mar (maritaca) ou GPT
-#   - Rerank: RR (com rerank) ou NoRR (sem rerank)
+#   - Chunking: sec (section) ou sem (semantic)
+#   - Retrieval: hyb (hybrid), bm25, vec (vector/semantic)
+#   - LLM: mar (maritaca) ou gpt
+#   - Rerank: rerank / no_rerank
+#
+# Groups:
+#   round1 — Executados em 08/02/2026 (resultados existentes)
+#   round2 — Combinações faltantes do fatorial completo
 # =============================================================================
 
 experiments:
-  # ---------------------------------------------------------------------------
-  # BASELINE: Configuração de Produção
-  # ---------------------------------------------------------------------------
+
+  # ===========================================================================
+  # SECTION + HYBRID (4/4 — completo)
+  # ===========================================================================
   baseline_producao:
     name: "Sec + Hybrid + Maritaca + Rerank"
-    description: "Configuração atual de produção: section chunking, hybrid search, Maritaca, com reranking"
+    description: "Configuração anterior de produção"
     enabled: true
+    group: round1
     retrieval_strategy: "hybrid"
     chunking: "section"
     llm_model: "maritaca"
     rerank_enabled: true
 
-  # ---------------------------------------------------------------------------
-  # EXPERIMENTOS: Impacto do Reranking
-  # ---------------------------------------------------------------------------
   sec_hyb_mar_no_rerank:
     name: "Sec + Hybrid + Maritaca (sem Rerank)"
-    description: "Baseline sem reranking - mede impacto do Cohere reranker"
+    description: "Baseline sem reranking"
     enabled: true
+    group: round1
     retrieval_strategy: "hybrid"
     chunking: "section"
     llm_model: "maritaca"
     rerank_enabled: false
 
-  # ---------------------------------------------------------------------------
-  # EXPERIMENTOS: Estratégias de Retrieval (com rerank)
-  # ---------------------------------------------------------------------------
-  sec_bm25_mar_rerank:
-    name: "Sec + BM25 + Maritaca + Rerank"
-    description: "Apenas busca por keywords com reranking"
-    enabled: true
-    retrieval_strategy: "bm25"
-    chunking: "section"
-    llm_model: "maritaca"
-    rerank_enabled: true
-
-  sec_vec_mar_rerank:
-    name: "Sec + Vector + Maritaca + Rerank"
-    description: "Apenas busca vetorial com reranking"
-    enabled: true
-    retrieval_strategy: "semantic"
-    chunking: "section"
-    llm_model: "maritaca"
-    rerank_enabled: true
-
-  # ---------------------------------------------------------------------------
-  # EXPERIMENTOS: Estratégias de Retrieval (sem rerank)
-  # ---------------------------------------------------------------------------
-  sec_bm25_mar_no_rerank:
-    name: "Sec + BM25 + Maritaca (sem Rerank)"
-    description: "Apenas busca por keywords sem reranking"
-    enabled: true
-    retrieval_strategy: "bm25"
-    chunking: "section"
-    llm_model: "maritaca"
-    rerank_enabled: false
-
-  sec_vec_mar_no_rerank:
-    name: "Sec + Vector + Maritaca (sem Rerank)"
-    description: "Apenas busca vetorial sem reranking"
-    enabled: true
-    retrieval_strategy: "semantic"
-    chunking: "section"
-    llm_model: "maritaca"
-    rerank_enabled: false
-
-  # ---------------------------------------------------------------------------
-  # EXPERIMENTOS: Chunking Semântico (vencedor anterior)
-  # ---------------------------------------------------------------------------
-  sem_hyb_mar_rerank:
-    name: "Semantic + Hybrid + Maritaca + Rerank"
-    description: "Chunking semântico com hybrid search e reranking"
-    enabled: true
-    retrieval_strategy: "hybrid"
-    chunking: "semantic"
-    llm_model: "maritaca"
-    rerank_enabled: true
-
-  sem_hyb_mar_no_rerank:
-    name: "Semantic + Hybrid + Maritaca (sem Rerank)"
-    description: "Chunking semântico com hybrid search sem reranking"
-    enabled: true
-    retrieval_strategy: "hybrid"
-    chunking: "semantic"
-    llm_model: "maritaca"
-    rerank_enabled: false
-
-  # ---------------------------------------------------------------------------
-  # EXPERIMENTOS: Variações de LLM (GPT-5-nano)
-  # ---------------------------------------------------------------------------
   sec_hyb_gpt_rerank:
     name: "Sec + Hybrid + GPT + Rerank"
     description: "Section chunking com GPT-5-nano e reranking"
     enabled: true
+    group: round1
     retrieval_strategy: "hybrid"
     chunking: "section"
     llm_model: "gpt_nano"
@@ -167,40 +108,226 @@ experiments:
     name: "Sec + Hybrid + GPT (sem Rerank)"
     description: "Section chunking com GPT-5-nano sem reranking"
     enabled: true
+    group: round1
     retrieval_strategy: "hybrid"
     chunking: "section"
     llm_model: "gpt_nano"
     rerank_enabled: false
 
-  sem_hyb_gpt_rerank:
-    name: "Semantic + Hybrid + GPT + Rerank"
-    description: "Chunking semântico com GPT-5-nano e reranking"
+  # ===========================================================================
+  # SECTION + BM25 (2/4 existentes + 2 novos)
+  # ===========================================================================
+  sec_bm25_mar_rerank:
+    name: "Sec + BM25 + Maritaca + Rerank"
+    description: "Busca por keywords com reranking"
     enabled: true
-    retrieval_strategy: "hybrid"
-    chunking: "semantic"
-    llm_model: "gpt_nano"
+    group: round1
+    retrieval_strategy: "bm25"
+    chunking: "section"
+    llm_model: "maritaca"
     rerank_enabled: true
 
-  # ---------------------------------------------------------------------------
-  # EXPERIMENTOS: Combinações Extremas (para análise)
-  # ---------------------------------------------------------------------------
+  sec_bm25_mar_no_rerank:
+    name: "Sec + BM25 + Maritaca (sem Rerank)"
+    description: "Busca por keywords sem reranking"
+    enabled: true
+    group: round1
+    retrieval_strategy: "bm25"
+    chunking: "section"
+    llm_model: "maritaca"
+    rerank_enabled: false
+
   sec_bm25_gpt_rerank:
     name: "Sec + BM25 + GPT + Rerank"
     description: "BM25 com GPT-5-nano e reranking"
-    enabled: false  # Desabilitado por padrão - habilite se quiser testar
+    enabled: true
+    group: round2
     retrieval_strategy: "bm25"
     chunking: "section"
     llm_model: "gpt_nano"
     rerank_enabled: true
 
+  sec_bm25_gpt_no_rerank:
+    name: "Sec + BM25 + GPT (sem Rerank)"
+    description: "BM25 com GPT-5-nano sem reranking"
+    enabled: true
+    group: round2
+    retrieval_strategy: "bm25"
+    chunking: "section"
+    llm_model: "gpt_nano"
+    rerank_enabled: false
+
+  # ===========================================================================
+  # SECTION + VECTOR (2/4 existentes + 2 novos)
+  # ===========================================================================
+  sec_vec_mar_rerank:
+    name: "Sec + Vector + Maritaca + Rerank"
+    description: "Busca vetorial com reranking"
+    enabled: true
+    group: rerun_vec
+    retrieval_strategy: "semantic"
+    chunking: "section"
+    llm_model: "maritaca"
+    rerank_enabled: true
+
+  sec_vec_mar_no_rerank:
+    name: "Sec + Vector + Maritaca (sem Rerank)"
+    description: "Busca vetorial sem reranking"
+    enabled: true
+    group: rerun_vec
+    retrieval_strategy: "semantic"
+    chunking: "section"
+    llm_model: "maritaca"
+    rerank_enabled: false
+
   sec_vec_gpt_rerank:
     name: "Sec + Vector + GPT + Rerank"
-    description: "Vector search com GPT-5-nano e reranking"
-    enabled: false  # Desabilitado por padrão
+    description: "Busca vetorial com GPT-5-nano e reranking"
+    enabled: true
+    group: rerun_vec
     retrieval_strategy: "semantic"
     chunking: "section"
     llm_model: "gpt_nano"
     rerank_enabled: true
+
+  sec_vec_gpt_no_rerank:
+    name: "Sec + Vector + GPT (sem Rerank)"
+    description: "Busca vetorial com GPT-5-nano sem reranking"
+    enabled: true
+    group: rerun_vec
+    retrieval_strategy: "semantic"
+    chunking: "section"
+    llm_model: "gpt_nano"
+    rerank_enabled: false
+
+  # ===========================================================================
+  # SEMANTIC + HYBRID (3/4 existentes + 1 novo)
+  # ===========================================================================
+  sem_hyb_mar_rerank:
+    name: "Sem + Hybrid + Maritaca + Rerank"
+    description: "Chunking semântico com hybrid search e reranking"
+    enabled: true
+    group: round1
+    retrieval_strategy: "hybrid"
+    chunking: "semantic"
+    llm_model: "maritaca"
+    rerank_enabled: true
+
+  sem_hyb_mar_no_rerank:
+    name: "Sem + Hybrid + Maritaca (sem Rerank)"
+    description: "Chunking semântico com hybrid search sem reranking"
+    enabled: true
+    group: round1
+    retrieval_strategy: "hybrid"
+    chunking: "semantic"
+    llm_model: "maritaca"
+    rerank_enabled: false
+
+  sem_hyb_gpt_rerank:
+    name: "Sem + Hybrid + GPT + Rerank"
+    description: "Chunking semântico com GPT-5-nano e reranking"
+    enabled: true
+    group: round1
+    retrieval_strategy: "hybrid"
+    chunking: "semantic"
+    llm_model: "gpt_nano"
+    rerank_enabled: true
+
+  sem_hyb_gpt_no_rerank:
+    name: "Sem + Hybrid + GPT (sem Rerank)"
+    description: "Chunking semântico com GPT-5-nano sem reranking"
+    enabled: true
+    group: round2
+    retrieval_strategy: "hybrid"
+    chunking: "semantic"
+    llm_model: "gpt_nano"
+    rerank_enabled: false
+
+  # ===========================================================================
+  # SEMANTIC + BM25 (0/4 — todos novos)
+  # ===========================================================================
+  sem_bm25_mar_rerank:
+    name: "Sem + BM25 + Maritaca + Rerank"
+    description: "Chunking semântico com BM25 e reranking"
+    enabled: true
+    group: round2
+    retrieval_strategy: "bm25"
+    chunking: "semantic"
+    llm_model: "maritaca"
+    rerank_enabled: true
+
+  sem_bm25_mar_no_rerank:
+    name: "Sem + BM25 + Maritaca (sem Rerank)"
+    description: "Chunking semântico com BM25 sem reranking"
+    enabled: true
+    group: round2
+    retrieval_strategy: "bm25"
+    chunking: "semantic"
+    llm_model: "maritaca"
+    rerank_enabled: false
+
+  sem_bm25_gpt_rerank:
+    name: "Sem + BM25 + GPT + Rerank"
+    description: "Chunking semântico com BM25, GPT-5-nano e reranking"
+    enabled: true
+    group: round2
+    retrieval_strategy: "bm25"
+    chunking: "semantic"
+    llm_model: "gpt_nano"
+    rerank_enabled: true
+
+  sem_bm25_gpt_no_rerank:
+    name: "Sem + BM25 + GPT (sem Rerank)"
+    description: "Chunking semântico com BM25 e GPT-5-nano sem reranking"
+    enabled: true
+    group: round2
+    retrieval_strategy: "bm25"
+    chunking: "semantic"
+    llm_model: "gpt_nano"
+    rerank_enabled: false
+
+  # ===========================================================================
+  # SEMANTIC + VECTOR (0/4 — todos novos)
+  # ===========================================================================
+  sem_vec_mar_rerank:
+    name: "Sem + Vector + Maritaca + Rerank"
+    description: "Chunking semântico com busca vetorial e reranking"
+    enabled: true
+    group: rerun_vec
+    retrieval_strategy: "semantic"
+    chunking: "semantic"
+    llm_model: "maritaca"
+    rerank_enabled: true
+
+  sem_vec_mar_no_rerank:
+    name: "Sem + Vector + Maritaca (sem Rerank)"
+    description: "Chunking semântico com busca vetorial sem reranking"
+    enabled: true
+    group: rerun_vec
+    retrieval_strategy: "semantic"
+    chunking: "semantic"
+    llm_model: "maritaca"
+    rerank_enabled: false
+
+  sem_vec_gpt_rerank:
+    name: "Sem + Vector + GPT + Rerank"
+    description: "Chunking semântico com busca vetorial, GPT-5-nano e reranking"
+    enabled: true
+    group: rerun_vec
+    retrieval_strategy: "semantic"
+    chunking: "semantic"
+    llm_model: "gpt_nano"
+    rerank_enabled: true
+
+  sem_vec_gpt_no_rerank:
+    name: "Sem + Vector + GPT (sem Rerank)"
+    description: "Chunking semântico com busca vetorial e GPT-5-nano sem reranking"
+    enabled: true
+    group: rerun_vec
+    retrieval_strategy: "semantic"
+    chunking: "semantic"
+    llm_model: "gpt_nano"
+    rerank_enabled: false
 
 # =============================================================================
 # CONFIGURAÇÃO DE RELATÓRIO

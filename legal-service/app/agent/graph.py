@@ -2,6 +2,7 @@ import atexit
 import hashlib
 import logging
 import os
+import time
 from typing import Optional
 
 from langgraph.graph import StateGraph, END
@@ -13,6 +14,12 @@ from app.agent.retriever import HybridWeaviateRetriever
 from app.agent.cache import CacheManager
 from app.core.config import settings
 from app.core.models_config import load_models_config
+from app.core.metrics import (
+    AGENT_INVOCATIONS,
+    AGENT_DURATION,
+    AGENT_ERRORS,
+    SERVICE_INFO,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +73,11 @@ class LegalAgent:
         channel_to_llm: dict[str, object] = {}
         default_llm = None
 
+        def _is_reasoning_model(name: str) -> bool:
+            """Detecta modelos de raciocínio (OpenAI o-series e gpt-5)."""
+            _lower = name.lower()
+            return any(tag in _lower for tag in ("gpt-5", "o1", "o3", "o4"))
+
         for ch, cfg in channels_config.items():
             prov = (cfg or {}).get("provider", "maritaca")
             model_name = (cfg or {}).get("model", "sabiazinho-4")
@@ -90,15 +102,31 @@ class LegalAgent:
                         raise ValueError(
                             f"Canal {ch} usa provider=openai mas OPENAI_API_KEY não está definida."
                         )
-                    llm_by_provider[key] = ChatOpenAI(
-                        model=model_name,
-                        api_key=openai_api_key,
-                        base_url="https://api.openai.com/v1",
-                        temperature=llm_temperature,
-                        max_tokens=max_tokens,
-                        timeout=timeout,
-                        max_retries=max_retries,
-                    )
+                    if _is_reasoning_model(model_name):
+                        # Modelos de raciocínio: usam max_completion_tokens
+                        # (reasoning_tokens + resposta), não suportam temperature
+                        llm_by_provider[key] = ChatOpenAI(
+                            model=model_name,
+                            api_key=openai_api_key,
+                            base_url="https://api.openai.com/v1",
+                            timeout=timeout,
+                            max_retries=max_retries,
+                            model_kwargs={"max_completion_tokens": max(max_tokens, 16000)},
+                        )
+                        logger.info(
+                            f"Canal {ch}: modelo de raciocínio '{model_name}' "
+                            f"com max_completion_tokens={max(max_tokens, 16000)}"
+                        )
+                    else:
+                        llm_by_provider[key] = ChatOpenAI(
+                            model=model_name,
+                            api_key=openai_api_key,
+                            base_url="https://api.openai.com/v1",
+                            temperature=llm_temperature,
+                            max_tokens=max_tokens,
+                            timeout=timeout,
+                            max_retries=max_retries,
+                        )
                 else:
                     raise ValueError(f"Provider não suportado: {prov} (canal {ch})")
             channel_to_llm[ch] = llm_by_provider[key]
@@ -130,6 +158,11 @@ class LegalAgent:
             for ch, cfg in channels_config.items()
         )
         logger.info("Legal agent initialized: llm por canal: %s", summary)
+
+        SERVICE_INFO.info({
+            "version": settings.SERVICE_VERSION,
+            "cache_enabled": str(settings.CACHE_ENABLED),
+        })
         
         # Log overrides se ativos (para experimentos)
         if alpha_override is not None:
@@ -209,22 +242,17 @@ class LegalAgent:
         if not content_body:
             content_body = content
 
-        cache_key_content = content_body or content or ""
-        # --- CÓDIGO LEGADO: usava apenas hash de imagem ---
-        # if content_image:
-        #     cache_key_content = f"{channel}:" + hashlib.sha256(content_image...).hexdigest()[:24]
-        # --- FIM CÓDIGO LEGADO ---
-        
-        # Cache key inclui hash de imagem + texto (para EMAIL com ambos)
-        if content_image and content_body:
-            combined = f"{content_body}:{content_image}"
-            cache_key_content = f"{channel}:" + hashlib.sha256(
-                combined.encode("utf-8")
-            ).hexdigest()[:32]
-        elif content_image:
-            cache_key_content = f"{channel}:" + hashlib.sha256(
-                content_image.encode("utf-8")
-            ).hexdigest()[:24]
+        # Monta cache key incluindo TODOS os campos relevantes por canal
+        cache_parts = [channel or ""]
+        if content_title:
+            cache_parts.append(content_title)
+        if content_body:
+            cache_parts.append(content_body)
+        elif content:
+            cache_parts.append(content)
+        if content_image:
+            cache_parts.append(hashlib.sha256(content_image.encode("utf-8")).hexdigest()[:24])
+        cache_key_content = ":".join(cache_parts)
         cached_result = self.cache.get(task, channel, cache_key_content)
         if cached_result:
             logger.info(f"Retornando resultado do cache para task={task}, channel={channel}")
@@ -249,10 +277,25 @@ class LegalAgent:
         }
         logger.info(f"Invoking agent with structured input: task={task}, channel={channel}")
         
-        result = self.app.invoke(initial_state)
+        ch_label = channel or "unknown"
+        start = time.perf_counter()
+        try:
+            result = self.app.invoke(initial_state)
+        except Exception as exc:
+            elapsed = time.perf_counter() - start
+            AGENT_DURATION.labels(channel=ch_label).observe(elapsed)
+            error_type = "timeout" if "timeout" in str(exc).lower() else "unknown"
+            AGENT_ERRORS.labels(channel=ch_label, error_type=error_type).inc()
+            raise
+        
+        elapsed = time.perf_counter() - start
+        decision = result.get("decision", "REPROVADO")
+        
+        AGENT_DURATION.labels(channel=ch_label).observe(elapsed)
+        AGENT_INVOCATIONS.labels(channel=ch_label, decision=decision).inc()
         
         formatted_result = {
-            "decision": result.get("decision", "REPROVADO"),
+            "decision": decision,
             "requires_human_review": result.get("requires_human_review", True),
             "summary": result.get("summary", ""),
             "sources": result.get("sources", []),

@@ -1,8 +1,10 @@
 import json
+import time
 import uuid
 from typing import Dict, List, Optional
 from fastapi import UploadFile, HTTPException, status
 from app.core.s3_client import upload_file, delete_file, get_file
+from app.core.metrics import S3_UPLOADS, S3_UPLOAD_DURATION
 from app.models.campaign import Campaign
 from sqlalchemy.orm import Session
 
@@ -37,7 +39,14 @@ async def upload_app_file(
     
     file_content = await file.read()
     file_key = generate_file_key(campaign.id, "App", commercial_space, ".png")
-    file_url = upload_file(file_content, file_key, "image/png")
+    _s3_start = time.perf_counter()
+    try:
+        file_url = upload_file(file_content, file_key, "image/png")
+        S3_UPLOAD_DURATION.observe(time.perf_counter() - _s3_start)
+        S3_UPLOADS.labels(status="success").inc()
+    except Exception:
+        S3_UPLOADS.labels(status="error").inc()
+        raise
     
     return file_url
 
@@ -86,7 +95,14 @@ async def upload_email_file(
         )
     
     file_key = generate_file_key(campaign.id, "E-mail", None, ".html")
-    file_url = upload_file(file_content, file_key, "text/html")
+    _s3_start = time.perf_counter()
+    try:
+        file_url = upload_file(file_content, file_key, "text/html")
+        S3_UPLOAD_DURATION.observe(time.perf_counter() - _s3_start)
+        S3_UPLOADS.labels(status="success").inc()
+    except Exception:
+        S3_UPLOADS.labels(status="error").inc()
+        raise
     
     return file_url
 

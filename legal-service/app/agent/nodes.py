@@ -1,4 +1,5 @@
 import logging
+import time
 from typing import Dict
 from app.agent.state import AgentState
 from app.agent.retriever import HybridWeaviateRetriever
@@ -7,6 +8,7 @@ from app.core.config import settings
 from app.core.models_config import load_models_config
 from app.api.schemas import ValidationOutput
 from langchain_core.output_parsers import PydanticOutputParser
+from app.core.metrics import LLM_REQUEST_DURATION, LLM_TOKENS, LLM_ERRORS
 
 logger = logging.getLogger(__name__)
 
@@ -202,13 +204,23 @@ def generate_node(
 
         logger.info("Generating structured validation response...")
 
+        # Identifica provider/model para métricas
+        model_name = getattr(llm, "model_name", "unknown")
+        base_url = getattr(llm, "openai_api_base", "") or ""
+        provider = "maritaca" if "maritaca" in base_url else "openai"
+        ch_label = channel or "unknown"
+
         try:
+            llm_start = time.perf_counter()
             if hasattr(llm, "with_structured_output"):
                 structured_llm = llm.with_structured_output(
                     ValidationOutput,
                     method="json_mode",
                 )
                 result = structured_llm.invoke(messages)
+                LLM_REQUEST_DURATION.labels(
+                    provider=provider, model=model_name, channel=ch_label,
+                ).observe(time.perf_counter() - llm_start)
                 return {
                     "decision": result.decision,
                     "requires_human_review": result.requires_human_review,
@@ -217,6 +229,20 @@ def generate_node(
                 }
             else:
                 response = llm.invoke(messages)
+                LLM_REQUEST_DURATION.labels(
+                    provider=provider, model=model_name, channel=ch_label,
+                ).observe(time.perf_counter() - llm_start)
+
+                # Registra tokens se disponíveis
+                usage = getattr(response, "usage_metadata", None) or getattr(response, "response_metadata", {}).get("token_usage")
+                if usage:
+                    input_tokens = usage.get("input_tokens") or usage.get("prompt_tokens") or 0
+                    output_tokens = usage.get("output_tokens") or usage.get("completion_tokens") or 0
+                    if input_tokens:
+                        LLM_TOKENS.labels(provider=provider, model=model_name, type="input").inc(input_tokens)
+                    if output_tokens:
+                        LLM_TOKENS.labels(provider=provider, model=model_name, type="output").inc(output_tokens)
+
                 response_text = response.content if hasattr(response, 'content') else str(response)
                 parsed = output_parser.parse(response_text)
                 
@@ -227,6 +253,7 @@ def generate_node(
                     "sources": parsed.sources if parsed.sources else sources,
                 }
         except Exception as e:
+            llm_elapsed = time.perf_counter() - llm_start if 'llm_start' in locals() else 0
             error_msg = str(e)
             logger.error(f"Error in structured output: {e}", exc_info=True)
             
@@ -236,6 +263,20 @@ def generate_node(
                 "token limit" in error_msg.lower() or
                 "completion_tokens" in error_msg.lower()
             )
+            is_timeout = "timeout" in error_msg.lower()
+            is_rate_limit = "rate" in error_msg.lower() and "limit" in error_msg.lower()
+            
+            error_type = (
+                "token_limit" if is_token_limit
+                else "timeout" if is_timeout
+                else "rate_limit" if is_rate_limit
+                else "other"
+            )
+            LLM_ERRORS.labels(provider=provider, model=model_name, error_type=error_type).inc()
+            if llm_elapsed:
+                LLM_REQUEST_DURATION.labels(
+                    provider=provider, model=model_name, channel=ch_label,
+                ).observe(llm_elapsed)
             
             if is_token_limit:
                 summary = "A análise da comunicação excedeu o limite de processamento. Por favor, revise manualmente a comunicação para garantir conformidade com as diretrizes."

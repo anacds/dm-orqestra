@@ -29,6 +29,11 @@ SERVICE_VERSION = os.getenv("SERVICE_VERSION") or _get("service", {}).get("versi
 ENVIRONMENT = os.getenv("ENVIRONMENT") or _get("service", {}).get("environment", "development")
 
 SECRET_KEY = os.getenv("SECRET_KEY") or _get("auth", {}).get("secret_key")
+if not SECRET_KEY:
+    raise RuntimeError(
+        "SECRET_KEY não definido. Defina via variável de ambiente SECRET_KEY "
+        "ou em config/config.yaml → auth.secret_key"
+    )
 ALGORITHM = os.getenv("ALGORITHM") or _get("auth", {}).get("algorithm", "HS256")
 
 AUTH_SERVICE_URL = _service_url("auth")

@@ -32,6 +32,12 @@ from app.core.permissions import (
 )
 from app.core.s3_client import normalize_file_url
 from app.core.auth_client import auth_client
+from app.core.metrics import (
+    CAMPAIGN_OPERATIONS,
+    STATUS_TRANSITIONS,
+    REVIEW_SUBMISSIONS,
+    REVIEW_VERDICTS,
+)
 import json
 
 
@@ -50,22 +56,28 @@ def _piece_review_to_response(pr: PieceReview) -> dict:
     }
 
 
-def _is_piece_finally_approved(ia: str, human: str) -> bool:
-    """True if piece is approved: (IA approved and not manually rejected) or (IA rejected/warning and human approved)."""
+def _is_piece_finally_approved(ia: str | None, human: str) -> bool:
+    """True if piece is approved.
+
+    - IA approved and not manually rejected → approved
+    - IA rejected/None and human approved → approved
+    """
     if ia == "approved":
         return human != HumanVerdict.MANUALLY_REJECTED.value
-    if ia in ("rejected", "warning"):
-        return human == HumanVerdict.APPROVED.value
-    return False
+    # ia is rejected, warning, or None (não validado) → depende do humano
+    return human == HumanVerdict.APPROVED.value
 
 
-def _is_piece_finally_rejected(ia: str, human: str) -> bool:
-    """True if piece is rejected: (IA approved and manually rejected) or (IA rejected/warning and human rejected)."""
+def _is_piece_finally_rejected(ia: str | None, human: str) -> bool:
+    """True if piece is rejected.
+
+    - IA approved and manually rejected → rejected
+    - IA rejected/None and human rejected → rejected
+    """
     if ia == "approved":
         return human == HumanVerdict.MANUALLY_REJECTED.value
-    if ia in ("rejected", "warning"):
-        return human == HumanVerdict.REJECTED.value
-    return False
+    # ia is rejected, warning, or None (não validado) → depende do humano
+    return human == HumanVerdict.REJECTED.value
 
 
 async def campaign_to_response(
@@ -265,6 +277,7 @@ class CampaignService:
         auth_token: Optional[str] = None
     ) -> CampaignResponse:
         """Create a new campaign."""
+        CAMPAIGN_OPERATIONS.labels(operation="create").inc()
         campaign = Campaign(
             id=str(uuid4()),
             name=campaign_data.name,
@@ -577,6 +590,7 @@ class CampaignService:
         auth_token: Optional[str] = None,
     ) -> CampaignResponse:
         """Creation analyst submits campaign for review. Inserts piece_reviews (IA verdict snapshot) and transitions to CONTENT_REVIEW."""
+        CAMPAIGN_OPERATIONS.labels(operation="submit_for_review").inc()
         if current_user.get("role") != UserRole.CREATIVE_ANALYST.value:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -597,9 +611,11 @@ class CampaignService:
             if ch == "E-MAIL":
                 ch = "EMAIL"
             space = (item.commercial_space or "").strip() or ""
-            ia = (item.ia_verdict or "warning").lower()
-            if ia not in ("approved", "rejected", "warning"):
-                ia = "warning"
+            ia = item.ia_verdict
+            if ia is not None:
+                ia = ia.lower()
+                if ia not in ("approved", "rejected"):
+                    ia = None  # valor inválido → tratar como não validado
             # Create current state record
             pr = PieceReview(
                 campaign_id=campaign_id,
@@ -632,6 +648,10 @@ class CampaignService:
             actor_id=actor_id,
         )
         db.add(status_event)
+        STATUS_TRANSITIONS.labels(from_status=old_status, to_status=CampaignStatus.CONTENT_REVIEW.value).inc()
+
+        for item in body.piece_reviews:
+            REVIEW_SUBMISSIONS.labels(channel=(item.channel or "").upper()).inc()
         
         db.commit()
         db.refresh(campaign)
@@ -645,11 +665,12 @@ class CampaignService:
         current_user: Dict,
         auth_token: Optional[str] = None,
     ) -> CampaignResponse:
-        """Business analyst approves/rejects a piece (or manually rejects an IA-approved piece)."""
-        if current_user.get("role") != UserRole.BUSINESS_ANALYST.value:
+        """Marketing manager approves/rejects a piece (or manually rejects an IA-approved piece)."""
+        CAMPAIGN_OPERATIONS.labels(operation="review_piece").inc()
+        if current_user.get("role") != UserRole.MARKETING_MANAGER.value:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only business analysts can review pieces",
+                detail="Only marketing managers can review pieces",
             )
         campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
         if not campaign:
@@ -696,6 +717,8 @@ class CampaignService:
             human = HumanVerdict.MANUALLY_REJECTED.value
             event_type = PieceReviewEventType.MANUALLY_REJECTED.value
         
+        REVIEW_VERDICTS.labels(channel=ch, verdict=action).inc()
+
         actor_id = current_user.get("id") or ""
         rejection_reason = None
         if action in ("reject", "manually_reject") and body.rejection_reason is not None:
@@ -716,6 +739,75 @@ class CampaignService:
             commercial_space=space,
             event_type=event_type,
             rejection_reason=rejection_reason,
+            actor_id=actor_id,
+        )
+        db.add(event)
+        db.commit()
+        db.refresh(campaign)
+        return await campaign_to_response(campaign, auth_token, db)
+
+    @staticmethod
+    async def update_ia_verdict(
+        db: Session,
+        campaign_id: str,
+        body: "UpdateIaVerdictRequest",
+        current_user: Dict,
+        auth_token: Optional[str] = None,
+    ) -> CampaignResponse:
+        """Marketing manager updates ia_verdict for a piece that was submitted without AI validation."""
+        from app.schemas.campaign import UpdateIaVerdictRequest  # noqa: F811
+
+        if current_user.get("role") != UserRole.MARKETING_MANAGER.value:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only marketing managers can update IA verdict post-submission",
+            )
+        campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
+        if not campaign:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
+        if campaign.status != CampaignStatus.CONTENT_REVIEW.value:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="IA verdict update only allowed when campaign is CONTENT_REVIEW",
+            )
+        ch = (body.channel or "").upper().replace("-", "").replace(" ", "")
+        if ch == "E-MAIL":
+            ch = "EMAIL"
+        space = (body.commercial_space or "").strip() or ""
+        ia = (body.ia_verdict or "").lower()
+        if ia not in ("approved", "rejected"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="ia_verdict must be 'approved' or 'rejected'",
+            )
+        pr = (
+            db.query(PieceReview)
+            .filter(
+                PieceReview.campaign_id == campaign_id,
+                PieceReview.channel == ch,
+                PieceReview.piece_id == body.piece_id,
+                PieceReview.commercial_space == space,
+            )
+            .first()
+        )
+        if not pr:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Piece review not found for this campaign/channel/piece",
+            )
+        actor_id = current_user.get("id") or ""
+
+        # Update current state
+        pr.ia_verdict = ia
+
+        # Create history event (immutable)
+        event = PieceReviewEvent(
+            campaign_id=campaign_id,
+            channel=ch,
+            piece_id=body.piece_id,
+            commercial_space=space,
+            event_type=PieceReviewEventType.IA_VALIDATED.value,
+            ia_verdict=ia,
             actor_id=actor_id,
         )
         db.add(event)
@@ -834,7 +926,7 @@ class CampaignService:
         task_groups = []
         
         if role == UserRole.BUSINESS_ANALYST.value:
-            # 1. Drafts created by this user that need to be sent to creative
+            # Drafts created by this user that need to be sent to creative
             drafts = (
                 db.query(Campaign)
                 .filter(
@@ -860,8 +952,9 @@ class CampaignService:
                         createdAt=c.created_date,
                     ) for c in drafts]
                 ))
-            
-            # 2. Campaigns in content review that need piece approval
+
+        elif role == UserRole.MARKETING_MANAGER.value:
+            # Campaigns in content review that need piece approval
             in_review = (
                 db.query(Campaign)
                 .filter(Campaign.status == CampaignStatus.CONTENT_REVIEW.value)

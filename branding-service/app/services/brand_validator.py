@@ -50,13 +50,7 @@ class BrandValidator:
     APPROVED_FONTS = ['arial', 'helvetica', 'sans-serif']
     
     # Prohibited fonts
-    PROHIBITED_FONTS = [
-        'times', 'times new roman', 'georgia', 'serif',
-        'comic sans', 'comic sans ms',
-        'courier', 'courier new',
-        'impact',
-        'papyrus', 'brush script'
-    ]
+    PROHIBITED_FONTS = ['comic sans', 'comic sans ms']
 
     # Prohibited URL shorteners
     PROHIBITED_SHORTENERS = (
@@ -388,17 +382,7 @@ class BrandValidator:
                 severity='warning',
                 message='Copyright "© 2026 Orqestra" não encontrado no footer'
             ))
-        
-        has_unsubscribe = any(keyword in footer_text for keyword in 
-                             ['unsubscribe', 'descadastrar', 'cancelar', 'remover'])
-        if not has_unsubscribe:
-            self.violations.append(Violation(
-                rule='missing_unsubscribe',
-                category='footer',
-                severity='warning',
-                message='Link de descadastro não encontrado no footer'
-            ))
-    
+
     def _validate_links(self, soup: BeautifulSoup) -> None:
         """Validate links: official domains, no generic shorteners, transparency."""
         anchors = soup.find_all('a', href=True)

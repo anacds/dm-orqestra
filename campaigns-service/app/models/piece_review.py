@@ -32,7 +32,7 @@ class PieceReview(Base):
     channel = Column(String, nullable=False, index=True)  # SMS | PUSH | EMAIL | APP
     piece_id = Column(String, nullable=False, index=True)
     commercial_space = Column(String, nullable=False, default="")  # "" for non-App
-    ia_verdict = Column(String, nullable=False)  # approved | rejected | warning
+    ia_verdict = Column(String, nullable=True)  # approved | rejected | null (não validado)
     human_verdict = Column(String, nullable=False, default=HumanVerdict.PENDING.value)
     reviewed_at = Column(DateTime(timezone=True), nullable=True)
     reviewed_by = Column(String, nullable=True)

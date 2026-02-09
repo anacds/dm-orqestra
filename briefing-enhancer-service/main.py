@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 from app.core.config import settings
 from app.core.checkpointer import close_checkpoint_pool
 from app.api.routes import router
+from prometheus_fastapi_instrumentator import Instrumentator
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -43,6 +44,12 @@ app.add_middleware(
 )
 
 app.include_router(router, prefix="/api", tags=["ai"])
+
+Instrumentator(
+    should_group_status_codes=True,
+    should_ignore_untemplated=True,
+    excluded_handlers=["/metrics", "/health"],
+).instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
 
 
 @app.get(

@@ -7,6 +7,7 @@ from app.core.config import settings
 from app.core.auth_config import load_auth_config
 from app.core.security import verify_password, get_password_hash, create_access_token, create_refresh_token
 from app.core.login_audit import log_login_attempt
+from app.core.metrics import LOGIN_ATTEMPTS, TOKEN_REFRESHES, USER_REGISTRATIONS, LOGOUTS
 from app.models.user import User, UserRole
 from app.models.refresh_token import RefreshToken
 from app.schemas.auth import UserCreate, UserResponse, RefreshTokenRequest, TokenResponse
@@ -20,6 +21,7 @@ class AuthService:
         """Register a new user."""
         existing_user = db.query(User).filter(User.email == user_data.email).first()
         if existing_user:
+            USER_REGISTRATIONS.labels(result="duplicate").inc()
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Email already registered"
@@ -38,6 +40,7 @@ class AuthService:
         db.commit()
         db.refresh(user)
         
+        USER_REGISTRATIONS.labels(result="success").inc()
         return UserResponse(
             id=user.id,
             email=user.email,
@@ -58,6 +61,7 @@ class AuthService:
         user = db.query(User).filter(User.email == email).first()
         
         if not user or not verify_password(password, user.hashed_password):
+            LOGIN_ATTEMPTS.labels(result="failure", failure_reason="invalid_credentials").inc()
             log_login_attempt(
                 db=db,
                 email=email,
@@ -73,6 +77,7 @@ class AuthService:
             )
         
         if not user.is_active:
+            LOGIN_ATTEMPTS.labels(result="failure", failure_reason="inactive_user").inc()
             log_login_attempt(
                 db=db,
                 email=email,
@@ -117,6 +122,7 @@ class AuthService:
             user_agent=user_agent
         )
         
+        LOGIN_ATTEMPTS.labels(result="success", failure_reason="none").inc()
         return TokenResponse(
             access_token=access_token,
             refresh_token=refresh_token_value,
@@ -132,12 +138,14 @@ class AuthService:
         ).first()
         
         if not refresh_token:
+            TOKEN_REFRESHES.labels(result="invalid").inc()
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid refresh token"
             )
         
         if refresh_token.expires_at < datetime.utcnow():
+            TOKEN_REFRESHES.labels(result="expired").inc()
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Refresh token expired"
@@ -158,6 +166,7 @@ class AuthService:
             expires_delta=access_token_expires
         )
         
+        TOKEN_REFRESHES.labels(result="success").inc()
         return TokenResponse(
             access_token=access_token,
             refresh_token=refresh_token.token,
@@ -167,6 +176,7 @@ class AuthService:
     @staticmethod
     def logout_user(db: Session, refresh_token: str, user_id: str) -> dict:
         """Revoke refresh token on logout."""
+        LOGOUTS.inc()
         token = db.query(RefreshToken).filter(
             RefreshToken.token == refresh_token,
             RefreshToken.user_id == user_id

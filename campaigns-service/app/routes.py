@@ -23,11 +23,12 @@ from app.schemas.campaign import (
     PieceReviewHistoryResponse,
     ReviewPieceRequest,
     SubmitForReviewRequest,
+    UpdateIaVerdictRequest,
 )
 from app.models.user_role import UserRole
 from app.models.campaign import Campaign, CampaignStatus
 from app.models.creative_piece import CreativePiece
-from app.core.permissions import require_business_analyst
+from app.core.permissions import require_business_analyst, require_marketing_manager
 from app.services.services import CampaignService
 from app.services.file_upload import (
     upload_app_file,
@@ -198,10 +199,24 @@ async def review_piece(
     current_user: Dict = Depends(get_current_user),
     auth_token: str = Depends(get_token_from_cookie_or_header),
 ):
-    """Business analyst approves/rejects a piece (or manually rejects an IA-approved piece)."""
-    require_business_analyst(current_user)
+    """Marketing manager approves/rejects a piece (or manually rejects an IA-approved piece)."""
+    require_marketing_manager(current_user)
     _get_campaign_or_404(db, campaign_id)
     return await CampaignService.review_piece(db, campaign_id, body, current_user, auth_token)
+
+
+@router.patch("/{campaign_id}/piece-reviews/ia-verdict", response_model=CampaignResponse)
+async def update_ia_verdict(
+    campaign_id: str,
+    body: UpdateIaVerdictRequest,
+    db: Session = Depends(get_db),
+    current_user: Dict = Depends(get_current_user),
+    auth_token: str = Depends(get_token_from_cookie_or_header),
+):
+    """Marketing manager updates IA verdict for a piece that was submitted without AI validation."""
+    require_marketing_manager(current_user)
+    _get_campaign_or_404(db, campaign_id)
+    return await CampaignService.update_ia_verdict(db, campaign_id, body, current_user, auth_token)
 
 
 @router.get("/{campaign_id}/piece-review-history", response_model=PieceReviewHistoryResponse)

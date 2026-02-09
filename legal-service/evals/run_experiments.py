@@ -5,7 +5,9 @@ Executa experimentos de avaliação de geração do legal-service.
 Uso:
     python evals/run_experiments.py                           # Executa todos os experimentos habilitados
     python evals/run_experiments.py --experiment baseline     # Executa apenas um experimento
+    python evals/run_experiments.py --group round2            # Executa apenas experimentos do grupo
     python evals/run_experiments.py --list                    # Lista experimentos disponíveis
+    python evals/run_experiments.py --report-all              # Relatório consolidado de todos os JSONs
     python evals/run_experiments.py --config custom.yaml      # Usa arquivo de config customizado
 """
 
@@ -54,25 +56,35 @@ def list_experiments(config: Dict) -> None:
     """Lista todos os experimentos disponíveis."""
     experiments = config.get("experiments", {})
     
+    # Agrupar por grupo
+    by_group: Dict[str, list] = {}
+    for exp_id, exp_config in experiments.items():
+        group = exp_config.get("group", "default")
+        by_group.setdefault(group, []).append((exp_id, exp_config))
+    
     print("\n" + "="*80)
     print("EXPERIMENTOS DISPONÍVEIS")
     print("="*80)
     
-    for exp_id, exp_config in experiments.items():
-        enabled = "✓" if exp_config.get("enabled", True) else "✗"
-        name = exp_config.get("name", exp_id)
-        description = exp_config.get("description", "")
-        retrieval = exp_config.get("retrieval_strategy", "hybrid")
-        chunking = exp_config.get("chunking", "section")
-        llm = exp_config.get("llm_model", "maritaca")
-        
-        print(f"\n[{enabled}] {exp_id}")
-        print(f"    Nome: {name}")
-        print(f"    Descrição: {description}")
-        print(f"    Retrieval: {retrieval} | Chunking: {chunking} | LLM: {llm}")
+    for group, exps in by_group.items():
+        print(f"\n--- Grupo: {group} ({len(exps)} experimentos) ---")
+        for exp_id, exp_config in exps:
+            enabled = "+" if exp_config.get("enabled", True) else "-"
+            name = exp_config.get("name", exp_id)
+            retrieval = exp_config.get("retrieval_strategy", "hybrid")
+            chunking = exp_config.get("chunking", "section")
+            llm = exp_config.get("llm_model", "maritaca")
+            rerank = "RR" if exp_config.get("rerank_enabled") else "NoRR"
+            
+            print(f"  [{enabled}] {exp_id:<30s} {chunking:<10s} {retrieval:<10s} {llm:<10s} {rerank}")
     
-    print("\n" + "="*80)
-    print("Legenda: [✓] habilitado | [✗] desabilitado")
+    total = sum(len(exps) for exps in by_group.values())
+    enabled_total = sum(
+        1 for exps in by_group.values()
+        for _, ec in exps if ec.get("enabled", True)
+    )
+    print(f"\nTotal: {total} experimentos ({enabled_total} habilitados)")
+    print(f"Grupos: {', '.join(by_group.keys())}")
     print("="*80 + "\n")
 
 
@@ -247,10 +259,25 @@ def generate_comparison_report(
             row[f"recall_{cls}"] = cls_metrics.get("recall", 0)
             row[f"f1_{cls}"] = cls_metrics.get("f1", 0)
         
+        # Latência
+        latency = result.get("latency", {})
+        row["avg_latency_s"] = latency.get("avg_s", 0)
+        row["p50_latency_s"] = latency.get("p50_s", 0)
+        row["p95_latency_s"] = latency.get("p95_s", 0)
+        
         comparison_data.append(row)
     
-    # Ordenar por accuracy (melhor primeiro)
-    comparison_data.sort(key=lambda x: x.get("accuracy", 0), reverse=True)
+    # Ordenar por recall de REPROVADO (métrica crítica: não deixar passar violações)
+    # Desempate: F1 REPROVADO → Accuracy → menor latência
+    comparison_data.sort(
+        key=lambda x: (
+            x.get("recall_REPROVADO", 0),
+            x.get("f1_REPROVADO", 0),
+            x.get("accuracy", 0),
+            -x.get("avg_latency_s", 999),  # menor latência é melhor
+        ),
+        reverse=True,
+    )
     
     # Salvar em JSON
     if "json" in report_config.get("formats", ["json"]):
@@ -277,7 +304,7 @@ def generate_comparison_report(
     print("RELATÓRIO COMPARATIVO DE EXPERIMENTOS")
     print("="*140)
     
-    # Cabeçalho com todas as dimensões importantes
+    # Cabeçalho: recall REPROVADO como métrica principal (custo de aprovar indevidamente é alto)
     header = (
         f"{'#':<3} "
         f"{'Experimento':<35} "
@@ -285,18 +312,23 @@ def generate_comparison_report(
         f"{'Retrieval':<10} "
         f"{'Rerank':<8} "
         f"{'LLM':<12} "
-        f"{'Accuracy':<10}"
+        f"{'Recall REP':<12} "
+        f"{'F1 REP':<10} "
+        f"{'Accuracy':<10} "
+        f"{'Latência':<10}"
     )
     print(f"\n{header}")
     print("-"*140)
     
     for idx, row in enumerate(comparison_data, 1):
-        # Indicador visual do vencedor
-        rank = "🏆" if idx == 1 else f"{idx:>2}."
+        rank = " 1." if idx == 1 else f"{idx:>2}."
         
-        # Rerank status
         rerank = row.get('rerank_enabled')
         rerank_str = "Sim" if rerank else ("Não" if rerank is False else "Config")
+        
+        recall_rep = row.get('recall_REPROVADO', 0)
+        f1_rep = row.get('f1_REPROVADO', 0)
+        avg_lat = row.get('avg_latency_s', 0)
         
         print(
             f"{rank:<3} "
@@ -305,38 +337,46 @@ def generate_comparison_report(
             f"{row['retrieval_strategy']:<10} "
             f"{rerank_str:<8} "
             f"{row['llm_model']:<12} "
-            f"{row['accuracy']*100:>6.2f}%"
+            f"{recall_rep*100:>6.2f}%     "
+            f"{f1_rep*100:>6.2f}%   "
+            f"{row['accuracy']*100:>6.2f}%   "
+            f"{avg_lat:>5.1f}s"
         )
     
     print("="*140)
+    print("  Ordenado por: Recall REPROVADO (métrica crítica — custo de aprovar indevidamente é alto)")
     
-    # Destacar melhor experimento com detalhes
+    # Destacar melhor experimento
     if comparison_data:
         best = comparison_data[0]
         rerank_best = best.get('rerank_enabled')
         rerank_str = "Sim" if rerank_best else ("Não" if rerank_best is False else "Config")
         
         print(f"\n{'='*60}")
-        print(f"🏆 CONFIGURAÇÃO VENCEDORA")
+        print(f"CONFIGURACAO VENCEDORA")
         print(f"{'='*60}")
-        print(f"   Experimento:  {best['experiment_name']}")
-        print(f"   Accuracy:     {best['accuracy']*100:.2f}%")
-        print(f"   Chunking:     {best['chunking']}")
-        print(f"   Retrieval:    {best['retrieval_strategy']} (alpha={best['alpha']})")
-        print(f"   Reranking:    {rerank_str}")
-        print(f"   LLM:          {best['llm_model']}")
-        print(f"   Collection:   {best.get('collection', 'N/A')}")
+        print(f"   Experimento:   {best['experiment_name']}")
+        print(f"   Recall REP:    {best.get('recall_REPROVADO', 0)*100:.2f}%")
+        print(f"   F1 REP:        {best.get('f1_REPROVADO', 0)*100:.2f}%")
+        print(f"   Accuracy:      {best['accuracy']*100:.2f}%")
+        print(f"   Latência avg:  {best.get('avg_latency_s', 0):.1f}s")
+        print(f"   Chunking:      {best['chunking']}")
+        print(f"   Retrieval:     {best['retrieval_strategy']} (alpha={best['alpha']})")
+        print(f"   Reranking:     {rerank_str}")
+        print(f"   LLM:           {best['llm_model']}")
+        print(f"   Collection:    {best.get('collection', 'N/A')}")
         print(f"{'='*60}")
     
     # Informar sobre arquivos salvos (caminho amigável)
     display_path = str(output_dir).replace("/app/", "legal-service/")
-    print(f"\n📁 Arquivos salvos em: {display_path}")
+    print(f"\nArquivos salvos em: {display_path}")
     print("")
 
 
 def run_experiments(
     config: Dict,
     experiment_filter: Optional[str] = None,
+    group_filter: Optional[str] = None,
 ) -> List[Dict]:
     """
     Executa experimentos conforme configuração.
@@ -344,6 +384,7 @@ def run_experiments(
     Args:
         config: Configuração carregada do YAML
         experiment_filter: Se especificado, executa apenas este experimento
+        group_filter: Se especificado, executa apenas experimentos deste grupo
     
     Returns:
         Lista de resultados dos experimentos
@@ -358,7 +399,7 @@ def run_experiments(
     
     # Cria diretório se não existir
     output_dir.mkdir(parents=True, exist_ok=True)
-    logger.info(f"📁 Diretório de resultados: {output_dir}")
+    logger.info(f"Diretorio de resultados: {output_dir}")
     
     results = []
     
@@ -367,6 +408,16 @@ def run_experiments(
         if experiment_filter not in experiments:
             raise ValueError(f"Experimento não encontrado: {experiment_filter}")
         experiments_to_run = {experiment_filter: experiments[experiment_filter]}
+    elif group_filter:
+        experiments_to_run = {
+            exp_id: exp_config
+            for exp_id, exp_config in experiments.items()
+            if exp_config.get("enabled", True)
+            and exp_config.get("group", "default") == group_filter
+        }
+        if not experiments_to_run:
+            raise ValueError(f"Nenhum experimento habilitado no grupo: {group_filter}")
+        logger.info(f"Filtrando por grupo: {group_filter}")
     else:
         # Apenas experimentos habilitados
         experiments_to_run = {
@@ -402,6 +453,66 @@ def run_experiments(
     return results
 
 
+def report_all_from_disk(config: Dict) -> None:
+    """
+    Gera relatório consolidado lendo o JSON mais recente de cada experiment_id
+    existente no diretório de resultados.  Não executa nenhum experimento.
+    """
+    evals_dir = Path(__file__).parent.resolve()
+    output_dir = evals_dir / "results"
+
+    if not output_dir.exists():
+        print("Nenhum resultado encontrado.")
+        return
+
+    # Mapear experiment_id → JSON mais recente
+    # Nome dos arquivos: {experiment_id}_{timestamp}.json
+    latest: Dict[str, Path] = {}
+    for json_file in sorted(output_dir.glob("*.json")):
+        # Ignorar comparison_*.json
+        if json_file.name.startswith("comparison"):
+            continue
+        # Extrair experiment_id: tudo antes do último _YYYYMMDD_HHMMSS.json
+        parts = json_file.stem.rsplit("_", 2)
+        if len(parts) >= 3:
+            exp_id = "_".join(parts[:-2])
+        else:
+            exp_id = json_file.stem
+        # Como os arquivos estão ordenados, o último sobrescreve (mais recente)
+        latest[exp_id] = json_file
+
+    if not latest:
+        print("Nenhum resultado de experimento encontrado no diretório de resultados.")
+        return
+
+    # Usar nomes do YAML como fonte de verdade (corrige JSONs antigos com nomes diferentes)
+    experiments_cfg = config.get("experiments", {})
+
+    print(f"\nCarregando resultados de {len(latest)} experimentos do disco...")
+    results = []
+    for exp_id, json_path in sorted(latest.items()):
+        try:
+            with open(json_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            # Garantir que tem experiment.id preenchido
+            if "experiment" not in data:
+                data["experiment"] = {"id": exp_id, "name": exp_id}
+            elif "id" not in data["experiment"]:
+                data["experiment"]["id"] = exp_id
+            # Normalizar nome a partir do YAML (corrige nomes legados)
+            if exp_id in experiments_cfg:
+                data["experiment"]["name"] = experiments_cfg[exp_id].get("name", data["experiment"].get("name", exp_id))
+            results.append(data)
+            logger.info(f"  [OK] {exp_id} ({json_path.name})")
+        except Exception as e:
+            logger.warning(f"  [ERRO] Erro ao ler {json_path.name}: {e}")
+
+    report_config = config.get("report", {})
+    generate_comparison_report(results, output_dir, report_config)
+
+    print(f"\nRelatorio consolidado gerado com {len(results)} experimentos")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Executa experimentos de avaliação de geração do legal-service"
@@ -419,9 +530,20 @@ def main():
         help="Executa apenas o experimento especificado"
     )
     parser.add_argument(
+        "--group",
+        type=str,
+        default=None,
+        help="Executa apenas experimentos do grupo especificado (ex: round1, round2)"
+    )
+    parser.add_argument(
         "--list",
         action="store_true",
         help="Lista experimentos disponíveis e sai"
+    )
+    parser.add_argument(
+        "--report-all",
+        action="store_true",
+        help="Gera relatório consolidado de TODOS os resultados existentes no disco (não executa nada)"
     )
     
     args = parser.parse_args()
@@ -441,25 +563,30 @@ def main():
             list_experiments(config)
             return
         
+        if args.report_all:
+            report_all_from_disk(config)
+            return
+        
         results = run_experiments(
             config=config,
             experiment_filter=args.experiment,
+            group_filter=args.group,
         )
         
         # Resumo final
         successful = sum(1 for r in results if "error" not in r)
         failed = len(results) - successful
         
-        print(f"\n✅ Experimentos concluídos: {successful}")
+        print(f"\nExperimentos concluidos: {successful}")
         if failed > 0:
-            print(f"❌ Experimentos com erro: {failed}")
+            print(f"Experimentos com erro: {failed}")
         
         # Mostrar localização dos resultados
         output_dir = Path(__file__).parent.resolve() / "results"
         
         # Mostra caminho amigável (dentro do container é /app, mas fora é legal-service)
         display_path = str(output_dir).replace("/app/", "legal-service/")
-        print(f"\n📁 Resultados salvos em: {display_path}")
+        print(f"\nResultados salvos em: {display_path}")
         
         # Listar arquivos gerados
         if output_dir.exists():

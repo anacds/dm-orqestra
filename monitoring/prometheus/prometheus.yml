@@ -1,0 +1,46 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: "legal-service"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["legal-service:8005"]
+        labels:
+          service: "legal-service"
+
+  - job_name: "api-gateway"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["api-gateway:8000"]
+        labels:
+          service: "api-gateway"
+
+  - job_name: "content-validation-service"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["content-validation-service:8004"]
+        labels:
+          service: "content-validation-service"
+
+  - job_name: "briefing-enhancer-service"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["briefing-enhancer-service:8001"]
+        labels:
+          service: "briefing-enhancer-service"
+
+  - job_name: "campaigns-service"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["campaigns-service:8003"]
+        labels:
+          service: "campaigns-service"
+
+  - job_name: "auth-service"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["auth-service:8002"]
+        labels:
+          service: "auth-service"

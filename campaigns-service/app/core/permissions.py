@@ -28,8 +28,14 @@ ROLE_VISIBLE_STATUSES = {
     UserRole.BUSINESS_ANALYST: [
         CampaignStatus.DRAFT,
         CampaignStatus.CREATIVE_STAGE,
-        CampaignStatus.CONTENT_REVIEW,
+        CampaignStatus.CONTENT_REVIEW,      # Vê (acompanhamento), mas não age
         CampaignStatus.CONTENT_ADJUSTMENT,
+        CampaignStatus.CAMPAIGN_BUILDING,
+        CampaignStatus.CAMPAIGN_PUBLISHED,
+    ],
+    UserRole.MARKETING_MANAGER: [
+        CampaignStatus.CONTENT_REVIEW,       # Aprova/rejeita peças
+        CampaignStatus.CONTENT_ADJUSTMENT,   # Acompanhamento
         CampaignStatus.CAMPAIGN_BUILDING,
         CampaignStatus.CAMPAIGN_PUBLISHED,
     ],
@@ -45,19 +51,23 @@ ROLE_VISIBLE_STATUSES = {
 }
 
 VALID_TRANSITIONS = {
+    # Analista de Negócios: demandante (briefing → criação)
     (UserRole.BUSINESS_ANALYST, CampaignStatus.DRAFT): [
         CampaignStatus.CREATIVE_STAGE,
     ],
-    (UserRole.BUSINESS_ANALYST, CampaignStatus.CONTENT_REVIEW): [
+    # Gestor de Marketing: aprovador de conteúdo
+    (UserRole.MARKETING_MANAGER, CampaignStatus.CONTENT_REVIEW): [
         CampaignStatus.CAMPAIGN_BUILDING,
         CampaignStatus.CONTENT_ADJUSTMENT,
     ],
+    # Analista de Criação: submete para revisão
     (UserRole.CREATIVE_ANALYST, CampaignStatus.CREATIVE_STAGE): [
         CampaignStatus.CONTENT_REVIEW,
     ],
     (UserRole.CREATIVE_ANALYST, CampaignStatus.CONTENT_ADJUSTMENT): [
         CampaignStatus.CONTENT_REVIEW,
     ],
+    # Analista de Campanhas: publica
     (UserRole.CAMPAIGN_ANALYST, CampaignStatus.CAMPAIGN_BUILDING): [
         CampaignStatus.CAMPAIGN_PUBLISHED,
     ],
@@ -72,6 +82,17 @@ def require_business_analyst(current_user: Dict) -> None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Esta funcionalidade é restrita a analistas de negócios"
+        )
+
+
+def require_marketing_manager(current_user: Dict) -> None:
+    user_role_str = current_user.get("role")
+    user_role = _to_user_role(user_role_str)
+    
+    if user_role != UserRole.MARKETING_MANAGER:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Esta funcionalidade é restrita ao gestor de marketing"
         )
 
 

@@ -6,6 +6,8 @@ from app.config import SERVICE_VERSION, SERVICE_NAME, get_cors_origins, AUTH_SER
 from app.gateway import proxy_request, get_service_url
 from app.rate_limit import limiter, rate_limit_handler, get_rate_limit_for_path
 from app.auth import validate_and_extract_user, should_skip_auth
+from app.metrics import AUTH_VALIDATIONS
+from prometheus_fastapi_instrumentator import Instrumentator
 import logging
 
 logger = logging.getLogger(__name__)
@@ -28,6 +30,13 @@ app.add_middleware(
 )
 
 
+Instrumentator(
+    should_group_status_codes=True,
+    should_ignore_untemplated=True,
+    excluded_handlers=["/metrics", "/health", "/api/health"],
+).instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
+
+
 @app.api_route("/api/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
 @limiter.limit(lambda request: get_rate_limit_for_path(request.url.path))
 async def gateway(request: Request, path: str):
@@ -40,11 +49,15 @@ async def gateway(request: Request, path: str):
     if not should_skip_auth(full_path):
         user_context = await validate_and_extract_user(request)
         if not user_context:
+            AUTH_VALIDATIONS.labels(result="failure").inc()
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Could not validate credentials",
                 headers={"WWW-Authenticate": "Bearer"},
             )
+        AUTH_VALIDATIONS.labels(result="success").inc()
+    else:
+        AUTH_VALIDATIONS.labels(result="skipped").inc()
     
     service_url = get_service_url(full_path)
     

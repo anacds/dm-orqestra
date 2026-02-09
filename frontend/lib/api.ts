@@ -197,7 +197,7 @@ export const campaignsAPI = {
 
   submitForReview: async (
     campaignId: string,
-    pieceReviews: { channel: string; pieceId: string; commercialSpace?: string; iaVerdict: string }[]
+    pieceReviews: { channel: string; pieceId: string; commercialSpace?: string; iaVerdict: string | null }[]
   ): Promise<Campaign> => {
     return await fetchAPI<CampaignResponse>(`/campaigns/${campaignId}/submit-for-review`, {
       method: "POST",
@@ -218,6 +218,22 @@ export const campaignsAPI = {
     if (params.rejectionReason != null) body.rejectionReason = params.rejectionReason;
     return await fetchAPI<CampaignResponse>(`/campaigns/${campaignId}/pieces/review`, {
       method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
+  updateIaVerdict: async (
+    campaignId: string,
+    params: { channel: string; pieceId: string; commercialSpace?: string; iaVerdict: "approved" | "rejected" }
+  ): Promise<Campaign> => {
+    const body: Record<string, unknown> = {
+      channel: params.channel,
+      pieceId: params.pieceId,
+      iaVerdict: params.iaVerdict,
+    };
+    if (params.commercialSpace != null) body.commercialSpace = params.commercialSpace;
+    return await fetchAPI<CampaignResponse>(`/campaigns/${campaignId}/piece-reviews/ia-verdict`, {
+      method: "PATCH",
       body: JSON.stringify(body),
     });
   },
@@ -270,28 +286,32 @@ function mapContentValidationToAnalyzePieceResponse(
   campaignId: string,
   channel: "SMS" | "Push" | "E-mail" | "App"
 ): AnalyzePieceResponse {
-  const status = raw.final_verdict?.status;
+  // O backend retorna final_verdict.decision: APROVADO | REPROVADO (binário)
+  const verdictDecision = raw.final_verdict?.decision;
   const comp = raw.compliance_result as { summary?: string; decision?: string } | undefined;
-  const decision = comp?.decision;
 
-  let is_valid: "valid" | "invalid" | "warning" = "warning";
-  if (status === "approved" || decision === "APROVADO") is_valid = "valid";
-  else if (status === "rejected" || decision === "REPROVADO") is_valid = "invalid";
-  else if (raw.requires_human_approval) is_valid = "warning";
+  let is_valid: "valid" | "invalid" = "invalid";
+  if (verdictDecision === "APROVADO") {
+    is_valid = "valid";
+  } else if (comp?.decision === "APROVADO" && !verdictDecision) {
+    // Fallback: se final_verdict não definido, usa compliance
+    is_valid = "valid";
+  }
 
+  // Texto: prioriza final_verdict.summary > compliance.summary > specs errors > validation_result.message
+  const verdictSummary = raw.final_verdict?.summary;
+  const compSummary = comp?.summary;
   const val = raw.validation_result as { message?: string } | undefined;
   const valMsg = typeof val?.message === "string" ? val.message : null;
   const useValMessage = valMsg && !INTERNAL_ROUTING_MESSAGE.test(valMsg.trim());
 
   const analysis_text =
-    (typeof comp?.summary === "string" && comp.summary.length > 0 ? comp.summary : null) ??
-    (typeof raw.final_verdict?.message === "string" && raw.final_verdict.message.length > 0
-      ? raw.final_verdict.message
-      : null) ??
-    (useValMessage ? valMsg : null) ??
+    (typeof verdictSummary === "string" && verdictSummary.length > 0 ? verdictSummary : null) ??
+    (typeof compSummary === "string" && compSummary.length > 0 ? compSummary : null) ??
     (typeof raw.human_approval_reason === "string" && raw.human_approval_reason.length > 0
       ? raw.human_approval_reason
       : null) ??
+    (useValMessage ? valMsg : null) ??
     "—";
 
   return {
@@ -353,13 +373,12 @@ export const aiAPI = {
   getAnalysis: async (
     campaignId: string,
     channel: "SMS" | "Push" | "E-mail" | "App",
-    opts: { contentHash?: string; pieceId?: string; commercialSpace?: string }
+    opts: { pieceId?: string; commercialSpace?: string } = {}
   ): Promise<AnalyzePieceResponse | null> => {
     const apiCh = getApiChannelForFetch(channel);
-    let params: string;
+    let params = "";
     if (apiCh === "SMS" || apiCh === "PUSH") {
-      if (!opts.contentHash) return null;
-      params = `?content_hash=${encodeURIComponent(opts.contentHash)}`;
+      // Backend retorna a entrada mais recente — nenhum parâmetro extra necessário
     } else if (apiCh === "EMAIL") {
       if (!opts.pieceId) return null;
       params = `?piece_id=${encodeURIComponent(opts.pieceId)}`;

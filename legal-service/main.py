@@ -12,6 +12,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import logging
+from prometheus_fastapi_instrumentator import Instrumentator
 
 logging.basicConfig(
     level=logging.INFO,
@@ -58,6 +59,13 @@ app.add_middleware(
 )
 
 app.include_router(router, prefix="/api/legal", tags=["legal"])
+
+# Prometheus: instrumentação HTTP automática + endpoint /metrics
+Instrumentator(
+    should_group_status_codes=True,
+    should_ignore_untemplated=True,
+    excluded_handlers=["/metrics", "/health"],
+).instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
 
 # A2A Protocol (independent of REST). Mount at /a2a so that:
 # - GET  /a2a/.well-known/agent-card.json

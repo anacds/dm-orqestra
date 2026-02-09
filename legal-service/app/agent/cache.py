@@ -4,6 +4,7 @@ import logging
 from typing import Optional, Dict, Any
 import redis
 from app.core.config import settings
+from app.core.metrics import CACHE_OPERATIONS
 
 logger = logging.getLogger(__name__)
 
@@ -60,12 +61,15 @@ class CacheManager:
             
             if cached_value:
                 result = json.loads(cached_value)
+                CACHE_OPERATIONS.labels(operation="get", result="hit").inc()
                 logger.info(f"Cache HIT para task={task}, channel={channel}")
                 return result
             else:
+                CACHE_OPERATIONS.labels(operation="get", result="miss").inc()
                 logger.debug(f"Cache MISS para task={task}, channel={channel}")
                 return None
         except Exception as e:
+            CACHE_OPERATIONS.labels(operation="get", result="error").inc()
             logger.error(f"Erro ao buscar do cache: {e}", exc_info=True)
             return None
     
@@ -77,9 +81,11 @@ class CacheManager:
             cache_key = self._generate_key(task, channel, content)
             result_json = json.dumps(result, ensure_ascii=False)
             self.redis_client.setex(cache_key, self.ttl, result_json)
+            CACHE_OPERATIONS.labels(operation="set", result="ok").inc()
             logger.info(f"Cache SET para task={task}, channel={channel}, TTL={self.ttl}s")
             return True
         except Exception as e:
+            CACHE_OPERATIONS.labels(operation="set", result="error").inc()
             logger.error(f"Erro ao armazenar no cache: {e}", exc_info=True)
             return False
     

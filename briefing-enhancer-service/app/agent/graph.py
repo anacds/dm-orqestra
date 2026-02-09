@@ -8,8 +8,10 @@ from app.agent.nodes import fetch_field_info, enhance_text
 from app.core.checkpointer import get_checkpoint_saver
 from app.agent.schemas import EnhancedTextResponse
 from langsmith import traceable
+from app.core.metrics import ENHANCEMENT_TOTAL, ENHANCEMENT_DURATION, LLM_INVOCATIONS
 import logging
 import os
+import time
 import yaml
 from pathlib import Path
 
@@ -97,6 +99,11 @@ async def run_enhancement_graph(
     timeout = int(enhancement.get("timeout", 20))
     max_retries = int(enhancement.get("max_retries", 2))
 
+    def _is_reasoning_model(name: str) -> bool:
+        """Detecta modelos de raciocínio (OpenAI o-series e gpt-5)."""
+        _lower = name.lower()
+        return any(tag in _lower for tag in ("gpt-5", "o1", "o3", "o4"))
+
     # caso não tenha api key da MaritacaAI, usa OpenAI
     if maritaca_api_key:
         provider = "maritaca"
@@ -111,17 +118,34 @@ async def run_enhancement_graph(
         base_url = "https://api.openai.com/v1"
         api_key = openai_api_key
 
-    chat_model = ChatOpenAI(
-        model=model_name,
-        api_key=api_key,
-        base_url=base_url,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        timeout=timeout,
-        max_retries=max_retries,
-    )
+    if _is_reasoning_model(model_name):
+        # Modelos de raciocínio: usam max_completion_tokens
+        # (reasoning_tokens + resposta), não suportam temperature
+        chat_model = ChatOpenAI(
+            model=model_name,
+            api_key=api_key,
+            base_url=base_url,
+            timeout=timeout,
+            max_retries=max_retries,
+            model_kwargs={"max_completion_tokens": max(max_tokens, 8000)},
+        )
+        logger.info(
+            f"Reasoning model detected: '{model_name}' — "
+            f"using max_completion_tokens={max(max_tokens, 8000)}, no temperature"
+        )
+    else:
+        chat_model = ChatOpenAI(
+            model=model_name,
+            api_key=api_key,
+            base_url=base_url,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            timeout=timeout,
+            max_retries=max_retries,
+        )
     
     logger.info(f"Using provider={provider}, model={model_name}, base_url={base_url}")
+    LLM_INVOCATIONS.labels(provider=provider, model=model_name).inc()
 
     moderation_model = moderation.get("name", "omni-moderation-latest")
     moderation_check_input = moderation.get("check_input", True)
@@ -156,7 +180,8 @@ async def run_enhancement_graph(
             use_checkpointing = False  
     
     graph = create_enhancement_graph(db, agent, checkpointer=checkpointer)
-    
+    _start = time.perf_counter()
+
     if checkpointer and thread_id:
         initial_state: EnhancementGraphState = {
             "field_name": field_name,
@@ -210,15 +235,21 @@ async def run_enhancement_graph(
         result = await graph.ainvoke(full_initial_state)
         logger.info("Graph execution completed without checkpointing")
     
+    _elapsed = time.perf_counter() - _start
     enhanced_text = result.get("enhanced_text", "")
     explanation = result.get("explanation", "No enhancement was generated.")
     
     if not enhanced_text and explanation and "moderação" in explanation.lower():
+        ENHANCEMENT_TOTAL.labels(field_name=field_name, provider=provider, status="moderation").inc()
+        ENHANCEMENT_DURATION.labels(field_name=field_name, provider=provider).observe(_elapsed)
         return {
             "enhanced_text": "",
             "explanation": explanation
         }
     
+    ENHANCEMENT_TOTAL.labels(field_name=field_name, provider=provider, status="success").inc()
+    ENHANCEMENT_DURATION.labels(field_name=field_name, provider=provider).observe(_elapsed)
+
     return {
         "enhanced_text": enhanced_text or text,
         "explanation": explanation

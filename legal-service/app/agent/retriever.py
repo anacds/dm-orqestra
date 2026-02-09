@@ -1,10 +1,16 @@
 import logging
 import os
+import time
 from typing import List, Dict, Optional
 import weaviate
 from weaviate.classes.query import MetadataQuery, Filter, Rerank
 from app.core.config import settings
 from app.core.models_config import load_models_config
+from app.core.metrics import (
+    RAG_RETRIEVAL_DURATION,
+    RAG_EMBEDDING_DURATION,
+    RAG_DOCUMENTS_RETRIEVED,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +91,7 @@ class HybridWeaviateRetriever:
     
     def _get_embedding(self, text: str) -> List[float]:
         """Generate embedding vector for text using OpenAI."""
+        start = time.perf_counter()
         try:
             from openai import OpenAI
             client = OpenAI(api_key=settings.OPENAI_API_KEY)
@@ -92,8 +99,14 @@ class HybridWeaviateRetriever:
                 model=self.embedding_model,
                 input=text
             )
+            RAG_EMBEDDING_DURATION.labels(model=self.embedding_model).observe(
+                time.perf_counter() - start
+            )
             return response.data[0].embedding
         except Exception as e:
+            RAG_EMBEDDING_DURATION.labels(model=self.embedding_model).observe(
+                time.perf_counter() - start
+            )
             logger.error(f"Error generating embedding: {e}")
             raise
     
@@ -184,10 +197,25 @@ class HybridWeaviateRetriever:
                 query_embedding = self._get_embedding(embedding_input)
                 search_query = query
             
+            # Weaviate v1.29 + client v4: near_vector/bm25 endpoints falham
+            # silenciosamente com Rerank + filters via gRPC.  Solução segura:
+            # usar sempre hybrid com alpha ajustado nos extremos.
+            #   alpha=1.0 → 0.99 (quase puro vetor, BM25 residual ~1%)
+            #   alpha=0.0 → 0.01 (quase puro BM25, vetor residual ~1%)
+            effective_alpha = alpha
+            if alpha == 1.0:
+                effective_alpha = 0.99
+                logger.info("[RETRIEVAL] alpha=1.0 → hybrid(0.99) — vetor dominante")
+            elif alpha == 0.0:
+                effective_alpha = 0.01
+                logger.info("[RETRIEVAL] alpha=0.0 → hybrid(0.01) — BM25 dominante")
+            else:
+                logger.info(f"[RETRIEVAL] Usando hybrid (alpha={alpha})")
+            
             query_kwargs = {
                 "query": search_query,
                 "vector": query_embedding,
-                "alpha": alpha,
+                "alpha": effective_alpha,
                 "limit": retrieval_limit,
                 "return_metadata": MetadataQuery(
                     score=True,
@@ -212,13 +240,20 @@ class HybridWeaviateRetriever:
             if where_filter:
                 query_kwargs["filters"] = where_filter
             
+            search_start = time.perf_counter()
             try:
                 response = collection.query.hybrid(**query_kwargs)
             except Exception as e:
                 logger.error(f"[RETRIEVAL] Hybrid query failed: {e}")
                 raise
+            finally:
+                RAG_RETRIEVAL_DURATION.labels(
+                    channel=channel or "unknown",
+                    rerank_enabled=str(rerank_enabled),
+                ).observe(time.perf_counter() - search_start)
             
             total_retrieved = len(response.objects) if response.objects else 0
+            RAG_DOCUMENTS_RETRIEVED.labels(channel=channel or "unknown").observe(total_retrieved)
             
             if rerank_enabled:
                 logger.info(

@@ -8,6 +8,7 @@ from slowapi.middleware import SlowAPIMiddleware
 from app.routes import router
 from app.core.config import settings
 from app.core.rate_limit import limiter, rate_limit_handler
+from prometheus_fastapi_instrumentator import Instrumentator
 
 app = FastAPI(
     title="Orqestra Auth Service",
@@ -28,6 +29,12 @@ app.add_middleware(
 )
 
 app.include_router(router, prefix="/api/auth", tags=["auth"])
+
+Instrumentator(
+    should_group_status_codes=True,
+    should_ignore_untemplated=True,
+    excluded_handlers=["/metrics", "/health", "/api/health"],
+).instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
 
 @app.get("/api/health")
 async def health_check():

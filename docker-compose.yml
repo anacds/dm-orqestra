@@ -58,25 +58,6 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  campaigns-mcp-server:
-    build:
-      context: ./campaigns-mcp-server
-      dockerfile: Dockerfile
-    ports:
-      - "8010:8010"
-    environment:
-      - CAMPAIGNS_SERVICE_URL=http://campaigns-service:8003
-      - PORT=8010
-      - MCP_SERVICE_USER_ID=svc-mcp-campaigns
-      - MCP_SERVICE_USER_EMAIL=mcp-campaigns@internal
-      - MCP_SERVICE_USER_ROLE=Analista de criação
-      - MCP_SERVICE_USER_IS_ACTIVE=true
-      - HTTP_TIMEOUT=30
-    depends_on:
-      campaigns-service:
-        condition: service_started
-    restart: unless-stopped
-
   html-converter-service:
     build:
       context: ./html-converter-service
@@ -104,6 +85,8 @@ services:
       - "8001:8001"
     env_file:
       - ./briefing-enhancer-service/.env
+    volumes:
+      - ./briefing-enhancer-service/evals/results:/app/evals/results
     environment:
       - DATABASE_URL=postgresql://orqestra:orqestra_password@db:5432/briefing_enhancer
       - ENVIRONMENT=development
@@ -134,7 +117,7 @@ services:
       - CORS_ORIGINS=["http://localhost:3000"]
       - AUTH_SERVICE_URL=http://auth-service:8002
       - LEGAL_SERVICE_URL=http://legal-service:8005
-      - CAMPAIGNS_MCP_URL=http://campaigns-mcp-server:8010
+      - CAMPAIGNS_MCP_URL=http://campaigns-service:8003
       - HTML_CONVERTER_MCP_URL=http://html-converter-service:8011
       - BRANDING_MCP_URL=http://branding-service:8012
       - A2A_BASE_URL=http://content-validation-service:8004
@@ -147,7 +130,7 @@ services:
         condition: service_started
       legal-service:
         condition: service_started
-      campaigns-mcp-server:
+      campaigns-service:
         condition: service_started
       html-converter-service:
         condition: service_started
@@ -300,8 +283,89 @@ services:
         condition: service_healthy
     restart: "no"
 
+  # --- Observabilidade ---
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=7d"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=orqestra
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+  # --- Business Intelligence (Metabase) ---
+  metabase-db-init:
+    image: postgres:16-alpine
+    entrypoint: ["sh", "-c", "PGPASSWORD=orqestra_password psql -h db -U orqestra -d postgres -tc \"SELECT 1 FROM pg_database WHERE datname='metabase'\" | grep -q 1 && echo 'DB metabase already exists' || (PGPASSWORD=orqestra_password psql -h db -U orqestra -d postgres -c 'CREATE DATABASE metabase' && echo 'DB metabase created')"]
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  metabase:
+    image: metabase/metabase:v0.52.5
+    ports:
+      - "3002:3000"
+    environment:
+      - MB_DB_TYPE=postgres
+      - MB_DB_DBNAME=metabase
+      - MB_DB_PORT=5432
+      - MB_DB_USER=orqestra
+      - MB_DB_PASS=orqestra_password
+      - MB_DB_HOST=db
+      - MB_DB_CONNECTION_URI=postgres://orqestra:orqestra_password@db:5432/metabase?sslmode=disable
+      - MB_JETTY_PORT=3000
+      - MB_ANON_TRACKING_ENABLED=false
+    depends_on:
+      db:
+        condition: service_healthy
+      metabase-db-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 90s
+    volumes:
+      - metabase_data:/metabase.db
+    restart: unless-stopped
+
+  metabase-init:
+    build:
+      context: ./monitoring/metabase
+      dockerfile: Dockerfile
+    depends_on:
+      metabase:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    restart: "no"
+
 volumes:
   postgres_data:
   localstack_data:
   weaviate_data:
   redis_data:
+  prometheus_data:
+  grafana_data:
+  metabase_data:

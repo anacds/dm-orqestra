@@ -175,7 +175,7 @@ class PieceReviewItem(BaseModel):
     channel: str = Field(..., description="SMS | PUSH | EMAIL | APP")
     piece_id: str = Field(..., alias="pieceId")
     commercial_space: Optional[str] = Field(None, alias="commercialSpace")
-    ia_verdict: str = Field(..., alias="iaVerdict", description="approved | rejected | warning")
+    ia_verdict: Optional[str] = Field(None, alias="iaVerdict", description="approved | rejected | null (não validado por IA)")
 
     model_config = {"populate_by_name": True}
 
@@ -196,7 +196,7 @@ class PieceReviewResponse(BaseModel):
     channel: str
     piece_id: str = Field(alias="pieceId")
     commercial_space: str = Field(alias="commercialSpace", default="")
-    ia_verdict: str = Field(alias="iaVerdict")
+    ia_verdict: Optional[str] = Field(None, alias="iaVerdict")
     human_verdict: str = Field(alias="humanVerdict")
     reviewed_at: Optional[datetime] = Field(None, alias="reviewedAt")
     reviewed_by: Optional[str] = Field(None, alias="reviewedBy")
@@ -214,6 +214,21 @@ class ReviewPieceRequest(BaseModel):
     commercial_space: Optional[str] = Field(None, alias="commercialSpace")
     action: str = Field(..., description="approve | reject | manually_reject")
     rejection_reason: Optional[str] = Field(None, alias="rejectionReason", max_length=2000)
+
+    model_config = {"populate_by_name": True}
+
+
+class UpdateIaVerdictRequest(BaseModel):
+    """Request body for PATCH /campaigns/{id}/piece-reviews/ia-verdict.
+
+    Usado pelo Gestor de Marketing para registrar resultado de validação de IA
+    em peças que foram submetidas sem parecer de IA.
+    """
+
+    channel: str = Field(..., description="SMS | PUSH | EMAIL | APP")
+    piece_id: str = Field(..., alias="pieceId")
+    commercial_space: Optional[str] = Field(None, alias="commercialSpace")
+    ia_verdict: str = Field(..., alias="iaVerdict", description="approved | rejected")
 
     model_config = {"populate_by_name": True}
 

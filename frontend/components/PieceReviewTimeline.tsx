@@ -1,5 +1,5 @@
 import { PieceReviewEvent } from "@shared/api";
-import { CheckCircle, XCircle, Send, AlertTriangle } from "lucide-react";
+import { CheckCircle, XCircle, Send, AlertTriangle, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface PieceReviewTimelineProps {
@@ -23,6 +23,11 @@ const EVENT_CONFIG: Record<string, { icon: React.ReactNode; label: string; color
     icon: <XCircle className="h-4 w-4" />,
     label: "Rejeitado",
     colorClass: "bg-red-500",
+  },
+  IA_VALIDATED: {
+    icon: <Sparkles className="h-4 w-4" />,
+    label: "Validado por IA (pós-submissão)",
+    colorClass: "bg-purple-500",
   },
   MANUALLY_REJECTED: {
     icon: <AlertTriangle className="h-4 w-4" />,
@@ -56,8 +61,6 @@ function getIaVerdictLabel(verdict: string | undefined): { label: string; classN
       return { label: "Aprovado", className: "text-green-600" };
     case "rejected":
       return { label: "Rejeitado", className: "text-red-600" };
-    case "warning":
-      return { label: "Atenção", className: "text-yellow-600" };
     default:
       return { label: verdict, className: "" };
   }
@@ -127,7 +130,7 @@ export function PieceReviewTimeline({ events, channel, pieceId }: PieceReviewTim
 
               {/* Event details */}
               <div className="mt-1 space-y-1">
-                {event.eventType === "SUBMITTED" && event.iaVerdict && (
+                {(event.eventType === "SUBMITTED" || event.eventType === "IA_VALIDATED") && event.iaVerdict && (
                   <p className="text-xs">
                     Parecer IA:{" "}
                     <span className={cn("font-medium", iaVerdict.className)}>

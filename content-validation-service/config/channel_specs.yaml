@@ -1,0 +1,61 @@
+# ============================================================================
+# Especificações técnicas por canal e espaço comercial
+# Usadas pelo validate_specs_node para validação determinística (fail-fast)
+# antes de enviar ao legal-service / branding-service.
+# ============================================================================
+
+channels:
+  SMS:
+    body:
+      min_chars: 1
+      max_chars: 160
+
+  PUSH:
+    title:
+      min_chars: 1
+      max_chars: 50
+    body:
+      min_chars: 1
+      max_chars: 150
+
+  EMAIL:
+    html:
+      min_chars: 1
+      max_weight_kb: 100    # Peso máximo do HTML em KB
+    rendered_image:
+      max_weight_kb: 500    # Peso máximo da imagem renderizada
+
+  APP:
+    image:
+      max_weight_kb: 1024   # 1 MB
+      min_width: 300
+      min_height: 300
+      max_width: 4096
+      max_height: 4096
+    # Specs por espaço comercial (override do default)
+    commercial_spaces:
+      stories:
+        width: 1080
+        height: 1920
+        tolerance_pct: 5      # Tolerância de 5% nas dimensões
+        max_weight_kb: 500
+      banner_home:
+        width: 1200
+        height: 628
+        tolerance_pct: 5
+        max_weight_kb: 300
+      banner_secundario:
+        width: 600
+        height: 314
+        tolerance_pct: 5
+        max_weight_kb: 200
+      popup:
+        width: 800
+        height: 600
+        tolerance_pct: 10
+        max_weight_kb: 400
+      fullscreen:
+        width: 1080
+        height: 1920
+        tolerance_pct: 5
+        max_weight_kb: 800

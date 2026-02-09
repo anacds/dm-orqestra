@@ -138,6 +138,7 @@ export default function Dashboard() {
       case "Analista de negócios": return "Analista de Negócios";
       case "Analista de criação": return "Analista de Criação";
       case "Analista de campanhas": return "Analista de Campanhas";
+      case "Gestor de marketing": return "Gestor de Marketing";
       default: return role || "Usuário";
     }
   };

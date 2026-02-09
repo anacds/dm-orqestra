@@ -17,3 +17,11 @@ a2a-sdk[http-server]>=0.3.0
 sqlalchemy>=2.0.0
 alembic>=1.13.0
 psycopg2-binary>=2.9.9
+
+# Specs validation
+PyYAML>=6.0
+Pillow>=10.0.0
+
+# Observability
+prometheus-client>=0.21.0
+prometheus-fastapi-instrumentator>=7.0.0

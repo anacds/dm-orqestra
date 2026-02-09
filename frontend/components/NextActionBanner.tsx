@@ -43,7 +43,7 @@ function getNextAction(
   const role = currentUser.role;
   const status = campaign.status;
 
-  // Analista de Negócios
+  // Analista de Negócios (demandante)
   if (role === "Analista de negócios") {
     if (status === "DRAFT" && campaign.createdBy === currentUser.id) {
       return {
@@ -55,6 +55,20 @@ function getNextAction(
         borderColor: "border-blue-200 dark:border-blue-800",
       };
     }
+    if (status === "CONTENT_REVIEW") {
+      return {
+        icon: <Eye className="h-5 w-5" />,
+        title: "Conteúdo em revisão pelo Gestor de Marketing",
+        description: "As peças estão sendo avaliadas. Você pode acompanhar o andamento.",
+        color: "text-yellow-700",
+        bgColor: "bg-yellow-50 dark:bg-yellow-950/30",
+        borderColor: "border-yellow-200 dark:border-yellow-800",
+      };
+    }
+  }
+
+  // Gestor de Marketing (aprovador de conteúdo)
+  if (role === "Gestor de marketing") {
     if (status === "CONTENT_REVIEW") {
       if (totalPieceCount === 0) {
         return {

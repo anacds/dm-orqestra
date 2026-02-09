@@ -33,3 +33,7 @@ redis>=5.0.0
 # Logging
 structlog>=24.1.0
 
+# Observability
+prometheus-client>=0.21.0
+prometheus-fastapi-instrumentator>=7.0.0
+

@@ -11,9 +11,10 @@ from app.core.database import Base
 
 class PieceReviewEventType(str, enum.Enum):
     SUBMITTED = "SUBMITTED"  # Analista de criação submeteu para revisão
-    APPROVED = "APPROVED"  # Analista de arte aprovou
-    REJECTED = "REJECTED"  # Analista de arte rejeitou (confirmando IA)
-    MANUALLY_REJECTED = "MANUALLY_REJECTED"  # Analista de arte rejeitou (override da IA)
+    IA_VALIDATED = "IA_VALIDATED"  # Gestor de marketing disparou validação de IA (pós-submissão)
+    APPROVED = "APPROVED"  # Gestor de marketing aprovou
+    REJECTED = "REJECTED"  # Gestor de marketing rejeitou (confirmando IA)
+    MANUALLY_REJECTED = "MANUALLY_REJECTED"  # Gestor de marketing rejeitou (override da IA)
 
 
 class PieceReviewEvent(Base):

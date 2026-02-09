@@ -12,26 +12,9 @@ import { campaignsAPI, authAPI, aiAPI, creativePiecesAPI, type AnalyzePieceInput
 import { Campaign, Comment, CampaignStatus, AnalyzePieceResponse, PieceReviewEvent, CampaignStatusEvent } from "@shared/api";
 import { format, formatDistanceToNow } from "date-fns";
 
-// Helper function to calculate content hash (same logic as backend)
-// SMS: uses "body" field (same as backend content_hash_sms)
-// Push: uses "title" and "body" fields (same as backend content_hash_push)
-async function calculateContentHash(channel: "SMS" | "Push", content: { text?: string; title?: string; body?: string }): Promise<string> {
-  let contentStr = "";
-  if (channel === "SMS") {
-    // Backend uses ch.get("body") for SMS, so we use content.body (or content.text as fallback)
-    const smsBody = content.body || content.text || "";
-    contentStr = `SMS:${smsBody}`;
-  } else if (channel === "Push") {
-    contentStr = `Push:${content.title || ""}:${content.body || ""}`;
-  }
-  
-  // Use Web Crypto API to calculate SHA-256 hash (same as backend)
-  const encoder = new TextEncoder();
-  const data = encoder.encode(contentStr);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-}
+// Content hash calculation removed — backend handles cache lookup internally.
+// For SMS/PUSH: backend returns the latest cached result for (campaign_id, channel).
+// For EMAIL/APP: backend uses piece_id / commercial_space.
 
 // Helper function to download a creative piece via backend proxy
 async function downloadCreativePiece(
@@ -127,6 +110,8 @@ export default function CampaignDetail() {
   const [isAnalyzingEmail, setIsAnalyzingEmail] = useState(false);
   const [isAnalyzingAppBySpace, setIsAnalyzingAppBySpace] = useState<Record<string, boolean>>({});
   const isAnalyzingAnyApp = Object.values(isAnalyzingAppBySpace).some(Boolean);
+  const [mmValidatingPiece, setMmValidatingPiece] = useState<string | null>(null); // key: "channel:pieceId:space"
+  const [mmAnalysisResults, setMmAnalysisResults] = useState<Record<string, AnalyzePieceResponse>>({}); // key → resultado
   const [statusError, setStatusError] = useState<string | null>(null);
   const [emailUploadError, setEmailUploadError] = useState<string | null>(null);
   const [skipEmailAnalysisFetch, setSkipEmailAnalysisFetch] = useState(false);
@@ -237,8 +222,7 @@ export default function CampaignDetail() {
       
       if (smsPiece && smsPiece.text) {
         try {
-          const contentHash = await calculateContentHash("SMS", { body: smsPiece.text });
-          const analysis = await aiAPI.getAnalysis(id, "SMS", { contentHash });
+          const analysis = await aiAPI.getAnalysis(id, "SMS");
           setSubmittedSmsAnalysis(analysis);
         } catch {
           setSubmittedSmsAnalysis(null);
@@ -249,8 +233,7 @@ export default function CampaignDetail() {
 
       if (pushPiece && (pushPiece.title || pushPiece.body)) {
         try {
-          const contentHash = await calculateContentHash("Push", { title: pushPiece.title, body: pushPiece.body });
-          const analysis = await aiAPI.getAnalysis(id, "Push", { contentHash });
+          const analysis = await aiAPI.getAnalysis(id, "Push");
           setSubmittedPushAnalysis(analysis);
         } catch {
           setSubmittedPushAnalysis(null);
@@ -342,7 +325,7 @@ export default function CampaignDetail() {
   });
 
   const submitForReviewMutation = useMutation({
-    mutationFn: (pieceReviews: { channel: string; pieceId: string; commercialSpace?: string; iaVerdict: string }[]) =>
+    mutationFn: (pieceReviews: { channel: string; pieceId: string; commercialSpace?: string; iaVerdict: string | null }[]) =>
       campaignsAPI.submitForReview(id!, pieceReviews),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["campaign", id] });
@@ -387,11 +370,10 @@ export default function CampaignDetail() {
         setSmsSubmitted(true);
         setTimeout(() => setSmsSubmitted(false), 3000);
 
-        // Always calculate hash from submitted values (don't rely on smsAnalysis state)
+        // Backend returns the latest cached result for this campaign+channel
         let analysis: AnalyzePieceResponse | null = null;
         try {
-          const contentHash = await calculateContentHash("SMS", { body: variables.text || "" });
-          analysis = await aiAPI.getAnalysis(id!, "SMS", { contentHash });
+          analysis = await aiAPI.getAnalysis(id!, "SMS");
         } catch {
           /* no stored analysis */
         }
@@ -404,18 +386,15 @@ export default function CampaignDetail() {
         setPushSubmitted(true);
         setTimeout(() => setPushSubmitted(false), 3000);
 
-        // Always calculate hash from submitted values (don't rely on pushAnalysis state)
-        // This ensures we get the correct cached analysis for what was actually submitted
+        // Backend returns the latest cached result for this campaign+channel
         let analysis: AnalyzePieceResponse | null = null;
         try {
-          const contentHash = await calculateContentHash("Push", { title: variables.title, body: variables.body });
-          analysis = await aiAPI.getAnalysis(id!, "Push", { contentHash });
+          analysis = await aiAPI.getAnalysis(id!, "Push");
         } catch {
           /* no stored analysis */
         }
-        // If no cached analysis found but we have a current pushAnalysis for the same content, use it
+        // If no cached analysis found but we have a current pushAnalysis, use it as fallback
         if (!analysis && pushAnalysis) {
-          // Only use pushAnalysis if it matches what we just submitted
           analysis = pushAnalysis;
         }
         setSubmittedPushAnalysis(analysis);
@@ -490,7 +469,62 @@ export default function CampaignDetail() {
     }
   };
 
-  
+  // --- Marketing Manager: Validar com IA (peças sem parecer de IA) ---
+  const handleMmValidateWithIa = async (
+    pr: { channel: string; pieceId: string; commercialSpace?: string }
+  ) => {
+    if (!id || !campaign) return;
+    const key = `${pr.channel}:${pr.pieceId}:${pr.commercialSpace || ""}`;
+    setMmValidatingPiece(key);
+    try {
+      const ch = pr.channel.toUpperCase();
+      let input: AnalyzePieceInput;
+
+      if (ch === "SMS") {
+        const piece = campaign.creativePieces?.find(p => p.pieceType === "SMS");
+        if (!piece?.text) throw new Error("Conteúdo SMS não encontrado");
+        input = { channel: "SMS", content: { body: piece.text } };
+      } else if (ch === "PUSH") {
+        const piece = campaign.creativePieces?.find(p => p.pieceType === "Push");
+        if (!piece?.title || !piece?.body) throw new Error("Conteúdo Push não encontrado");
+        input = { channel: "Push", content: { title: piece.title, body: piece.body } };
+      } else if (ch === "EMAIL") {
+        const piece = campaign.creativePieces?.find(p => p.pieceType === "E-mail");
+        if (!piece?.id) throw new Error("Peça de e-mail não encontrada");
+        input = { channel: "EMAIL", content: { campaign_id: id, piece_id: piece.id } };
+      } else if (ch === "APP") {
+        const piece = campaign.creativePieces?.find(p => p.pieceType === "App");
+        if (!piece?.id || !pr.commercialSpace) throw new Error("Peça App não encontrada");
+        input = { channel: "APP", content: { campaign_id: id, piece_id: piece.id, commercial_space: pr.commercialSpace } };
+      } else {
+        throw new Error(`Canal desconhecido: ${ch}`);
+      }
+
+      // 1. Executar validação de IA
+      const result = await aiAPI.analyzePiece(id, input);
+      const iaVerdict: "approved" | "rejected" = result.is_valid === "valid" ? "approved" : "rejected";
+
+      // 2. Guardar resultado para exibir justificativas
+      setMmAnalysisResults(prev => ({ ...prev, [key]: result }));
+
+      // 3. Atualizar ia_verdict no piece_review
+      await campaignsAPI.updateIaVerdict(id, {
+        channel: ch,
+        pieceId: pr.pieceId,
+        commercialSpace: pr.commercialSpace,
+        iaVerdict,
+      });
+
+      queryClient.invalidateQueries({ queryKey: ["campaign", id] });
+      queryClient.invalidateQueries({ queryKey: ["campaigns"] });
+    } catch (error: any) {
+      setStatusError(error.message || "Erro ao validar com IA");
+      setTimeout(() => setStatusError(null), 5000);
+    } finally {
+      setMmValidatingPiece(null);
+    }
+  };
+
   useEffect(() => {
     setSmsAnalysis(null);
   }, [smsText]);
@@ -741,18 +775,16 @@ export default function CampaignDetail() {
     return "SMS";
   };
 
-  const buildPieceReviewsForSubmit = (): { channel: string; pieceId: string; commercialSpace?: string; iaVerdict: string }[] => {
+  const buildPieceReviewsForSubmit = (): { channel: string; pieceId: string; commercialSpace?: string; iaVerdict: string | null }[] => {
     if (!campaign?.creativePieces?.length) return [];
-    const out: { channel: string; pieceId: string; commercialSpace?: string; iaVerdict: string }[] = [];
+    const out: { channel: string; pieceId: string; commercialSpace?: string; iaVerdict: string | null }[] = [];
     const smsPiece = campaign.creativePieces.find(p => p.pieceType === "SMS");
     const pushPiece = campaign.creativePieces.find(p => p.pieceType === "Push");
     const emailPiece = campaign.creativePieces.find(p => p.pieceType === "E-mail");
     const appPiece = campaign.creativePieces.find(p => p.pieceType === "App");
-    const toIa = (a: AnalyzePieceResponse | null | undefined) => {
-      if (!a) return "warning";
-      if (a.is_valid === "valid") return "approved";
-      if (a.is_valid === "invalid") return "rejected";
-      return "warning";
+    const toIa = (a: AnalyzePieceResponse | null | undefined): "approved" | "rejected" | null => {
+      if (!a) return null; // não validado por IA
+      return a.is_valid === "valid" ? "approved" : "rejected";
     };
     if (smsPiece?.id) {
       const a = submittedSmsAnalysis ?? smsAnalysis;
@@ -788,10 +820,11 @@ export default function CampaignDetail() {
     let allApproved = pr.length > 0;
     let anyRejected = false;
     for (const r of pr) {
-      const ia = (r.iaVerdict || "").toLowerCase();
+      const ia = r.iaVerdict ? r.iaVerdict.toLowerCase() : null;
       const hu = (r.humanVerdict || "").toLowerCase();
-      const approved = (ia === "approved" && hu !== "manually_rejected") || ((ia === "rejected" || ia === "warning") && hu === "approved");
-      const rejected = (ia === "approved" && hu === "manually_rejected") || ((ia === "rejected" || ia === "warning") && hu === "rejected");
+      // ia null = não validado por IA → depende do humano (como "rejected")
+      const approved = (ia === "approved" && hu !== "manually_rejected") || ((ia === "rejected" || ia === null) && hu === "approved");
+      const rejected = (ia === "approved" && hu === "manually_rejected") || ((ia === "rejected" || ia === null) && hu === "rejected");
       if (!approved) allApproved = false;
       if (rejected) anyRejected = true;
     }
@@ -836,10 +869,11 @@ export default function CampaignDetail() {
   };
 
   const showPieceReviewBlock =
+    (currentUser?.role === "Gestor de marketing" && campaign?.status === "CONTENT_REVIEW") ||
     (currentUser?.role === "Analista de negócios" && campaign?.status === "CONTENT_REVIEW") ||
     (currentUser?.role === "Analista de criação" && campaign?.status === "CONTENT_ADJUSTMENT");
   const showPieceReviewActions =
-    currentUser?.role === "Analista de negócios" && campaign?.status === "CONTENT_REVIEW";
+    currentUser?.role === "Gestor de marketing" && campaign?.status === "CONTENT_REVIEW";
 
   type PieceReviewType = NonNullable<NonNullable<Campaign["pieceReviews"]>[number]>;
   const renderPieceReviewBlock = (
@@ -848,9 +882,10 @@ export default function CampaignDetail() {
     spaceLabel?: string,
     showActions?: boolean
   ) => {
-    const ia = (pr.iaVerdict || "").toLowerCase();
+    const ia = pr.iaVerdict ? pr.iaVerdict.toLowerCase() : null;
     const hu = (pr.humanVerdict || "").toLowerCase();
-    const needsHuman = ia === "rejected" || ia === "warning";
+    const notValidatedByIa = ia === null;
+    const needsHuman = ia === "rejected" || notValidatedByIa;
     const canApproveReject = needsHuman && hu === "pending";
     const canManuallyReject = ia === "approved" && hu !== "manually_rejected";
     const pending = reviewPieceMutation.isPending;
@@ -864,7 +899,7 @@ export default function CampaignDetail() {
       red: "bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-800",
       yellow: "bg-yellow-50 border-yellow-200 dark:bg-yellow-950/20 dark:border-yellow-800",
     };
-    const iaLabel = ia === "approved" ? "Aprovado" : ia === "rejected" ? "Reprovado" : "Ressalvas";
+    const iaLabel = notValidatedByIa ? "Não validado" : ia === "approved" ? "Aprovado" : "Reprovado";
     const huLabel = hu === "approved" ? "Aprovado" : hu === "rejected" ? "Reprovado" : hu === "manually_rejected" ? "Reprovado manualmente" : "Pendente";
 
     return (
@@ -885,7 +920,7 @@ export default function CampaignDetail() {
                 "font-medium px-2 py-0.5 rounded",
                 ia === "approved" && "bg-green-500/20 text-green-800 dark:text-green-200",
                 ia === "rejected" && "bg-red-500/20 text-red-800 dark:text-red-200",
-                (ia === "warning" || !ia) && "bg-yellow-500/20 text-yellow-800 dark:text-yellow-200",
+                notValidatedByIa && "bg-gray-500/20 text-gray-800 dark:text-gray-200",
               )}>
                 Parecer IA: {iaLabel}
               </span>
@@ -911,6 +946,68 @@ export default function CampaignDetail() {
                 <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{pr.rejectionReason}</p>
               </div>
             )}
+            {/* Botão "Validar com IA" — apenas para MM quando a peça não foi validada por IA */}
+            {displayActions && notValidatedByIa && hu === "pending" && showPieceReviewActions && (() => {
+              const pieceKey = `${channelToApi(uiChannel)}:${pr.pieceId}:${pr.commercialSpace || ""}`;
+              const isValidating = mmValidatingPiece === pieceKey;
+              return (
+                <div className="pt-1">
+                  <button
+                    onClick={() => handleMmValidateWithIa({ channel: channelToApi(uiChannel), pieceId: pr.pieceId, commercialSpace: pr.commercialSpace || undefined })}
+                    disabled={isValidating}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium bg-primary/10 text-primary hover:bg-primary/20 border border-primary/30 disabled:opacity-50 transition-colors"
+                  >
+                    {isValidating ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                    {isValidating ? "Validando..." : "Validar com IA"}
+                  </button>
+                </div>
+              );
+            })()}
+            {/* Resultado detalhado da análise de IA (MM ou qualquer perfil com análise em cache) */}
+            {(() => {
+              const pieceKey = `${channelToApi(uiChannel)}:${pr.pieceId}:${pr.commercialSpace || ""}`;
+              const ch = channelToApi(uiChannel);
+              // Primeiro tenta resultado local (MM acabou de validar), depois busca do cache carregado ao abrir a página
+              const analysis = mmAnalysisResults[pieceKey]
+                || (ch === "SMS" ? submittedSmsAnalysis : null)
+                || (ch === "PUSH" ? submittedPushAnalysis : null)
+                || (ch === "EMAIL" ? emailAnalysis : null)
+                || (ch === "APP" && pr.commercialSpace ? appAnalysis[pr.commercialSpace] : null);
+              if (!analysis) return null;
+              const isValid = analysis.is_valid === "valid";
+              return (
+                <div className={cn(
+                  "mt-2 p-3 rounded-lg border",
+                  isValid
+                    ? "bg-green-50/50 border-green-200 dark:bg-green-950/10 dark:border-green-800"
+                    : "bg-red-50/50 border-red-200 dark:bg-red-950/10 dark:border-red-800"
+                )}>
+                  <div className="flex items-start gap-2">
+                    {isValid ? (
+                      <CheckCircle size={16} className="text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
+                    ) : (
+                      <AlertCircle size={16} className="text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className={cn(
+                        "text-xs font-semibold mb-1",
+                        isValid ? "text-green-800 dark:text-green-200" : "text-red-800 dark:text-red-200"
+                      )}>
+                        {isValid ? "Conteúdo aprovado pela IA" : "Validação reprovada pela IA"}
+                      </p>
+                      <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
+                        {analysis.analysis_text}
+                      </p>
+                      {analysis.created_at && (
+                        <p className="text-xs text-foreground/50 mt-1.5">
+                          Análise em {format(new Date(analysis.created_at), "dd/MM/yyyy 'às' HH:mm")}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
             {displayActions && (canApproveReject || canManuallyReject) && (
               <div className="flex flex-wrap gap-2 pt-1">
                 {canApproveReject && (
@@ -997,11 +1094,14 @@ export default function CampaignDetail() {
       if (campaign.status === "DRAFT" && campaign.createdBy === currentUser.id) {
         actions.push({ kind: "status", label: "Enviar para Criação", status: "CREATIVE_STAGE" as CampaignStatus, variant: "primary" });
       }
+    }
+
+    if (userRole === "Gestor de marketing") {
       if (campaign.status === "CONTENT_REVIEW") {
         const { allApproved, anyRejected } = computeReviewState(campaign);
         const pieceReviews = campaign.pieceReviews || [];
         const approvedCount = pieceReviews.filter(r => {
-          const ia = (r.iaVerdict || "").toLowerCase();
+          const ia = r.iaVerdict ? r.iaVerdict.toLowerCase() : null;
           const hu = (r.humanVerdict || "").toLowerCase();
           return hu === "approved" || (hu === "pending" && ia === "approved");
         }).length;
@@ -1237,7 +1337,7 @@ export default function CampaignDetail() {
           approvedPieceCount={
             (campaign.pieceReviews || []).filter(r => {
               const hu = (r.humanVerdict || "").toLowerCase();
-              const ia = (r.iaVerdict || "").toLowerCase();
+              const ia = r.iaVerdict ? r.iaVerdict.toLowerCase() : null;
               return hu === "approved" || (hu === "pending" && ia === "approved");
             }).length
           }
@@ -1245,7 +1345,7 @@ export default function CampaignDetail() {
           hasRejectedPieces={
             (campaign.pieceReviews || []).some(r => {
               const hu = (r.humanVerdict || "").toLowerCase();
-              const ia = (r.iaVerdict || "").toLowerCase();
+              const ia = r.iaVerdict ? r.iaVerdict.toLowerCase() : null;
               return hu === "rejected" || hu === "manually_rejected" || (hu === "pending" && ia === "rejected");
             })
           }
@@ -1536,6 +1636,7 @@ export default function CampaignDetail() {
 
         {/* Creative Pieces Section - For Creative Analysts, Business Analysts, and Campaign Analysts */}
         {((currentUser?.role === "Analista de negócios" && (campaign.status === "CONTENT_REVIEW" || campaign.status === "CAMPAIGN_BUILDING" || campaign.status === "CAMPAIGN_PUBLISHED")) ||
+          (currentUser?.role === "Gestor de marketing" && (campaign.status === "CONTENT_REVIEW" || campaign.status === "CONTENT_ADJUSTMENT" || campaign.status === "CAMPAIGN_BUILDING" || campaign.status === "CAMPAIGN_PUBLISHED")) ||
           (currentUser?.role === "Analista de criação" && (campaign.status === "CREATIVE_STAGE" || campaign.status === "CONTENT_ADJUSTMENT" || campaign.status === "CONTENT_REVIEW")) ||
           (currentUser?.role === "Analista de campanhas" && (campaign.status === "CAMPAIGN_BUILDING" || campaign.status === "CAMPAIGN_PUBLISHED"))) && (
           <div id="creative-pieces-section" className="order-1 w-full">

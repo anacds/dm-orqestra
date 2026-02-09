@@ -1,8 +1,11 @@
+import time
+
 import httpx
 from fastapi import Request, HTTPException, status
 from typing import Optional
 from app.config import AUTH_SERVICE_URL, CAMPAIGNS_SERVICE_URL, BRIEFING_ENHANCER_SERVICE_URL, CONTENT_VALIDATION_SERVICE_URL
 from app.auth import validate_and_extract_user, should_skip_auth
+from app.metrics import PROXY_REQUESTS, PROXY_DURATION, UPSTREAM_ERRORS
 import logging
 
 logger = logging.getLogger(__name__)
@@ -60,6 +63,9 @@ async def proxy_request(
     if cookie_header:
         proxy_headers["cookie"] = cookie_header
     
+    target_service = _resolve_target_name(service_url)
+    start = time.perf_counter()
+
     try:
         async with httpx.AsyncClient(timeout=120.0) as client:
             if method == "GET":
@@ -75,6 +81,9 @@ async def proxy_request(
             else:
                 raise HTTPException(status_code=status.HTTP_405_METHOD_NOT_ALLOWED, detail="Method not allowed")
             
+            elapsed = time.perf_counter() - start
+            PROXY_DURATION.labels(target_service=target_service, method=method).observe(elapsed)
+            PROXY_REQUESTS.labels(target_service=target_service, method=method, status_code=str(response.status_code)).inc()
 
             response_body = response.content
             response_headers = dict(response.headers)
@@ -97,20 +106,38 @@ async def proxy_request(
             return response_body, response.status_code, response_headers
             
     except httpx.TimeoutException:
+        UPSTREAM_ERRORS.labels(target_service=target_service, error_type="timeout").inc()
         raise HTTPException(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT,
             detail="Service timeout"
         )
     except httpx.ConnectError:
+        UPSTREAM_ERRORS.labels(target_service=target_service, error_type="connection").inc()
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Service unavailable"
         )
+    except HTTPException:
+        raise
     except Exception as e:
+        UPSTREAM_ERRORS.labels(target_service=target_service, error_type="other").inc()
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Gateway error: {str(e)}"
         )
+
+
+_SERVICE_URL_NAMES = {
+    AUTH_SERVICE_URL: "auth",
+    CAMPAIGNS_SERVICE_URL: "campaigns",
+    BRIEFING_ENHANCER_SERVICE_URL: "briefing-enhancer",
+    CONTENT_VALIDATION_SERVICE_URL: "content-validation",
+}
+
+
+def _resolve_target_name(service_url: str) -> str:
+    """Resolve human-readable service name from URL."""
+    return _SERVICE_URL_NAMES.get(service_url, "unknown")
 
 
 def get_service_url(path: str) -> str:

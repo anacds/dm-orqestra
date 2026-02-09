@@ -10,6 +10,7 @@ from langchain_core.exceptions import LangChainException
 from langchain_openai.middleware import OpenAIModerationError
 from openai import APITimeoutError, RateLimitError, APIError
 from app.agent.schemas import EnhancedTextResponse
+from app.core.metrics import MODERATION_REJECTIONS
 
 logger = logging.getLogger(__name__)
 
@@ -137,6 +138,7 @@ def enhance_text(state: EnhancementGraphState, structured_llm: Runnable[Any, Enh
             "enhancement_history": updated_history
         }
     except OpenAIModerationError as e:
+        MODERATION_REJECTIONS.labels(field_name=field_name).inc()
         logger.warning(f"Content moderation error for field '{field_name}': {str(e)}")
         return {
             "enhanced_text": "",

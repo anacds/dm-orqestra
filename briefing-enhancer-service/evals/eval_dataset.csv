@@ -1,0 +1,81 @@
+campaign_name;field_name;original_text
+Cartão Platinum Black;businessObjective;Vender mais cartões platinum pra clientes bons
+Cartão Platinum Black;expectedResult;Aumentar a base de cartões premium
+Cartão Platinum Black;targetAudienceDescription;Clientes de alta renda que usam cartão de crédito frequentemente
+Cartão Platinum Black;exclusionCriteria;Quem já tem cartão platinum
+Seguro Auto Completo;businessObjective;Fazer cross-sell de seguro auto para clientes que têm carro
+Seguro Auto Completo;expectedResult;Vender mais seguros auto
+Seguro Auto Completo;targetAudienceDescription;Clientes com veículo financiado ou próprio
+Seguro Auto Completo;exclusionCriteria;Clientes que já possuem seguro auto ativo conosco
+Crédito Consignado INSS;businessObjective;Oferecer crédito consignado para aposentados do INSS
+Crédito Consignado INSS;expectedResult;Atingir meta de 2000 contratos em 2 meses
+Crédito Consignado INSS;targetAudienceDescription;Aposentados e pensionistas do INSS
+Crédito Consignado INSS;exclusionCriteria;Inadimplentes e menores de 18 anos
+Conta Digital Jovem;businessObjective;Lançar conta digital focada em jovens universitários
+Conta Digital Jovem;expectedResult;Abrir 5000 contas digitais no trimestre
+Conta Digital Jovem;targetAudienceDescription;Jovens entre 18 e 25 anos que são universitários
+Conta Digital Jovem;exclusionCriteria;Menores de 18 anos
+Fundos de Investimento ESG;businessObjective;Promover os novos fundos ESG da nossa plataforma de investimentos
+Fundos de Investimento ESG;expectedResult;Captar R$ 10 milhões em aportes no primeiro mês
+Fundos de Investimento ESG;targetAudienceDescription;Investidores com perfil moderado a arrojado que se preocupam com sustentabilidade
+Fundos de Investimento ESG;exclusionCriteria;Clientes com perfil ultra-conservador
+Refinanciamento Imobiliário;businessObjective;Ajudar clientes a refinanciar seus imóveis com taxas melhores
+Refinanciamento Imobiliário;expectedResult;Converter 30% dos clientes elegíveis
+Refinanciamento Imobiliário;targetAudienceDescription;Clientes com financiamento imobiliário ativo há mais de 2 anos
+Refinanciamento Imobiliário;exclusionCriteria;Financiamentos em atraso e clientes negativados
+Seguro de Vida Familiar;businessObjective;Aumentar a contratação de seguro de vida entre famílias
+Seguro de Vida Familiar;expectedResult;Crescer 20% na carteira de seguros de vida
+Seguro de Vida Familiar;targetAudienceDescription;Famílias com filhos dependentes e renda acima de 5 salários mínimos
+Seguro de Vida Familiar;exclusionCriteria;Clientes que já possuem seguro de vida conosco
+Previdência Privada Corporativa;businessObjective;Expandir a oferta de previdência privada para empresas parceiras
+Previdência Privada Corporativa;expectedResult;Fechar contratos com 50 novas empresas
+Previdência Privada Corporativa;targetAudienceDescription;Empresas de médio e grande porte com mais de 100 funcionários
+Previdência Privada Corporativa;exclusionCriteria;Empresas já atendidas pela concorrência com contratos vigentes
+Empréstimo Pessoal Rápido;businessObjective;Oferecer crédito rápido online com aprovação em minutos
+Empréstimo Pessoal Rápido;expectedResult;Liberar R$ 50 milhões em crédito em 3 meses
+Empréstimo Pessoal Rápido;targetAudienceDescription;Clientes com necessidade urgente de crédito e bom score
+Empréstimo Pessoal Rápido;exclusionCriteria;Score abaixo de 500 e inadimplentes
+Cashback no Débito;businessObjective;Incentivar uso do cartão de débito com programa de cashback
+Cashback no Débito;expectedResult;Aumentar transações de débito em 40%
+Cashback no Débito;targetAudienceDescription;Clientes PF que usam pouco o cartão de débito
+Cashback no Débito;exclusionCriteria;Clientes sem conta corrente ativa
+Consórcio de Veículos;businessObjective;Ampliar a venda de consórcios de veículos novos e seminovos
+Consórcio de Veículos;expectedResult;Vender 300 cotas de consórcio no semestre
+Consórcio de Veículos;targetAudienceDescription;Pessoas que querem comprar carro mas não querem financiamento tradicional
+Consórcio de Veículos;exclusionCriteria;Clientes com consórcio ativo em aberto
+Seguro Residencial Premium;businessObjective;Oferecer seguro residencial premium com coberturas extras
+Seguro Residencial Premium;expectedResult;Atingir 1000 apólices vendidas
+Seguro Residencial Premium;targetAudienceDescription;Proprietários de imóveis de alto valor
+Seguro Residencial Premium;exclusionCriteria;Quem já tem seguro residencial ativo e locatários
+Antecipação do 13º Salário;businessObjective;Campanha sazonal para antecipação de 13o salário com taxa reduzida
+Antecipação do 13º Salário;expectedResult;Liberar R$ 30 milhões em antecipações entre outubro e novembro
+Antecipação do 13º Salário;targetAudienceDescription;Trabalhadores CLT que recebem salário pelo banco
+Antecipação do 13º Salário;exclusionCriteria;Funcionários públicos e autônomos
+Portabilidade de Crédito;businessObjective;Trazer clientes de outros bancos oferecendo portabilidade com taxa menor
+Portabilidade de Crédito;expectedResult;Portar R$ 100 milhões em operações de crédito
+Portabilidade de Crédito;targetAudienceDescription;Clientes com empréstimos em outros bancos com taxas altas
+Portabilidade de Crédito;exclusionCriteria;Clientes com restrição no SPC/Serasa
+Conta PJ para MEIs;businessObjective;Atrair microempreendedores individuais para abrir conta PJ
+Conta PJ para MEIs;expectedResult;Abrir 10.000 contas PJ MEI em 6 meses
+Conta PJ para MEIs;targetAudienceDescription;Microempreendedores individuais que usam conta PF para o negócio
+Conta PJ para MEIs;exclusionCriteria;Empresas com faturamento acima do limite MEI
+Financiamento Imobiliário Verde;businessObjective;Financiar imóveis sustentáveis com taxas especiais
+Financiamento Imobiliário Verde;expectedResult;Financiar 200 imóveis verdes em 1 ano
+Financiamento Imobiliário Verde;targetAudienceDescription;Compradores de primeiro imóvel interessados em sustentabilidade
+Financiamento Imobiliário Verde;exclusionCriteria;Clientes com nome negativado e sem comprovação de renda
+Cartão Adicional Família;businessObjective;Estimular a emissão de cartões adicionais para familiares
+Cartão Adicional Família;expectedResult;Emitir 20.000 cartões adicionais
+Cartão Adicional Família;targetAudienceDescription;Titulares de cartão que tenham dependentes ou cônjuge
+Cartão Adicional Família;exclusionCriteria;Cartões com limite comprometido acima de 80%
+Poupança Programada Kids;businessObjective;Lançar produto de poupança programada para crianças
+Poupança Programada Kids;expectedResult;Captar 5000 adesões no primeiro trimestre
+Poupança Programada Kids;targetAudienceDescription;Pais e responsáveis que querem guardar dinheiro para os filhos
+Poupança Programada Kids;exclusionCriteria;Clientes sem filhos dependentes cadastrados
+Câmbio Turismo Verão;businessObjective;Campanha de câmbio para viagens de verão com taxa competitiva
+Câmbio Turismo Verão;expectedResult;Movimentar US$ 5 milhões em câmbio turismo em 2 meses
+Câmbio Turismo Verão;targetAudienceDescription;Clientes com viagens internacionais marcadas ou que viajam regularmente
+Câmbio Turismo Verão;exclusionCriteria;Clientes PJ e operações acima de US$ 10.000
+Reativação de Inativos;businessObjective;Reativar clientes que pararam de usar os serviços do banco
+Reativação de Inativos;expectedResult;Reativar 15% da base inativa
+Reativação de Inativos;targetAudienceDescription;Clientes que não fizeram transações nos últimos 6 meses
+Reativação de Inativos;exclusionCriteria;Contas encerradas e clientes falecidos

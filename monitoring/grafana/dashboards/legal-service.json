@@ -1,0 +1,236 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "title": "Agent — Invocações / min",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum(rate(legal_agent_invocations_total[5m])) by (channel) * 60",
+          "legendFormat": "{{channel}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "reqpm" }
+      }
+    },
+    {
+      "title": "Agent — Latência P95 (s)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 0 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(legal_agent_duration_seconds_bucket[5m])) by (le, channel))",
+          "legendFormat": "P95 {{channel}}",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(legal_agent_duration_seconds_bucket[5m])) by (le, channel))",
+          "legendFormat": "P50 {{channel}}",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "s" }
+      }
+    },
+    {
+      "title": "Agent — Decisões",
+      "type": "piechart",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum(legal_agent_invocations_total) by (decision)",
+          "legendFormat": "{{decision}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "LLM — Latência por Provider (s)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(legal_llm_request_duration_seconds_bucket[5m])) by (le, provider, model))",
+          "legendFormat": "P95 {{provider}}/{{model}}",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(legal_llm_request_duration_seconds_bucket[5m])) by (le, provider, model))",
+          "legendFormat": "P50 {{provider}}/{{model}}",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "s" }
+      }
+    },
+    {
+      "title": "LLM — Tokens / min",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        {
+          "expr": "sum(rate(legal_llm_tokens_total[5m])) by (provider, model, type) * 60",
+          "legendFormat": "{{provider}}/{{model}} {{type}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "short" }
+      }
+    },
+    {
+      "title": "LLM — Erros",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 16 },
+      "targets": [
+        {
+          "expr": "sum(rate(legal_llm_errors_total[5m])) by (provider, error_type) * 60",
+          "legendFormat": "{{provider}} {{error_type}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "reqpm" }
+      }
+    },
+    {
+      "title": "RAG — Retrieval Latência (s)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 16 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(legal_rag_retrieval_duration_seconds_bucket[5m])) by (le, rerank_enabled))",
+          "legendFormat": "P95 rerank={{rerank_enabled}}",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(legal_rag_retrieval_duration_seconds_bucket[5m])) by (le, rerank_enabled))",
+          "legendFormat": "P50 rerank={{rerank_enabled}}",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "s" }
+      }
+    },
+    {
+      "title": "RAG — Embedding Latência (s)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 16 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(legal_rag_embedding_duration_seconds_bucket[5m])) by (le, model))",
+          "legendFormat": "P95 {{model}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "s" }
+      }
+    },
+    {
+      "title": "RAG — Docs Recuperados (média)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 8, "x": 0, "y": 24 },
+      "targets": [
+        {
+          "expr": "sum(rate(legal_rag_documents_retrieved_sum[5m])) / sum(rate(legal_rag_documents_retrieved_count[5m]))",
+          "legendFormat": "Média",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "short", "decimals": 1 }
+      }
+    },
+    {
+      "title": "Cache — Hit Rate (%)",
+      "type": "gauge",
+      "gridPos": { "h": 4, "w": 8, "x": 8, "y": 24 },
+      "targets": [
+        {
+          "expr": "sum(rate(legal_cache_operations_total{operation=\"get\",result=\"hit\"}[5m])) / (sum(rate(legal_cache_operations_total{operation=\"get\",result=\"hit\"}[5m])) + sum(rate(legal_cache_operations_total{operation=\"get\",result=\"miss\"}[5m]))) * 100",
+          "legendFormat": "Hit Rate",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 30 },
+              { "color": "green", "value": 60 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Cache — Operações / min",
+      "type": "timeseries",
+      "gridPos": { "h": 4, "w": 8, "x": 16, "y": 24 },
+      "targets": [
+        {
+          "expr": "sum(rate(legal_cache_operations_total[5m])) by (operation, result) * 60",
+          "legendFormat": "{{operation}} {{result}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "reqpm" }
+      }
+    },
+    {
+      "title": "HTTP — Requests / min",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 28 },
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total[5m])) by (status) * 60",
+          "legendFormat": "HTTP {{status}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "reqpm" }
+      }
+    },
+    {
+      "title": "HTTP — Latência P95 (s)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 28 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, handler))",
+          "legendFormat": "P95 {{handler}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "s" }
+      }
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["orqestra", "legal-service"],
+  "templating": { "list": [] },
+  "time": { "from": "now-1h", "to": "now" },
+  "title": "Legal Service — Observability",
+  "uid": "legal-service-obs",
+  "version": 1
+}

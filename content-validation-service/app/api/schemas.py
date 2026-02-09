@@ -1,4 +1,4 @@
-from typing import Any, Dict, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -25,15 +25,28 @@ class AnalyzePieceRequest(BaseModel):
 
 
 class AnalyzePieceResponse(BaseModel):
-    """Response de /api/ai/analyze-piece."""
+    """Response de /api/ai/analyze-piece.
+    
+    Fluxo paralelo:
+    - validate_channel (estrutural) → retrieve_content (EMAIL/APP)
+    - [specs, branding, compliance] executam em paralelo
+    - issue_final_verdict agrega os 3 resultados
+    
+    Early-fail apenas em validate_channel ou retrieve_content.
+    Use `failure_stage` (só para early-fails) e `stages_completed`.
+    """
 
     validation_result: Dict[str, Any] = Field(
         ...,
         description="Resultado da validação de formato/tamanho (validate_channel)",
     )
+    specs_result: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Resultado da validação de specs técnicos (dimensões, peso, caracteres)",
+    )
     orchestration_result: Optional[Dict[str, Any]] = Field(
         None,
-        description="Resultado da orquestração (legado / agregado)",
+        description="Resultado da orquestração (agregado de todas as etapas)",
     )
     compliance_result: Optional[Dict[str, Any]] = Field(
         None,
@@ -41,17 +54,25 @@ class AnalyzePieceResponse(BaseModel):
     )
     branding_result: Optional[Dict[str, Any]] = Field(
         None,
-        description="Parecer do Branding Service (MCP) - validação determinística de marca (só EMAIL)",
+        description="Parecer do Branding Service (MCP) - validação determinística de marca (EMAIL/APP)",
     )
     requires_human_approval: bool = Field(
         False,
-        description="True se retrieve ou validate_compliance falhou",
+        description="True se o legal-service recomenda revisão humana",
     )
     human_approval_reason: Optional[str] = Field(
         None,
-        description="Motivo da aprovação humana",
+        description="Motivo da recomendação de revisão humana",
+    )
+    failure_stage: Optional[str] = Field(
+        None,
+        description="Estágio onde a validação falhou (fail-fast). None se passou em tudo.",
+    )
+    stages_completed: Optional[List[str]] = Field(
+        None,
+        description="Lista de estágios completados com sucesso antes de falhar ou finalizar.",
     )
     final_verdict: Optional[Dict[str, Any]] = Field(
         None,
-        description="Veredito final: status (approved|rejected), message, contributors (legal + branding)",
+        description="Veredito final: decision (APROVADO|REPROVADO), summary, failure_stage, stages_completed, specs, legal, branding",
     )
