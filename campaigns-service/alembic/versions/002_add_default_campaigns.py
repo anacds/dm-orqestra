@@ -164,27 +164,7 @@ def _insert_comment(conn, cid, author, role, text, days_ago):
 
 # ── Campaign definitions ──────────────────────────────────────────────
 CAMPAIGNS = [
-    # 1 — CREATIVE_STAGE (existing, enhanced)
-    {
-        "name": "Campanha de Aquisição - Conta Corrente Digital",
-        "category": "Aquisição",
-        "objective": "Aumentar a base de clientes com conta corrente digital através de ofertas atrativas e experiência simplificada de abertura",
-        "result": "Aquisição de 5.000 novos clientes e aumento de 15% na base de contas correntes digitais",
-        "area": "Produtos PF",
-        "audience": "Pessoas físicas entre 25 e 55 anos, sem vínculo bancário atual, residentes em áreas urbanas",
-        "exclusion": "Clientes já ativos, menores de 18 anos, clientes com restrições no CPF",
-        "volume": 2500000,
-        "tone": "Informal",
-        "priority": "Normal",
-        "status": "CREATIVE_STAGE",
-        "days_ago": 5,
-        "transitions": [(None, "DRAFT"), ("DRAFT", "CREATIVE_STAGE")],
-        "pieces": [
-            ("SMS", None, "Orqestra: sua conta digital te espera! Abra em 3 min, sem burocracia. Acesse: orqestra.com.br/conta"),
-            ("Push", "Conta Digital Orqestra", "Abra sua conta em 3 minutos. Sem taxas no primeiro ano!"),
-        ],
-    },
-    # 2 — DRAFT (existing, enhanced)
+    # 1 — DRAFT
     {
         "name": "Campanha de Retenção - Conta PJ Premium",
         "category": "Retenção",
@@ -203,7 +183,25 @@ CAMPAIGNS = [
         "days_ago": 2,
         "transitions": [(None, "DRAFT")],
     },
-    # 3 — CONTENT_REVIEW
+    # 2 — CREATIVE_STAGE (todos os canais, sem peças, pronta para o analista criar)
+    {
+        "name": "Campanha Multicanal - Crédito Consignado",
+        "category": "Cross-sell",
+        "objective": "Oferecer crédito consignado com taxas competitivas em todos os canais de comunicação, incluindo banners in-app em dois espaços comerciais distintos",
+        "result": "Contratação de 4.000 novos consignados e aumento de 18% na carteira de crédito PF",
+        "area": "Produtos PF",
+        "audience": "Servidores públicos e aposentados com margem consignável disponível, correntistas há mais de 3 meses",
+        "exclusion": "Clientes com score abaixo de 500, inadimplentes, já com consignado ativo no banco",
+        "volume": 3500000,
+        "tone": "Consultivo",
+        "priority": "Alta",
+        "channels": ["SMS", "Push", "E-mail", "App"],
+        "spaces": ["Banner superior da Home", "Página de ofertas"],
+        "status": "CREATIVE_STAGE",
+        "days_ago": 3,
+        "transitions": [(None, "DRAFT"), ("DRAFT", "CREATIVE_STAGE")],
+    },
+    # 3 — CONTENT_REVIEW (peças submetidas, aguardando aprovação do gestor)
     {
         "name": "Promoção Cartão Gold - Cross-sell",
         "category": "Cross-sell",
@@ -223,36 +221,7 @@ CAMPAIGNS = [
         ],
         "reviews_pending": True,
     },
-    # 4 — CAMPAIGN_PUBLISHED
-    {
-        "name": "Programa Fidelidade Diamante",
-        "category": "Relacionamento",
-        "objective": "Engajar clientes de alta renda com programa de pontos exclusivo",
-        "result": "Adesão de 10.000 clientes ao programa e aumento de 30% no engajamento digital",
-        "audience": "Clientes PF com renda acima de R$ 15.000 e histórico de pelo menos 12 meses",
-        "exclusion": "Clientes inativos há mais de 90 dias, funcionários do banco",
-        "volume": 3000000,
-        "tone": "Formal",
-        "priority": "Alta",
-        "status": "CAMPAIGN_PUBLISHED",
-        "days_ago": 30,
-        "transitions": [
-            (None, "DRAFT"),
-            ("DRAFT", "CREATIVE_STAGE"),
-            ("CREATIVE_STAGE", "CONTENT_REVIEW"),
-            ("CONTENT_REVIEW", "CAMPAIGN_BUILDING"),
-            ("CAMPAIGN_BUILDING", "CAMPAIGN_PUBLISHED"),
-        ],
-        "pieces": [
-            ("SMS", None, "Você foi selecionado para o Programa Diamante Orqestra. Acumule pontos e troque por viagens. Saiba mais: orqestra.com.br/diamante"),
-            ("Push", "Programa Diamante", "Acumule pontos em cada transação e troque por experiências exclusivas."),
-        ],
-        "reviews_approved": True,
-        "comments": [
-            ("ana@email.com", "Analista de negócios", "Campanha publicada com sucesso. Monitorar métricas semanalmente."),
-        ],
-    },
-    # 5 — CONTENT_ADJUSTMENT
+    # 4 — CONTENT_ADJUSTMENT (peças reprovadas, devolvidas para ajuste)
     {
         "name": "Alerta de Segurança Digital",
         "category": "Regulatório",
@@ -281,7 +250,7 @@ CAMPAIGNS = [
             ("eric@email.com", "Gestor de marketing", "Ajustar tom da mensagem. Está parecendo alarmista demais."),
         ],
     },
-    # 6 — CAMPAIGN_BUILDING
+    # 5 — CAMPAIGN_BUILDING (peças aprovadas, campanha sendo construída)
     {
         "name": "Campanha Pix Sem Limites",
         "category": "Upsell",
@@ -306,50 +275,36 @@ CAMPAIGNS = [
         ],
         "reviews_approved": True,
     },
-    # 7 — CREATIVE_STAGE (with SMS piece)
+    # 6 — CAMPAIGN_PUBLISHED
     {
-        "name": "Educação Financeira para Jovens",
-        "category": "Educacional",
-        "objective": "Engajar público jovem com conteúdo educativo sobre finanças pessoais",
-        "result": "Alcançar 50.000 jovens e aumentar abertura de contas na faixa 18-25 em 10%",
-        "area": "Marketing Institucional",
-        "audience": "Pessoas de 18 a 25 anos, estudantes universitários ou recém-formados",
-        "exclusion": "Menores de 18 anos",
-        "volume": 500000,
-        "tone": "Informal",
-        "status": "CREATIVE_STAGE",
-        "days_ago": 8,
-        "transitions": [(None, "DRAFT"), ("DRAFT", "CREATIVE_STAGE")],
-        "pieces": [
-            ("SMS", None, "Orqestra Educa: aprenda a investir com R$ 10. Assista agora: orqestra.com.br/educa"),
-        ],
-    },
-    # 8 — CONTENT_REVIEW (with PUSH piece)
-    {
-        "name": "Renegociação de Dívidas - Recuperação",
-        "category": "Retenção",
-        "objective": "Oferecer condições especiais para renegociação de dívidas em atraso",
-        "result": "Recuperação de 30% dos valores inadimplentes e redução de 15% na carteira em atraso",
-        "audience": "Clientes PF com parcelas em atraso entre 30 e 180 dias",
-        "exclusion": "Dívidas judicializadas, clientes em processo de falência",
-        "volume": 6000000,
-        "tone": "Consultivo",
+        "name": "Programa Fidelidade Diamante",
+        "category": "Relacionamento",
+        "objective": "Engajar clientes de alta renda com programa de pontos exclusivo",
+        "result": "Adesão de 10.000 clientes ao programa e aumento de 30% no engajamento digital",
+        "audience": "Clientes PF com renda acima de R$ 15.000 e histórico de pelo menos 12 meses",
+        "exclusion": "Clientes inativos há mais de 90 dias, funcionários do banco",
+        "volume": 3000000,
+        "tone": "Formal",
         "priority": "Alta",
-        "execution": "Event-driven (por evento)",
-        "trigger": "Fatura fechada",
-        "status": "CONTENT_REVIEW",
-        "days_ago": 10,
+        "status": "CAMPAIGN_PUBLISHED",
+        "days_ago": 30,
         "transitions": [
             (None, "DRAFT"),
             ("DRAFT", "CREATIVE_STAGE"),
             ("CREATIVE_STAGE", "CONTENT_REVIEW"),
+            ("CONTENT_REVIEW", "CAMPAIGN_BUILDING"),
+            ("CAMPAIGN_BUILDING", "CAMPAIGN_PUBLISHED"),
         ],
         "pieces": [
-            ("Push", "Condições especiais pra você", "Negocie suas pendências com até 90% de desconto nos juros. Só até sexta!"),
+            ("SMS", None, "Você foi selecionado para o Programa Diamante Orqestra. Acumule pontos e troque por viagens. Saiba mais: orqestra.com.br/diamante"),
+            ("Push", "Programa Diamante", "Acumule pontos em cada transação e troque por experiências exclusivas."),
         ],
-        "reviews_pending": True,
+        "reviews_approved": True,
+        "comments": [
+            ("ana@email.com", "Analista de negócios", "Campanha publicada com sucesso. Monitorar métricas semanalmente."),
+        ],
     },
-    # 9 — CAMPAIGN_PUBLISHED
+    # 7 — CAMPAIGN_PUBLISHED
     {
         "name": "Black Friday Investimentos",
         "category": "Cross-sell",
@@ -378,47 +333,6 @@ CAMPAIGNS = [
         "comments": [
             ("ana@email.com", "Analista de negócios", "Campanha encerrada. Superamos a meta em 12%."),
             ("jose@email.com", "Analista de campanhas", "Métricas finais enviadas ao board."),
-        ],
-    },
-    # 10 — DRAFT (very recent)
-    {
-        "name": "Abertura de Conta MEI",
-        "category": "Aquisição",
-        "objective": "Facilitar abertura de conta PJ para microempreendedores individuais com processo 100% digital",
-        "result": "Abertura de 2.000 contas MEI no primeiro mês e crescimento de 20% na base PJ",
-        "area": "Produtos PJ",
-        "audience": "Microempreendedores individuais sem conta PJ ativa",
-        "exclusion": "MEIs com restrição cadastral, CNPJ inativo",
-        "volume": 300000,
-        "tone": "Informal",
-        "priority": "Normal",
-        "status": "DRAFT",
-        "days_ago": 1,
-        "transitions": [(None, "DRAFT")],
-    },
-    # 11 — CREATIVE_STAGE — todos os canais + 2 espaços comerciais APP (campanha-exemplo)
-    {
-        "name": "Campanha Multicanal - Crédito Consignado",
-        "category": "Cross-sell",
-        "objective": "Oferecer crédito consignado com taxas competitivas em todos os canais de comunicação, incluindo banners in-app em dois espaços comerciais distintos",
-        "result": "Contratação de 4.000 novos consignados e aumento de 18% na carteira de crédito PF",
-        "area": "Produtos PF",
-        "audience": "Servidores públicos e aposentados com margem consignável disponível, correntistas há mais de 3 meses",
-        "exclusion": "Clientes com score abaixo de 500, inadimplentes, já com consignado ativo no banco",
-        "volume": 3500000,
-        "tone": "Consultivo",
-        "priority": "Alta",
-        "channels": ["SMS", "Push", "E-mail", "App"],
-        "spaces": ["Banner superior da Home", "Página de ofertas"],
-        "status": "CREATIVE_STAGE",
-        "days_ago": 3,
-        "transitions": [(None, "DRAFT"), ("DRAFT", "CREATIVE_STAGE")],
-        "pieces": [
-            ("SMS", None, "Orqestra: crédito consignado a partir de 1,49% a.m. Simule agora: orqestra.com.br/consignado"),
-            ("Push", "Crédito Consignado Orqestra", "Taxas a partir de 1,49% a.m. com parcelas que cabem no seu bolso. Simule!"),
-            ("E-mail", "Crédito Consignado - Condições Exclusivas", None),
-            ("App", "Banner Consignado Home", None),
-            ("App", "Banner Consignado Ofertas", None),
         ],
     },
 ]

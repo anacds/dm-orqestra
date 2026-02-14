@@ -31,3 +31,6 @@ venv
 .env.development
 .env.test
 .env.production
+
+# Debug images geradas pelo content-validation-service
+**/debug_images/

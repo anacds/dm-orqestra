@@ -1,6 +1,6 @@
 import logging
 import time
-from typing import Any, Optional
+from typing import Any, AsyncIterator, Optional
 from langgraph.graph import END, StateGraph
 from app.agent.state import ValidationGraphState
 from app.agent.nodes import (
@@ -180,5 +180,65 @@ class ContentValidationAgent:
         verdict = (result.get("final_verdict") or {}).get("decision", "unknown")
         VALIDATION_TOTAL.labels(channel=ch, verdict=verdict).inc()
         return dict(result)
+
+    async def astream_with_progress(
+        self,
+        task: Optional[str] = None,
+        channel: Optional[str] = None,
+        content: Optional[dict[str, Any]] = None,
+    ) -> AsyncIterator[dict[str, Any]]:
+        """Stream graph execution emitting custom step events and a final result."""
+        initial: ValidationGraphState = {
+            "task": task or "VALIDATE_COMMUNICATION",
+            "channel": channel or "",
+            "content": content or {},
+            "validation_result": None,
+            "validation_valid": False,
+            "retrieve_ok": False,
+            "retrieve_error": None,
+            "content_for_compliance": None,
+            "html_for_branding": None,
+            "image_for_branding": None,
+            "conversion_metadata": None,
+            "retrieved_content_hash": None,
+            "specs_ok": None,
+            "specs_result": None,
+            "compliance_ok": False,
+            "compliance_result": None,
+            "compliance_error": None,
+            "branding_ok": None,
+            "branding_result": None,
+            "branding_error": None,
+            "requires_human_approval": False,
+            "human_approval_reason": None,
+            "final_verdict": None,
+            "orchestration_result": None,
+        }
+        ch = (channel or "unknown").upper()
+        langsmith_config = {
+            "metadata": {
+                "channel": ch,
+                "task": task or "VALIDATE_COMMUNICATION",
+                "campaign_id": (content or {}).get("campaign_id") or (content or {}).get("campaignId"),
+            },
+            "tags": [ch, task or "VALIDATE_COMMUNICATION"],
+        }
+        logger.info("Streaming content-validation graph: task=%s, channel=%s", task, channel)
+        start = time.perf_counter()
+        final_state: dict[str, Any] = {}
+
+        async for mode, chunk in self.app.astream(
+            initial, config=langsmith_config, stream_mode=["custom", "values"]
+        ):
+            if mode == "custom":
+                yield {"type": "step", "data": chunk}
+            elif mode == "values":
+                final_state = dict(chunk)
+
+        elapsed = time.perf_counter() - start
+        VALIDATION_DURATION.labels(channel=ch).observe(elapsed)
+        verdict = (final_state.get("final_verdict") or {}).get("decision", "unknown")
+        VALIDATION_TOTAL.labels(channel=ch, verdict=verdict).inc()
+        yield {"type": "result", "data": final_state}
 
 graph = ContentValidationAgent().app

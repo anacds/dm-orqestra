@@ -197,7 +197,7 @@ export const campaignsAPI = {
 
   submitForReview: async (
     campaignId: string,
-    pieceReviews: { channel: string; pieceId: string; commercialSpace?: string; iaVerdict: string | null }[]
+    pieceReviews: { channel: string; pieceId: string; commercialSpace?: string }[]
   ): Promise<Campaign> => {
     return await fetchAPI<CampaignResponse>(`/campaigns/${campaignId}/submit-for-review`, {
       method: "POST",
@@ -224,7 +224,7 @@ export const campaignsAPI = {
 
   updateIaVerdict: async (
     campaignId: string,
-    params: { channel: string; pieceId: string; commercialSpace?: string; iaVerdict: "approved" | "rejected" }
+    params: { channel: string; pieceId: string; commercialSpace?: string; iaVerdict: "approved" | "rejected"; iaAnalysisText?: string }
   ): Promise<Campaign> => {
     const body: Record<string, unknown> = {
       channel: params.channel,
@@ -232,6 +232,7 @@ export const campaignsAPI = {
       iaVerdict: params.iaVerdict,
     };
     if (params.commercialSpace != null) body.commercialSpace = params.commercialSpace;
+    if (params.iaAnalysisText != null) body.iaAnalysisText = params.iaAnalysisText;
     return await fetchAPI<CampaignResponse>(`/campaigns/${campaignId}/piece-reviews/ia-verdict`, {
       method: "PATCH",
       body: JSON.stringify(body),
@@ -314,12 +315,18 @@ function mapContentValidationToAnalyzePieceResponse(
     (useValMessage ? valMsg : null) ??
     "—";
 
+  const sources =
+    raw.final_verdict?.sources ??
+    (raw.compliance_result as { sources?: string[] } | undefined)?.sources ??
+    undefined;
+
   return {
     id: crypto.randomUUID(),
     campaign_id: campaignId,
     channel,
     is_valid,
     analysis_text,
+    sources: sources && sources.length > 0 ? sources : undefined,
     analyzed_by: "Content Validation Service",
     created_at: new Date().toISOString(),
   };
@@ -345,11 +352,10 @@ function toUiChannel(ch: AnalyzePieceInput["channel"]): "SMS" | "Push" | "E-mail
   return "SMS";
 }
 
-function getApiChannelForFetch(ch: "SMS" | "Push" | "E-mail" | "App"): "SMS" | "PUSH" | "EMAIL" | "APP" {
-  if (ch === "E-mail") return "EMAIL";
-  if (ch === "App") return "APP";
-  if (ch === "Push") return "PUSH";
-  return "SMS";
+export interface ValidationStepEvent {
+  node: string;
+  status: "started" | "done";
+  label?: string;
 }
 
 export const aiAPI = {
@@ -370,35 +376,73 @@ export const aiAPI = {
     return mapContentValidationToAnalyzePieceResponse(raw, campaignId, toUiChannel(input.channel));
   },
 
-  getAnalysis: async (
+  analyzePieceStream: async (
     campaignId: string,
-    channel: "SMS" | "Push" | "E-mail" | "App",
-    opts: { pieceId?: string; commercialSpace?: string } = {}
-  ): Promise<AnalyzePieceResponse | null> => {
-    const apiCh = getApiChannelForFetch(channel);
-    let params = "";
-    if (apiCh === "SMS" || apiCh === "PUSH") {
-      // Backend retorna a entrada mais recente — nenhum parâmetro extra necessário
-    } else if (apiCh === "EMAIL") {
-      if (!opts.pieceId) return null;
-      params = `?piece_id=${encodeURIComponent(opts.pieceId)}`;
-    } else {
-      if (!opts.pieceId || !opts.commercialSpace) return null;
-      params = `?piece_id=${encodeURIComponent(opts.pieceId)}&commercial_space=${encodeURIComponent(opts.commercialSpace)}`;
+    input: AnalyzePieceInput,
+    onStep: (step: ValidationStepEvent) => void,
+  ): Promise<AnalyzePieceResponse> => {
+    const body: AnalyzePieceRequest = {
+      task: "VALIDATE_COMMUNICATION",
+      channel: toApiChannel(input.channel),
+      content: input.content as Record<string, unknown>,
+      campaign_id: campaignId,
+    };
+
+    const response = await fetch(`${API_BASE}/ai/analyze-piece/stream`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Erro na validação streaming: ${response.status}`);
     }
-    try {
-      const raw = await fetchAPI<ContentValidationAnalyzePieceResponse>(
-        `/ai/analyze-piece/${campaignId}/${apiCh}${params}`,
-        { method: "GET" }
-      );
-      return mapContentValidationToAnalyzePieceResponse(raw, campaignId, channel);
-    } catch (error) {
-      if (error instanceof Error && (error.message.includes("404") || error.message.includes("not found"))) {
-        return null;
+
+    const reader = response.body!.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let result: ContentValidationAnalyzePieceResponse | null = null;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+
+      let currentEvent = "";
+      for (const line of lines) {
+        if (line.startsWith("event: ")) {
+          currentEvent = line.slice(7).trim();
+        } else if (line.startsWith("data: ")) {
+          const data = line.slice(6);
+          try {
+            const parsed = JSON.parse(data);
+            if (currentEvent === "step") {
+              onStep(parsed as ValidationStepEvent);
+            } else if (currentEvent === "result") {
+              result = parsed as ContentValidationAnalyzePieceResponse;
+            } else if (currentEvent === "error") {
+              throw new Error(parsed.error || "Erro desconhecido no streaming");
+            }
+          } catch (e) {
+            if (e instanceof SyntaxError) continue;
+            throw e;
+          }
+          currentEvent = "";
+        }
       }
-      throw error;
     }
+
+    if (!result) {
+      throw new Error("Stream encerrado sem resultado");
+    }
+
+    return mapContentValidationToAnalyzePieceResponse(result, campaignId, toUiChannel(input.channel));
   },
+
 };
 
 export const creativePiecesAPI = {
@@ -440,6 +484,20 @@ export const creativePiecesAPI = {
   deleteEmailFile: async (campaignId: string): Promise<void> => {
     await fetchAPI(`/campaigns/${campaignId}/creative-pieces/email`, {
       method: "DELETE",
+    });
+  },
+
+  updatePieceIaAnalysis: async (
+    campaignId: string,
+    pieceId: string,
+    iaVerdict: "approved" | "rejected",
+    iaAnalysisText?: string,
+  ): Promise<CreativePiece> => {
+    const body: Record<string, unknown> = { iaVerdict };
+    if (iaAnalysisText != null) body.iaAnalysisText = iaAnalysisText;
+    return await fetchAPI<CreativePiece>(`/campaigns/${campaignId}/creative-pieces/${pieceId}/ia-analysis`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
     });
   },
 };

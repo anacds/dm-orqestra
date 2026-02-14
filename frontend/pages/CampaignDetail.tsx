@@ -8,7 +8,7 @@ import { ArrowLeft, Plus, MessageSquare, Send, AlertCircle, Edit2, Save, X, Load
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
-import { campaignsAPI, authAPI, aiAPI, creativePiecesAPI, type AnalyzePieceInput } from "@/lib/api";
+import { campaignsAPI, authAPI, aiAPI, creativePiecesAPI, type AnalyzePieceInput, type ValidationStepEvent } from "@/lib/api";
 import { Campaign, Comment, CampaignStatus, AnalyzePieceResponse, PieceReviewEvent, CampaignStatusEvent } from "@shared/api";
 import { format, formatDistanceToNow } from "date-fns";
 
@@ -91,8 +91,6 @@ export default function CampaignDetail() {
   const [isAnalyzingPush, setIsAnalyzingPush] = useState(false);
   const [smsAnalysis, setSmsAnalysis] = useState<AnalyzePieceResponse | null>(null);
   const [pushAnalysis, setPushAnalysis] = useState<AnalyzePieceResponse | null>(null);
-  const [submittedSmsAnalysis, setSubmittedSmsAnalysis] = useState<AnalyzePieceResponse | null>(null);
-  const [submittedPushAnalysis, setSubmittedPushAnalysis] = useState<AnalyzePieceResponse | null>(null);
   const [smsSubmitted, setSmsSubmitted] = useState(false);
   const [pushSubmitted, setPushSubmitted] = useState(false);
   const [appFiles, setAppFiles] = useState<Record<string, File | null>>({});
@@ -110,11 +108,11 @@ export default function CampaignDetail() {
   const [isAnalyzingEmail, setIsAnalyzingEmail] = useState(false);
   const [isAnalyzingAppBySpace, setIsAnalyzingAppBySpace] = useState<Record<string, boolean>>({});
   const isAnalyzingAnyApp = Object.values(isAnalyzingAppBySpace).some(Boolean);
+  const [liveValidationSteps, setLiveValidationSteps] = useState<Map<string, ValidationStepEvent>>(new Map());
   const [mmValidatingPiece, setMmValidatingPiece] = useState<string | null>(null); // key: "channel:pieceId:space"
   const [mmAnalysisResults, setMmAnalysisResults] = useState<Record<string, AnalyzePieceResponse>>({}); // key → resultado
   const [statusError, setStatusError] = useState<string | null>(null);
   const [emailUploadError, setEmailUploadError] = useState<string | null>(null);
-  const [skipEmailAnalysisFetch, setSkipEmailAnalysisFetch] = useState(false);
   const [appUploadErrors, setAppUploadErrors] = useState<Record<string, string>>({});
   const [activeChannelTab, setActiveChannelTab] = useState<string>("");
   const [studioOpen, setStudioOpen] = useState(false);
@@ -212,80 +210,6 @@ export default function CampaignDetail() {
   }, [campaign?.creativePieces]);
 
   
-  useEffect(() => {
-    const loadAnalyses = async () => {
-      if (!id || !campaign?.creativePieces) return;
-      
-      const smsPiece = campaign.creativePieces.find(p => p.pieceType === "SMS");
-      const pushPiece = campaign.creativePieces.find(p => p.pieceType === "Push");
-      
-      
-      if (smsPiece && smsPiece.text) {
-        try {
-          const analysis = await aiAPI.getAnalysis(id, "SMS");
-          setSubmittedSmsAnalysis(analysis);
-        } catch {
-          setSubmittedSmsAnalysis(null);
-        }
-      } else {
-        setSubmittedSmsAnalysis(null);
-      }
-
-      if (pushPiece && (pushPiece.title || pushPiece.body)) {
-        try {
-          const analysis = await aiAPI.getAnalysis(id, "Push");
-          setSubmittedPushAnalysis(analysis);
-        } catch {
-          setSubmittedPushAnalysis(null);
-        }
-      } else {
-        setSubmittedPushAnalysis(null);
-      }
-
-      const emailPiece = campaign.creativePieces.find(p => p.pieceType === "E-mail");
-      if (emailPiece?.id) {
-        // Skip fetch if we just uploaded a new file (to avoid restoring old cached analysis)
-        if (skipEmailAnalysisFetch) {
-          setSkipEmailAnalysisFetch(false);
-          // Keep emailAnalysis as null (already set in handleEmailFileUpload)
-        } else {
-          try {
-            const analysis = await aiAPI.getAnalysis(id, "E-mail", { pieceId: emailPiece.id });
-            setEmailAnalysis(analysis);
-          } catch {
-            setEmailAnalysis(null);
-          }
-        }
-      } else {
-        setEmailAnalysis(null);
-      }
-
-      const appPiece = campaign.creativePieces.find(p => p.pieceType === "App");
-      if (appPiece?.id && appPiece?.fileUrls) {
-        try {
-          const fileUrls = JSON.parse(appPiece.fileUrls) as Record<string, string>;
-          const next: Record<string, AnalyzePieceResponse | null> = {};
-          await Promise.all(
-            Object.keys(fileUrls).map(async (space) => {
-              try {
-                const a = await aiAPI.getAnalysis(id, "App", { pieceId: appPiece.id, commercialSpace: space });
-                next[space] = a;
-              } catch {
-                next[space] = null;
-              }
-            })
-          );
-          setAppAnalysis(next);
-        } catch {
-          setAppAnalysis({});
-        }
-      } else {
-        setAppAnalysis({});
-      }
-    };
-
-    loadAnalyses();
-  }, [id, campaign?.creativePieces]);
 
   const updateMutation = useMutation({
     mutationFn: (data: Parameters<typeof campaignsAPI.update>[1]) =>
@@ -325,7 +249,7 @@ export default function CampaignDetail() {
   });
 
   const submitForReviewMutation = useMutation({
-    mutationFn: (pieceReviews: { channel: string; pieceId: string; commercialSpace?: string; iaVerdict: string | null }[]) =>
+    mutationFn: (pieceReviews: { channel: string; pieceId: string; commercialSpace?: string }[]) =>
       campaignsAPI.submitForReview(id!, pieceReviews),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["campaign", id] });
@@ -351,17 +275,15 @@ export default function CampaignDetail() {
   const analyzePieceMutation = useMutation({
     mutationFn: ({ input }: { input: AnalyzePieceInput; target: AnalyzeTarget; space?: string }) =>
       aiAPI.analyzePiece(id!, input),
-    onSuccess: (data, { target, space }) => {
+    onSuccess: (data, { target }) => {
       if (target === "sms") setSmsAnalysis(data);
       else if (target === "push") setPushAnalysis(data);
-      else if (target === "email") setEmailAnalysis(data);
-      else if (target === "app" && space) setAppAnalysis(prev => ({ ...prev, [space]: data }));
     },
   });
 
   const submitCreativePieceMutation = useMutation({
-    mutationFn: ({ pieceType, text, title, body }: { pieceType: "SMS" | "Push"; text?: string; title?: string; body?: string }) =>
-      creativePiecesAPI.submitCreativePiece(id!, { pieceType, text, title, body }),
+    mutationFn: ({ pieceType, text, title, body, iaVerdict, iaAnalysisText }: { pieceType: "SMS" | "Push"; text?: string; title?: string; body?: string; iaVerdict?: string; iaAnalysisText?: string }) =>
+      creativePiecesAPI.submitCreativePiece(id!, { pieceType, text, title, body, iaVerdict, iaAnalysisText }),
     onSuccess: async (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["campaign", id] });
       queryClient.invalidateQueries({ queryKey: ["campaigns"] });
@@ -369,42 +291,14 @@ export default function CampaignDetail() {
       if (variables.pieceType === "SMS") {
         setSmsSubmitted(true);
         setTimeout(() => setSmsSubmitted(false), 3000);
-
-        // Backend returns the latest cached result for this campaign+channel
-        let analysis: AnalyzePieceResponse | null = null;
-        try {
-          analysis = await aiAPI.getAnalysis(id!, "SMS");
-        } catch {
-          /* no stored analysis */
-        }
-        // If no cached analysis found but we have a current smsAnalysis, use it as fallback
-        if (!analysis && smsAnalysis) {
-          analysis = smsAnalysis;
-        }
-        setSubmittedSmsAnalysis(analysis);
       } else {
         setPushSubmitted(true);
         setTimeout(() => setPushSubmitted(false), 3000);
-
-        // Backend returns the latest cached result for this campaign+channel
-        let analysis: AnalyzePieceResponse | null = null;
-        try {
-          analysis = await aiAPI.getAnalysis(id!, "Push");
-        } catch {
-          /* no stored analysis */
-        }
-        // If no cached analysis found but we have a current pushAnalysis, use it as fallback
-        if (!analysis && pushAnalysis) {
-          analysis = pushAnalysis;
-        }
-        setSubmittedPushAnalysis(analysis);
       }
 
       setSmsText("");
       setPushTitle("");
       setPushBody("");
-      setSmsAnalysis(null);
-      setPushAnalysis(null);
     },
   });
 
@@ -441,31 +335,50 @@ export default function CampaignDetail() {
   const handleAnalyzePieceEmail = async () => {
     if (!id || !emailPieceId) return;
     setIsAnalyzingEmail(true);
+    setLiveValidationSteps(new Map());
     try {
-      await analyzePieceMutation.mutateAsync({
-        input: { channel: "EMAIL", content: { campaign_id: id, piece_id: emailPieceId } },
-        target: "email",
+      const input: AnalyzePieceInput = { channel: "EMAIL", content: { campaign_id: id, piece_id: emailPieceId } };
+      const result = await aiAPI.analyzePieceStream(id, input, (step) => {
+        setLiveValidationSteps((prev) => new Map(prev).set(step.node, step));
       });
+      setEmailAnalysis(result);
+      if (emailPieceId) {
+        const verdict: "approved" | "rejected" = result.is_valid === "valid" ? "approved" : "rejected";
+        try {
+          await creativePiecesAPI.updatePieceIaAnalysis(id, emailPieceId, verdict, result.analysis_text);
+          queryClient.invalidateQueries({ queryKey: ["campaign", id] });
+        } catch { /* best-effort */ }
+      }
     } catch {
       /* already surfaced */
     } finally {
       setIsAnalyzingEmail(false);
+      setLiveValidationSteps(new Map());
     }
   };
 
   const handleAnalyzePieceApp = async (space: string) => {
     if (!id || !appPieceId) return;
     setIsAnalyzingAppBySpace(prev => ({ ...prev, [space]: true }));
+    setLiveValidationSteps(new Map());
     try {
-      await analyzePieceMutation.mutateAsync({
-        input: { channel: "APP", content: { campaign_id: id, piece_id: appPieceId, commercial_space: space } },
-        target: "app",
-        space,
+      const input: AnalyzePieceInput = { channel: "APP", content: { campaign_id: id, piece_id: appPieceId, commercial_space: space } };
+      const result = await aiAPI.analyzePieceStream(id, input, (step) => {
+        setLiveValidationSteps((prev) => new Map(prev).set(step.node, step));
       });
+      setAppAnalysis(prev => ({ ...prev, [space]: result }));
+      if (appPieceId) {
+        const verdict: "approved" | "rejected" = result.is_valid === "valid" ? "approved" : "rejected";
+        try {
+          await creativePiecesAPI.updatePieceIaAnalysis(id, appPieceId, verdict, result.analysis_text);
+          queryClient.invalidateQueries({ queryKey: ["campaign", id] });
+        } catch { /* best-effort */ }
+      }
     } catch {
       /* already surfaced */
     } finally {
       setIsAnalyzingAppBySpace(prev => ({ ...prev, [space]: false }));
+      setLiveValidationSteps(new Map());
     }
   };
 
@@ -507,12 +420,13 @@ export default function CampaignDetail() {
       // 2. Guardar resultado para exibir justificativas
       setMmAnalysisResults(prev => ({ ...prev, [key]: result }));
 
-      // 3. Atualizar ia_verdict no piece_review
+      // 3. Atualizar ia_verdict e ia_analysis_text no piece_review
       await campaignsAPI.updateIaVerdict(id, {
         channel: ch,
         pieceId: pr.pieceId,
         commercialSpace: pr.commercialSpace,
         iaVerdict,
+        iaAnalysisText: result.analysis_text,
       });
 
       queryClient.invalidateQueries({ queryKey: ["campaign", id] });
@@ -526,21 +440,25 @@ export default function CampaignDetail() {
   };
 
   useEffect(() => {
-    setSmsAnalysis(null);
+    if (smsText) setSmsAnalysis(null);
   }, [smsText]);
 
   useEffect(() => {
-    setPushAnalysis(null);
+    if (pushTitle || pushBody) setPushAnalysis(null);
   }, [pushTitle, pushBody]);
 
   const handleSubmitPiece = async (pieceType: "SMS" | "Push") => {
     try {
       if (pieceType === "SMS") {
         if (!smsText.trim()) return;
-        await submitCreativePieceMutation.mutateAsync({ pieceType: "SMS", text: smsText });
+        const verdict = smsAnalysis ? (smsAnalysis.is_valid === "valid" ? "approved" : "rejected") : undefined;
+        const analysisText = smsAnalysis?.analysis_text ?? undefined;
+        await submitCreativePieceMutation.mutateAsync({ pieceType: "SMS", text: smsText, iaVerdict: verdict, iaAnalysisText: analysisText });
       } else {
         if (!pushTitle.trim() || !pushBody.trim()) return;
-        await submitCreativePieceMutation.mutateAsync({ pieceType: "Push", title: pushTitle, body: pushBody });
+        const verdict = pushAnalysis ? (pushAnalysis.is_valid === "valid" ? "approved" : "rejected") : undefined;
+        const analysisText = pushAnalysis?.analysis_text ?? undefined;
+        await submitCreativePieceMutation.mutateAsync({ pieceType: "Push", title: pushTitle, body: pushBody, iaVerdict: verdict, iaAnalysisText: analysisText });
       }
     } catch (error) {
       
@@ -618,7 +536,6 @@ export default function CampaignDetail() {
     
     setEmailUploading(true);
     setEmailUploadError(null);
-    setSkipEmailAnalysisFetch(true); // Evita re-fetch da análise antiga após upload
     try {
       const result = await creativePiecesAPI.uploadEmailFile(id, file);
       queryClient.invalidateQueries({ queryKey: ["campaign", id] });
@@ -775,60 +692,33 @@ export default function CampaignDetail() {
     return "SMS";
   };
 
-  const buildPieceReviewsForSubmit = (): { channel: string; pieceId: string; commercialSpace?: string; iaVerdict: string | null }[] => {
+  const buildPieceReviewsForSubmit = (): { channel: string; pieceId: string; commercialSpace?: string }[] => {
     if (!campaign?.creativePieces?.length) return [];
-    const out: { channel: string; pieceId: string; commercialSpace?: string; iaVerdict: string | null }[] = [];
+    const out: { channel: string; pieceId: string; commercialSpace?: string }[] = [];
     const smsPiece = campaign.creativePieces.find(p => p.pieceType === "SMS");
     const pushPiece = campaign.creativePieces.find(p => p.pieceType === "Push");
     const emailPiece = campaign.creativePieces.find(p => p.pieceType === "E-mail");
     const appPiece = campaign.creativePieces.find(p => p.pieceType === "App");
-    const toIa = (a: AnalyzePieceResponse | null | undefined): "approved" | "rejected" | null => {
-      if (!a) return null; // não validado por IA
-      return a.is_valid === "valid" ? "approved" : "rejected";
-    };
     if (smsPiece?.id) {
-      const a = submittedSmsAnalysis ?? smsAnalysis;
-      out.push({ channel: "SMS", pieceId: smsPiece.id, iaVerdict: toIa(a) });
+      out.push({ channel: "SMS", pieceId: smsPiece.id });
     }
     if (pushPiece?.id) {
-      const a = submittedPushAnalysis ?? pushAnalysis;
-      out.push({ channel: "PUSH", pieceId: pushPiece.id, iaVerdict: toIa(a) });
+      out.push({ channel: "PUSH", pieceId: pushPiece.id });
     }
     if (emailPiece?.id) {
-      out.push({ channel: "EMAIL", pieceId: emailPiece.id, iaVerdict: toIa(emailAnalysis) });
+      out.push({ channel: "EMAIL", pieceId: emailPiece.id });
     }
     if (appPiece?.id && appPiece.fileUrls) {
       try {
         const urls = JSON.parse(appPiece.fileUrls) as Record<string, string>;
         Object.keys(urls).forEach(space => {
-          out.push({
-            channel: "APP",
-            pieceId: appPiece!.id,
-            commercialSpace: space,
-            iaVerdict: toIa(appAnalysis[space]),
-          });
+          out.push({ channel: "APP", pieceId: appPiece!.id, commercialSpace: space });
         });
       } catch {
         /* ignore */
       }
     }
     return out;
-  };
-
-  const computeReviewState = (c: Campaign) => {
-    const pr = c.pieceReviews ?? [];
-    let allApproved = pr.length > 0;
-    let anyRejected = false;
-    for (const r of pr) {
-      const ia = r.iaVerdict ? r.iaVerdict.toLowerCase() : null;
-      const hu = (r.humanVerdict || "").toLowerCase();
-      // ia null = não validado por IA → depende do humano (como "rejected")
-      const approved = (ia === "approved" && hu !== "manually_rejected") || ((ia === "rejected" || ia === null) && hu === "approved");
-      const rejected = (ia === "approved" && hu === "manually_rejected") || ((ia === "rejected" || ia === null) && hu === "rejected");
-      if (!approved) allApproved = false;
-      if (rejected) anyRejected = true;
-    }
-    return { allApproved, anyRejected };
   };
 
   const getPieceReviewsForChannel = (ch: string) => {
@@ -884,6 +774,7 @@ export default function CampaignDetail() {
   ) => {
     const ia = pr.iaVerdict ? pr.iaVerdict.toLowerCase() : null;
     const hu = (pr.humanVerdict || "").toLowerCase();
+    const eff = pr.effectiveStatus;
     const notValidatedByIa = ia === null;
     const needsHuman = ia === "rejected" || notValidatedByIa;
     const canApproveReject = needsHuman && hu === "pending";
@@ -891,8 +782,8 @@ export default function CampaignDetail() {
     const pending = reviewPieceMutation.isPending;
     const displayActions = showActions !== false;
     const reviewed = hu !== "pending";
-    const isApproved = hu === "approved" || (ia === "approved" && hu !== "manually_rejected");
-    const isRejected = hu === "rejected" || hu === "manually_rejected";
+    const isApproved = eff === "approved";
+    const isRejected = eff === "rejected";
     const blockVariant = isRejected ? "red" : isApproved ? "green" : "yellow";
     const variantClasses = {
       green: "bg-green-50 border-green-200 dark:bg-green-950/20 dark:border-green-800",
@@ -963,18 +854,13 @@ export default function CampaignDetail() {
                 </div>
               );
             })()}
-            {/* Resultado detalhado da análise de IA (MM ou qualquer perfil com análise em cache) */}
+            {/* Resultado detalhado da análise de IA */}
             {(() => {
               const pieceKey = `${channelToApi(uiChannel)}:${pr.pieceId}:${pr.commercialSpace || ""}`;
-              const ch = channelToApi(uiChannel);
-              // Primeiro tenta resultado local (MM acabou de validar), depois busca do cache carregado ao abrir a página
-              const analysis = mmAnalysisResults[pieceKey]
-                || (ch === "SMS" ? submittedSmsAnalysis : null)
-                || (ch === "PUSH" ? submittedPushAnalysis : null)
-                || (ch === "EMAIL" ? emailAnalysis : null)
-                || (ch === "APP" && pr.commercialSpace ? appAnalysis[pr.commercialSpace] : null);
-              if (!analysis) return null;
-              const isValid = analysis.is_valid === "valid";
+              const mmResult = mmAnalysisResults[pieceKey];
+              const analysisText = mmResult?.analysis_text ?? pr.iaAnalysisText;
+              if (!analysisText || !ia) return null;
+              const isValid = ia === "approved";
               return (
                 <div className={cn(
                   "mt-2 p-3 rounded-lg border",
@@ -996,12 +882,17 @@ export default function CampaignDetail() {
                         {isValid ? "Conteúdo aprovado pela IA" : "Validação reprovada pela IA"}
                       </p>
                       <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
-                        {analysis.analysis_text}
+                        {analysisText}
                       </p>
-                      {analysis.created_at && (
-                        <p className="text-xs text-foreground/50 mt-1.5">
-                          Análise em {format(new Date(analysis.created_at), "dd/MM/yyyy 'às' HH:mm")}
-                        </p>
+                      {mmResult?.sources && mmResult.sources.length > 0 && (
+                        <div className="mt-2 pt-2 border-t border-border/50">
+                          <p className="text-xs font-medium text-foreground/60 mb-1">Fontes consultadas:</p>
+                          <ul className="text-xs text-foreground/50 space-y-0.5">
+                            {mmResult.sources.map((src, i) => (
+                              <li key={i}>• {src}</li>
+                            ))}
+                          </ul>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -1098,14 +989,10 @@ export default function CampaignDetail() {
 
     if (userRole === "Gestor de marketing") {
       if (campaign.status === "CONTENT_REVIEW") {
-        const { allApproved, anyRejected } = computeReviewState(campaign);
-        const pieceReviews = campaign.pieceReviews || [];
-        const approvedCount = pieceReviews.filter(r => {
-          const ia = r.iaVerdict ? r.iaVerdict.toLowerCase() : null;
-          const hu = (r.humanVerdict || "").toLowerCase();
-          return hu === "approved" || (hu === "pending" && ia === "approved");
-        }).length;
-        const totalCount = pieceReviews.length;
+        const allApproved = campaign.allPiecesApproved ?? false;
+        const anyRejected = campaign.hasRejectedPieces ?? false;
+        const approvedCount = campaign.approvedPieceCount ?? 0;
+        const totalCount = campaign.totalPieceCount ?? 0;
         
         actions.push(
           { 
@@ -1230,6 +1117,7 @@ export default function CampaignDetail() {
         <ValidationLoadingOverlay
           isLoading={true}
           channel={currentAnalyzingChannel}
+          liveSteps={liveValidationSteps}
         />
       )}
 
@@ -1334,21 +1222,9 @@ export default function CampaignDetail() {
           campaign={campaign}
           currentUser={currentUser}
           pieceCount={campaign.creativePieces?.length || 0}
-          approvedPieceCount={
-            (campaign.pieceReviews || []).filter(r => {
-              const hu = (r.humanVerdict || "").toLowerCase();
-              const ia = r.iaVerdict ? r.iaVerdict.toLowerCase() : null;
-              return hu === "approved" || (hu === "pending" && ia === "approved");
-            }).length
-          }
-          totalPieceCount={(campaign.pieceReviews || []).length}
-          hasRejectedPieces={
-            (campaign.pieceReviews || []).some(r => {
-              const hu = (r.humanVerdict || "").toLowerCase();
-              const ia = r.iaVerdict ? r.iaVerdict.toLowerCase() : null;
-              return hu === "rejected" || hu === "manually_rejected" || (hu === "pending" && ia === "rejected");
-            })
-          }
+          approvedPieceCount={campaign.approvedPieceCount ?? 0}
+          totalPieceCount={campaign.totalPieceCount ?? 0}
+          hasRejectedPieces={campaign.hasRejectedPieces ?? false}
         />
         
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 order-2">
@@ -1890,6 +1766,16 @@ export default function CampaignDetail() {
                                 <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
                                   {smsAnalysis.analysis_text}
                                 </p>
+                                {smsAnalysis.sources && smsAnalysis.sources.length > 0 && (
+                                  <div className="mt-2 pt-2 border-t border-border/50">
+                                    <p className="text-xs font-medium text-foreground/60 mb-1">Fontes consultadas:</p>
+                                    <ul className="text-xs text-foreground/50 space-y-0.5">
+                                      {smsAnalysis.sources.map((src, i) => (
+                                        <li key={i}>• {src}</li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
                                 <p className="text-xs text-foreground/60 mt-2">
                                   Análise realizada em {format(new Date(smsAnalysis.created_at), "dd/MM/yyyy 'às' HH:mm")}
                                 </p>
@@ -2059,6 +1945,16 @@ export default function CampaignDetail() {
                                 <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
                                   {pushAnalysis.analysis_text}
                                 </p>
+                                {pushAnalysis.sources && pushAnalysis.sources.length > 0 && (
+                                  <div className="mt-2 pt-2 border-t border-border/50">
+                                    <p className="text-xs font-medium text-foreground/60 mb-1">Fontes consultadas:</p>
+                                    <ul className="text-xs text-foreground/50 space-y-0.5">
+                                      {pushAnalysis.sources.map((src, i) => (
+                                        <li key={i}>• {src}</li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
                                 <p className="text-xs text-foreground/60 mt-2">
                                   Análise realizada em {format(new Date(pushAnalysis.created_at), "dd/MM/yyyy 'às' HH:mm")}
                                 </p>
@@ -2254,6 +2150,16 @@ export default function CampaignDetail() {
                                           <p className="text-xs text-foreground whitespace-pre-wrap leading-relaxed">
                                             {appAnalysis[space]!.analysis_text}
                                           </p>
+                                          {appAnalysis[space]!.sources && appAnalysis[space]!.sources!.length > 0 && (
+                                            <div className="mt-2 pt-2 border-t border-border/50">
+                                              <p className="text-xs font-medium text-foreground/60 mb-1">Fontes consultadas:</p>
+                                              <ul className="text-xs text-foreground/50 space-y-0.5">
+                                                {appAnalysis[space]!.sources!.map((src, i) => (
+                                                  <li key={i}>• {src}</li>
+                                                ))}
+                                              </ul>
+                                            </div>
+                                          )}
                                         </div>
                                       </div>
                                     </div>
@@ -2414,6 +2320,16 @@ export default function CampaignDetail() {
                                 <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
                                   {emailAnalysis.analysis_text}
                                 </p>
+                                {emailAnalysis.sources && emailAnalysis.sources.length > 0 && (
+                                  <div className="mt-2 pt-2 border-t border-border/50">
+                                    <p className="text-xs font-medium text-foreground/60 mb-1">Fontes consultadas:</p>
+                                    <ul className="text-xs text-foreground/50 space-y-0.5">
+                                      {emailAnalysis.sources.map((src, i) => (
+                                        <li key={i}>• {src}</li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
                                 <p className="text-xs text-foreground/60 mt-2">
                                   Análise realizada em {format(new Date(emailAnalysis.created_at), "dd/MM/yyyy 'às' HH:mm")}
                                 </p>
@@ -2456,70 +2372,36 @@ export default function CampaignDetail() {
                                 <span>Criado em {format(new Date(piece.createdAt), "dd/MM/yyyy 'às' HH:mm")}</span>
                               </div>
                               
-                              {/* Warning if piece was submitted without validation */}
-                              {!submittedSmsAnalysis && (
-                                <div className="mt-4 p-4 rounded-lg border-2 bg-yellow-50 border-yellow-200 dark:bg-yellow-950/20 dark:border-yellow-800">
-                                  <div className="flex items-start gap-3">
-                                    <AlertTriangle size={20} className="text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" />
-                                    <div className="flex-1">
-                                      <p className="text-sm font-semibold mb-1 text-yellow-900 dark:text-yellow-100">
-                                        Peça não validada
-                                      </p>
-                                      <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                                        Esta peça criativa foi submetida sem validação automática. Recomendamos validar a peça antes de prosseguir com a campanha.
-                                      </p>
-                                    </div>
-                                  </div>
-                                </div>
-                              )}
-                              
-                              {/* Display Analysis for Submitted SMS Piece */}
-                              {submittedSmsAnalysis && (
-                                <div className={cn(
-                                  "mt-4 p-4 rounded-lg border-2",
-                                  submittedSmsAnalysis.is_valid === "valid" 
-                                    ? "bg-green-50 border-green-200 dark:bg-green-950/20 dark:border-green-800"
-                                    : submittedSmsAnalysis.is_valid === "invalid"
-                                    ? "bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-800"
-                                    : "bg-yellow-50 border-yellow-200 dark:bg-yellow-950/20 dark:border-yellow-800"
-                                )}>
-                                  <div className="flex items-start gap-3">
-                                    {submittedSmsAnalysis.is_valid === "valid" ? (
-                                      <CheckCircle size={20} className="text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
-                                    ) : submittedSmsAnalysis.is_valid === "invalid" ? (
-                                      <AlertCircle size={20} className="text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
-                                    ) : (
-                                      <AlertTriangle size={20} className="text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" />
-                                    )}
-                                    <div className="flex-1">
-                                      <p className={cn(
-                                        "text-sm font-semibold mb-2",
-                                        submittedSmsAnalysis.is_valid === "valid"
-                                          ? "text-green-900 dark:text-green-100"
-                                          : submittedSmsAnalysis.is_valid === "invalid"
-                                          ? "text-red-900 dark:text-red-100"
-                                          : "text-yellow-900 dark:text-yellow-100"
-                                      )}>
-                                        {submittedSmsAnalysis.is_valid === "valid" 
-                                          ? "Conteúdo aprovado" 
-                                          : submittedSmsAnalysis.is_valid === "invalid"
-                                          ? "Validação Reprovada"
-                                          : "Validação com Ressalvas"}
-                                      </p>
-                                      <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
-                                        {submittedSmsAnalysis.analysis_text}
-                                      </p>
-                                      <p className="text-xs text-foreground/60 mt-2">
-                                        Análise realizada em {format(new Date(submittedSmsAnalysis.created_at), "dd/MM/yyyy 'às' HH:mm")}
-                                      </p>
-                                    </div>
-                                  </div>
-                                </div>
-                              )}
+                              {/* Piece review block from backend (includes IA analysis text and effective status) */}
                               {showPieceReviewBlock && (() => {
                                 const pr = getPieceReviewsForChannel("SMS")[0];
                                 return pr ? renderPieceReviewBlock(pr, "SMS", undefined, showPieceReviewActions) : null;
                               })()}
+                              {/* IA analysis persisted on creative piece (CREATIVE_STAGE) */}
+                              {!showPieceReviewBlock && piece.iaVerdict && (
+                                <div className={cn(
+                                  "mt-4 p-4 rounded-lg border-2",
+                                  piece.iaVerdict === "approved"
+                                    ? "bg-green-50 border-green-200 dark:bg-green-950/20 dark:border-green-800"
+                                    : "bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-800"
+                                )}>
+                                  <div className="flex items-start gap-3">
+                                    {piece.iaVerdict === "approved" ? (
+                                      <CheckCircle size={20} className="text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
+                                    ) : (
+                                      <AlertCircle size={20} className="text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
+                                    )}
+                                    <div className="flex-1">
+                                      <p className={cn("text-sm font-semibold mb-2", piece.iaVerdict === "approved" ? "text-green-900 dark:text-green-100" : "text-red-900 dark:text-red-100")}>
+                                        {piece.iaVerdict === "approved" ? "Conteúdo aprovado" : "Validação Reprovada"}
+                                      </p>
+                                      {piece.iaAnalysisText && (
+                                        <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{piece.iaAnalysisText}</p>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           )}
 
@@ -2553,70 +2435,36 @@ export default function CampaignDetail() {
                                 Criado em {format(new Date(piece.createdAt), "dd/MM/yyyy 'às' HH:mm")}
                               </div>
                               
-                              {/* Warning if piece was submitted without validation */}
-                              {!submittedPushAnalysis && (
-                                <div className="mt-4 p-4 rounded-lg border-2 bg-yellow-50 border-yellow-200 dark:bg-yellow-950/20 dark:border-yellow-800">
-                                  <div className="flex items-start gap-3">
-                                    <AlertTriangle size={20} className="text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" />
-                                    <div className="flex-1">
-                                      <p className="text-sm font-semibold mb-1 text-yellow-900 dark:text-yellow-100">
-                                        Peça não validada
-                                      </p>
-                                      <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                                        Esta peça criativa foi submetida sem validação automática. Recomendamos validar a peça antes de prosseguir com a campanha.
-                                      </p>
-                                    </div>
-                                  </div>
-                                </div>
-                              )}
-                              
-                              {/* Display Analysis for Submitted Push Piece */}
-                              {submittedPushAnalysis && (
-                                <div className={cn(
-                                  "mt-4 p-4 rounded-lg border-2",
-                                  submittedPushAnalysis.is_valid === "valid" 
-                                    ? "bg-green-50 border-green-200 dark:bg-green-950/20 dark:border-green-800"
-                                    : submittedPushAnalysis.is_valid === "invalid"
-                                    ? "bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-800"
-                                    : "bg-yellow-50 border-yellow-200 dark:bg-yellow-950/20 dark:border-yellow-800"
-                                )}>
-                                  <div className="flex items-start gap-3">
-                                    {submittedPushAnalysis.is_valid === "valid" ? (
-                                      <CheckCircle size={20} className="text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
-                                    ) : submittedPushAnalysis.is_valid === "invalid" ? (
-                                      <AlertCircle size={20} className="text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
-                                    ) : (
-                                      <AlertTriangle size={20} className="text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" />
-                                    )}
-                                    <div className="flex-1">
-                                      <p className={cn(
-                                        "text-sm font-semibold mb-2",
-                                        submittedPushAnalysis.is_valid === "valid"
-                                          ? "text-green-900 dark:text-green-100"
-                                          : submittedPushAnalysis.is_valid === "invalid"
-                                          ? "text-red-900 dark:text-red-100"
-                                          : "text-yellow-900 dark:text-yellow-100"
-                                      )}>
-                                        {submittedPushAnalysis.is_valid === "valid" 
-                                          ? "Conteúdo aprovado" 
-                                          : submittedPushAnalysis.is_valid === "invalid"
-                                          ? "Validação Reprovada"
-                                          : "Validação com Ressalvas"}
-                                      </p>
-                                      <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
-                                        {submittedPushAnalysis.analysis_text}
-                                      </p>
-                                      <p className="text-xs text-foreground/60 mt-2">
-                                        Análise realizada em {format(new Date(submittedPushAnalysis.created_at), "dd/MM/yyyy 'às' HH:mm")}
-                                      </p>
-                                    </div>
-                                  </div>
-                                </div>
-                              )}
+                              {/* Piece review block from backend */}
                               {showPieceReviewBlock && (() => {
                                 const pr = getPieceReviewsForChannel("Push")[0];
                                 return pr ? renderPieceReviewBlock(pr, "Push", undefined, showPieceReviewActions) : null;
                               })()}
+                              {/* IA analysis persisted on creative piece (CREATIVE_STAGE) */}
+                              {!showPieceReviewBlock && piece.iaVerdict && (
+                                <div className={cn(
+                                  "mt-4 p-4 rounded-lg border-2",
+                                  piece.iaVerdict === "approved"
+                                    ? "bg-green-50 border-green-200 dark:bg-green-950/20 dark:border-green-800"
+                                    : "bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-800"
+                                )}>
+                                  <div className="flex items-start gap-3">
+                                    {piece.iaVerdict === "approved" ? (
+                                      <CheckCircle size={20} className="text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
+                                    ) : (
+                                      <AlertCircle size={20} className="text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
+                                    )}
+                                    <div className="flex-1">
+                                      <p className={cn("text-sm font-semibold mb-2", piece.iaVerdict === "approved" ? "text-green-900 dark:text-green-100" : "text-red-900 dark:text-red-100")}>
+                                        {piece.iaVerdict === "approved" ? "Conteúdo aprovado" : "Validação Reprovada"}
+                                      </p>
+                                      {piece.iaAnalysisText && (
+                                        <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{piece.iaAnalysisText}</p>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           )}
 
@@ -2680,7 +2528,7 @@ export default function CampaignDetail() {
                                           )}
                                         </div>
                                         {/* Warning if this piece was submitted without validation */}
-                                        {!appAnalysis[space] && (
+                                        {!appAnalysis[space] && !piece.iaVerdict && (
                                           <div className="p-3 rounded-lg border-2 bg-yellow-50 border-yellow-200 dark:bg-yellow-950/20 dark:border-yellow-800">
                                             <div className="flex items-start gap-2">
                                               <AlertTriangle size={16} className="text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" />
@@ -2691,6 +2539,31 @@ export default function CampaignDetail() {
                                                 <p className="text-xs text-yellow-800 dark:text-yellow-200">
                                                   Esta peça foi submetida sem validação automática. Recomendamos validar antes de prosseguir.
                                                 </p>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        )}
+                                        {/* IA analysis persisted on creative piece */}
+                                        {!showPieceReviewBlock && !appAnalysis[space] && piece.iaVerdict && (
+                                          <div className={cn(
+                                            "p-3 rounded-lg border-2",
+                                            piece.iaVerdict === "approved"
+                                              ? "bg-green-50 border-green-200 dark:bg-green-950/20 dark:border-green-800"
+                                              : "bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-800"
+                                          )}>
+                                            <div className="flex items-start gap-2">
+                                              {piece.iaVerdict === "approved" ? (
+                                                <CheckCircle size={16} className="text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
+                                              ) : (
+                                                <AlertCircle size={16} className="text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
+                                              )}
+                                              <div className="flex-1 min-w-0">
+                                                <p className={cn("text-xs font-semibold mb-0.5", piece.iaVerdict === "approved" ? "text-green-900 dark:text-green-100" : "text-red-900 dark:text-red-100")}>
+                                                  {piece.iaVerdict === "approved" ? "Conteúdo aprovado" : "Validação Reprovada"}
+                                                </p>
+                                                {piece.iaAnalysisText && (
+                                                  <p className="text-xs text-foreground whitespace-pre-wrap">{piece.iaAnalysisText}</p>
+                                                )}
                                               </div>
                                             </div>
                                           </div>
@@ -2761,7 +2634,7 @@ export default function CampaignDetail() {
                                 </div>
                               </div>
                               {/* Warning if piece was submitted without validation */}
-                              {!emailAnalysis && (
+                              {!emailAnalysis && !piece.iaVerdict && (
                                 <div className="mt-4 p-4 rounded-lg border-2 bg-yellow-50 border-yellow-200 dark:bg-yellow-950/20 dark:border-yellow-800">
                                   <div className="flex items-start gap-3">
                                     <AlertTriangle size={20} className="text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" />
@@ -2772,6 +2645,31 @@ export default function CampaignDetail() {
                                       <p className="text-sm text-yellow-800 dark:text-yellow-200">
                                         Esta peça criativa foi submetida sem validação automática. Recomendamos validar a peça antes de prosseguir com a campanha.
                                       </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                              {/* IA analysis persisted on creative piece */}
+                              {!showPieceReviewBlock && !emailAnalysis && piece.iaVerdict && (
+                                <div className={cn(
+                                  "mt-4 p-4 rounded-lg border-2",
+                                  piece.iaVerdict === "approved"
+                                    ? "bg-green-50 border-green-200 dark:bg-green-950/20 dark:border-green-800"
+                                    : "bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-800"
+                                )}>
+                                  <div className="flex items-start gap-3">
+                                    {piece.iaVerdict === "approved" ? (
+                                      <CheckCircle size={20} className="text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
+                                    ) : (
+                                      <AlertCircle size={20} className="text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
+                                    )}
+                                    <div className="flex-1">
+                                      <p className={cn("text-sm font-semibold mb-2", piece.iaVerdict === "approved" ? "text-green-900 dark:text-green-100" : "text-red-900 dark:text-red-100")}>
+                                        {piece.iaVerdict === "approved" ? "Conteúdo aprovado" : "Validação Reprovada"}
+                                      </p>
+                                      {piece.iaAnalysisText && (
+                                        <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{piece.iaAnalysisText}</p>
+                                      )}
                                     </div>
                                   </div>
                                 </div>

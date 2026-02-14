@@ -68,6 +68,8 @@ export interface CreativePiece {
   body?: string;
   fileUrls?: string;
   htmlFileUrl?: string;
+  iaVerdict?: "approved" | "rejected" | null;
+  iaAnalysisText?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -99,7 +101,13 @@ export interface Campaign {
   creativePieces?: CreativePiece[];
   /** Set when status is CONTENT_REVIEW (piece review workflow). */
   pieceReviews?: PieceReview[];
+  approvedPieceCount?: number;
+  totalPieceCount?: number;
+  hasRejectedPieces?: boolean;
+  allPiecesApproved?: boolean;
 }
+
+export type EffectiveStatus = "approved" | "rejected" | "pending" | "not_validated";
 
 export interface PieceReview {
   id: string;
@@ -108,7 +116,9 @@ export interface PieceReview {
   pieceId: string;
   commercialSpace: string;
   iaVerdict: "approved" | "rejected" | null;
+  iaAnalysisText?: string | null;
   humanVerdict: "pending" | "approved" | "rejected" | "manually_rejected";
+  effectiveStatus: EffectiveStatus;
   reviewedAt?: string;
   reviewedBy?: string;
   reviewedByName?: string;
@@ -213,6 +223,7 @@ export interface ContentValidationAnalyzePieceResponse {
     specs?: Record<string, unknown> | null;
     legal?: { decision?: string | null; summary?: string | null } | null;
     branding?: Record<string, unknown> | null;
+    sources?: string[];
   } | null;
 }
 
@@ -223,6 +234,7 @@ export interface AnalyzePieceResponse {
   channel: TextChannel | "E-mail" | "App";
   is_valid: "valid" | "invalid";
   analysis_text: string;
+  sources?: string[];
   analyzed_by: string;
   created_at: string;
 }
@@ -232,6 +244,8 @@ export interface SubmitCreativePieceRequest {
   text?: string;
   title?: string;
   body?: string;
+  iaVerdict?: string;
+  iaAnalysisText?: string;
 }
 
 export interface CampaignsResponse {

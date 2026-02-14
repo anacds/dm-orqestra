@@ -687,23 +687,61 @@
 						}
 					}
 				},
-				{
-					"name": "Health Check (direto)",
-					"request": {
-						"auth": { "type": "noauth" },
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{content_validation_url}}/api/content-validation/health",
-							"host": ["{{content_validation_url}}"],
-							"path": ["api", "content-validation", "health"]
-						}
+			{
+				"name": "Analyze Piece Stream — EMAIL (SSE)",
+				"request": {
+					"method": "POST",
+					"header": [
+						{ "key": "Content-Type", "value": "application/json" }
+					],
+					"body": {
+						"mode": "raw",
+						"raw": "{\n  \"task\": \"VALIDATE_COMMUNICATION\",\n  \"channel\": \"EMAIL\",\n  \"content\": {\n    \"campaign_id\": \"{{campaign_id}}\",\n    \"piece_id\": \"{{piece_id}}\"\n  }\n}"
+					},
+					"url": {
+						"raw": "{{api_gateway_url}}/api/ai/analyze-piece/stream",
+						"host": ["{{api_gateway_url}}"],
+						"path": ["api", "ai", "analyze-piece", "stream"]
+					},
+					"description": "Endpoint SSE que retorna eventos de progresso em tempo real durante a validação. Eventos: 'step' (progresso de cada nó do grafo) e 'result' (resultado final). Recomendado para EMAIL e APP."
+				}
+			},
+			{
+				"name": "Analyze Piece Stream — APP (SSE)",
+				"request": {
+					"method": "POST",
+					"header": [
+						{ "key": "Content-Type", "value": "application/json" }
+					],
+					"body": {
+						"mode": "raw",
+						"raw": "{\n  \"task\": \"VALIDATE_COMMUNICATION\",\n  \"channel\": \"APP\",\n  \"content\": {\n    \"campaign_id\": \"{{campaign_id}}\",\n    \"piece_id\": \"{{piece_id}}\",\n    \"commercial_space\": \"Banner superior da Home\"\n  }\n}"
+					},
+					"url": {
+						"raw": "{{api_gateway_url}}/api/ai/analyze-piece/stream",
+						"host": ["{{api_gateway_url}}"],
+						"path": ["api", "ai", "analyze-piece", "stream"]
+					},
+					"description": "Endpoint SSE que retorna eventos de progresso em tempo real durante a validação. Eventos: 'step' (progresso de cada nó do grafo) e 'result' (resultado final). Recomendado para EMAIL e APP."
+				}
+			},
+			{
+				"name": "Health Check (direto)",
+				"request": {
+					"auth": { "type": "noauth" },
+					"method": "GET",
+					"header": [],
+					"url": {
+						"raw": "{{content_validation_url}}/api/content-validation/health",
+						"host": ["{{content_validation_url}}"],
+						"path": ["api", "content-validation", "health"]
 					}
 				}
-			]
-		},
-		{
-			"name": "Legal Service",
+			}
+		]
+	},
+	{
+		"name": "Legal Service",
 			"description": "Validação jurídica de comunicações via RAG (Weaviate + LangGraph). Acessível via REST direto ou A2A.",
 			"item": [
 				{

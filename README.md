@@ -116,7 +116,7 @@ Edite o `.env` com suas chaves. Apenas `OPENAI_API_KEY` é obrigatória. Veja `.
 ### 2. Subir os serviços
 
 ```bash
-docker compose up -d
+docker compose up --build
 ```
 
 Isso inicia todos os containers, executa as migrations (Alembic) e carrega os dados pré-processados no Weaviate.
@@ -130,6 +130,8 @@ Isso inicia todos os containers, executa as migrations (Alembic) e carrega os da
 | Grafana | http://localhost:3001 (admin / orqestra) |
 | Metabase | http://localhost:3002 |
 | Prometheus | http://localhost:9090 |
+
+> **Nota:** O Metabase pode levar de 1 a 3 minutos para ficar disponível na primeira execução. Enquanto não estiver pronto, `http://localhost:3002` retornará erro de conexão.
 
 ### Usuários para testes
 

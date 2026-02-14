@@ -24,6 +24,7 @@ from app.schemas.campaign import (
     ReviewPieceRequest,
     SubmitForReviewRequest,
     UpdateIaVerdictRequest,
+    UpdatePieceIaAnalysisRequest,
 )
 from app.models.user_role import UserRole
 from app.models.campaign import Campaign, CampaignStatus
@@ -83,6 +84,8 @@ def normalize_creative_piece_response(piece) -> dict:
         "text": piece.text,
         "title": piece.title,
         "body": piece.body,
+        "iaVerdict": piece.ia_verdict,
+        "iaAnalysisText": piece.ia_analysis_text,
         "createdAt": piece.created_at,
         "updatedAt": piece.updated_at,
     }
@@ -258,6 +261,33 @@ async def submit_creative_piece(
     return CampaignService.submit_creative_piece(db, campaign_id, piece_data, current_user)
 
 
+@router.patch("/{campaign_id}/creative-pieces/{piece_id}/ia-analysis", response_model=CreativePieceResponse)
+async def update_piece_ia_analysis(
+    campaign_id: str,
+    piece_id: str,
+    body: UpdatePieceIaAnalysisRequest,
+    db: Session = Depends(get_db),
+    current_user: Dict = Depends(get_current_user),
+):
+    """Persist IA analysis result on a creative piece (used after validation for Email/App)."""
+    _get_campaign_or_404(db, campaign_id)
+    piece = (
+        db.query(CreativePiece)
+        .filter(CreativePiece.campaign_id == campaign_id, CreativePiece.id == piece_id)
+        .first()
+    )
+    if not piece:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Creative piece not found")
+    ia = (body.ia_verdict or "").lower()
+    if ia not in ("approved", "rejected"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="iaVerdict must be 'approved' or 'rejected'")
+    piece.ia_verdict = ia
+    piece.ia_analysis_text = body.ia_analysis_text
+    db.commit()
+    db.refresh(piece)
+    return CreativePieceResponse.model_validate(normalize_creative_piece_response(piece))
+
+
 @router.post("/{campaign_id}/creative-pieces/upload-app", response_model=CreativePieceResponse, status_code=status.HTTP_201_CREATED)
 async def upload_app_creative_piece(
     campaign_id: str,
@@ -299,6 +329,8 @@ async def upload_app_creative_piece(
     
     if existing_piece:
         existing_piece.file_urls = updated_file_urls
+        existing_piece.ia_verdict = None
+        existing_piece.ia_analysis_text = None
         db.commit()
         db.refresh(existing_piece)
         return CreativePieceResponse.model_validate(normalize_creative_piece_response(existing_piece))
@@ -347,6 +379,8 @@ async def upload_email_creative_piece(
     
     if existing_piece:
         existing_piece.html_file_url = file_url
+        existing_piece.ia_verdict = None
+        existing_piece.ia_analysis_text = None
         db.commit()
         db.refresh(existing_piece)
         return CreativePieceResponse.model_validate(normalize_creative_piece_response(existing_piece))

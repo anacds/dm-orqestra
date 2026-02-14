@@ -41,6 +41,18 @@ from app.core.metrics import (
 import json
 
 
+def _compute_effective_status(ia_verdict: str | None, human_verdict: str) -> str:
+    if human_verdict == HumanVerdict.APPROVED.value:
+        return "approved"
+    if human_verdict in (HumanVerdict.REJECTED.value, HumanVerdict.MANUALLY_REJECTED.value):
+        return "rejected"
+    if ia_verdict == "approved":
+        return "approved"
+    if ia_verdict == "rejected":
+        return "pending"
+    return "not_validated"
+
+
 def _piece_review_to_response(pr: PieceReview) -> dict:
     return {
         "id": pr.id,
@@ -49,7 +61,9 @@ def _piece_review_to_response(pr: PieceReview) -> dict:
         "pieceId": pr.piece_id,
         "commercialSpace": pr.commercial_space or "",
         "iaVerdict": pr.ia_verdict,
+        "iaAnalysisText": pr.ia_analysis_text,
         "humanVerdict": pr.human_verdict,
+        "effectiveStatus": _compute_effective_status(pr.ia_verdict, pr.human_verdict),
         "reviewedAt": pr.reviewed_at,
         "reviewedBy": pr.reviewed_by,
         "rejectionReason": pr.rejection_reason,
@@ -102,6 +116,8 @@ async def campaign_to_response(
                 "text": cp.text,
                 "title": cp.title,
                 "body": cp.body,
+                "iaVerdict": cp.ia_verdict,
+                "iaAnalysisText": cp.ia_analysis_text,
                 "createdAt": cp.created_at,
                 "updatedAt": cp.updated_at,
             }
@@ -126,6 +142,10 @@ async def campaign_to_response(
         creative_pieces_list = normalized_pieces
 
     piece_reviews_list = None
+    approved_piece_count = 0
+    total_piece_count = 0
+    has_rejected_pieces = False
+    all_pieces_approved = False
     _status = getattr(campaign, "status", None)
     _status_val = _status.value if hasattr(_status, "value") else (_status.strip() if isinstance(_status, str) else None)
     if db and _status_val in (
@@ -134,9 +154,15 @@ async def campaign_to_response(
     ):
         rows = db.query(PieceReview).filter(PieceReview.campaign_id == campaign.id).all()
         if rows:
+            total_piece_count = len(rows)
             out = []
             for r in rows:
                 d = _piece_review_to_response(r)
+                eff = d["effectiveStatus"]
+                if eff == "approved":
+                    approved_piece_count += 1
+                elif eff == "rejected":
+                    has_rejected_pieces = True
                 if r.reviewed_by and auth_token:
                     try:
                         u = await auth_client.get_user_by_id(r.reviewed_by, auth_token)
@@ -146,6 +172,7 @@ async def campaign_to_response(
                         pass
                 out.append(PieceReviewResponse.model_validate(d))
             piece_reviews_list = out
+            all_pieces_approved = (approved_piece_count == total_piece_count) and total_piece_count > 0
     
     response_dict = {
         "id": campaign.id,
@@ -172,6 +199,10 @@ async def campaign_to_response(
         "comments": comments_list,
         "creative_pieces": creative_pieces_list,
         "piece_reviews": piece_reviews_list,
+        "approved_piece_count": approved_piece_count,
+        "total_piece_count": total_piece_count,
+        "has_rejected_pieces": has_rejected_pieces,
+        "all_pieces_approved": all_pieces_approved,
     }
     
     if auth_token and campaign.created_by:
@@ -552,16 +583,31 @@ class CampaignService:
             .first()
         )
         
+        ia_v = piece_data.ia_verdict.lower() if piece_data.ia_verdict else None
+        if ia_v and ia_v not in ("approved", "rejected"):
+            ia_v = None
+        ia_txt = piece_data.ia_analysis_text if ia_v else None
+
         if existing_piece:
+            content_changed = False
             if piece_data.piece_type == "SMS":
+                content_changed = existing_piece.text != piece_data.text
                 existing_piece.text = piece_data.text
                 existing_piece.title = None
                 existing_piece.body = None
-            else:  
+            else:
+                content_changed = (existing_piece.title != piece_data.title or existing_piece.body != piece_data.body)
                 existing_piece.title = piece_data.title
                 existing_piece.body = piece_data.body
                 existing_piece.text = None
-            
+
+            if ia_v:
+                existing_piece.ia_verdict = ia_v
+                existing_piece.ia_analysis_text = ia_txt
+            elif content_changed:
+                existing_piece.ia_verdict = None
+                existing_piece.ia_analysis_text = None
+
             db.commit()
             db.refresh(existing_piece)
             return CreativePieceResponse.model_validate(existing_piece)
@@ -573,12 +619,14 @@ class CampaignService:
                 text=piece_data.text if piece_data.piece_type == "SMS" else None,
                 title=piece_data.title if piece_data.piece_type == "Push" else None,
                 body=piece_data.body if piece_data.piece_type == "Push" else None,
+                ia_verdict=ia_v,
+                ia_analysis_text=ia_txt,
             )
-            
+
             db.add(creative_piece)
             db.commit()
             db.refresh(creative_piece)
-            
+
             return CreativePieceResponse.model_validate(creative_piece)
 
     @staticmethod
@@ -606,23 +654,33 @@ class CampaignService:
             )
         db.query(PieceReview).filter(PieceReview.campaign_id == campaign_id).delete()
         actor_id = current_user.get("id") or ""
+        creative_pieces_by_id: Dict[str, CreativePiece] = {}
+        for cp in db.query(CreativePiece).filter(CreativePiece.campaign_id == campaign_id).all():
+            creative_pieces_by_id[cp.id] = cp
+
         for item in body.piece_reviews:
             ch = (item.channel or "").upper().replace("-", "").replace(" ", "")
             if ch == "E-MAIL":
                 ch = "EMAIL"
             space = (item.commercial_space or "").strip() or ""
             ia = item.ia_verdict
+            ia_txt = item.ia_analysis_text
             if ia is not None:
                 ia = ia.lower()
                 if ia not in ("approved", "rejected"):
-                    ia = None  # valor inválido → tratar como não validado
-            # Create current state record
+                    ia = None
+            if ia is None:
+                cp = creative_pieces_by_id.get(item.piece_id)
+                if cp and cp.ia_verdict:
+                    ia = cp.ia_verdict
+                    ia_txt = cp.ia_analysis_text
             pr = PieceReview(
                 campaign_id=campaign_id,
                 channel=ch,
                 piece_id=item.piece_id,
                 commercial_space=space,
                 ia_verdict=ia,
+                ia_analysis_text=ia_txt,
                 human_verdict=HumanVerdict.PENDING.value,
             )
             db.add(pr)
@@ -797,10 +855,10 @@ class CampaignService:
             )
         actor_id = current_user.get("id") or ""
 
-        # Update current state
         pr.ia_verdict = ia
+        if body.ia_analysis_text is not None:
+            pr.ia_analysis_text = body.ia_analysis_text
 
-        # Create history event (immutable)
         event = PieceReviewEvent(
             campaign_id=campaign_id,
             channel=ch,

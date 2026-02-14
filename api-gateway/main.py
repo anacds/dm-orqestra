@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from slowapi.middleware import SlowAPIMiddleware
 from slowapi.errors import RateLimitExceeded
 from app.config import SERVICE_VERSION, SERVICE_NAME, get_cors_origins, AUTH_SERVICE_URL, CAMPAIGNS_SERVICE_URL, BRIEFING_ENHANCER_SERVICE_URL, CONTENT_VALIDATION_SERVICE_URL, ENVIRONMENT
-from app.gateway import proxy_request, get_service_url
+from app.gateway import proxy_request, proxy_request_stream, get_service_url
 from app.rate_limit import limiter, rate_limit_handler, get_rate_limit_for_path
 from app.auth import validate_and_extract_user, should_skip_auth
 from app.metrics import AUTH_VALIDATIONS
@@ -66,7 +66,16 @@ async def gateway(request: Request, path: str):
     body = None
     if request.method in ["POST", "PUT", "PATCH"]:
         body = await request.body()
-    
+
+    if full_path == "/api/ai/analyze-piece/stream" and request.method == "POST":
+        return await proxy_request_stream(
+            request=request,
+            service_url=service_url,
+            path=full_path,
+            body=body,
+            user_context=user_context,
+        )
+
     try:
         response_body, status_code, response_headers = await proxy_request(
             request=request,

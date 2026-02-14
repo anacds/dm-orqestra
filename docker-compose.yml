@@ -83,8 +83,6 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8001:8001"
-    env_file:
-      - ./briefing-enhancer-service/.env
     volumes:
       - ./briefing-enhancer-service/evals/results:/app/evals/results
     environment:
@@ -95,6 +93,9 @@ services:
       - ENVIRONMENT=development
       - CORS_ORIGINS=["http://localhost:3000", "http://localhost:8000"]
       - AUTH_SERVICE_URL=http://auth-service:8002
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - MARITACA_API_KEY=${MARITACA_API_KEY:-}
+      - MARITACA_BASE_URL=https://chat.maritaca.ai/api
       - LANGCHAIN_TRACING_V2=${LANGCHAIN_TRACING_V2:-false}
       - LANGCHAIN_API_KEY=${LANGCHAIN_API_KEY:-}
       - LANGCHAIN_PROJECT=Briefing Enhancer Service
@@ -114,8 +115,6 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8004:8004"
-    env_file:
-      - ./content-validation-service/.env
     volumes:
       - ./content-validation-service/debug_images:/app/debug_images
     environment:
@@ -131,6 +130,7 @@ services:
       - REDIS_URL=redis://redis:6379/1
       - CACHE_ENABLED=true
       - CACHE_TTL=86400
+      - HTTP_TIMEOUT=30
       - DEBUG_IMAGES_DIR=/app/debug_images
       - LANGCHAIN_TRACING_V2=${LANGCHAIN_TRACING_V2:-false}
       - LANGCHAIN_API_KEY=${LANGCHAIN_API_KEY:-}
@@ -159,8 +159,6 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8005:8005"
-    env_file:
-      - ./legal-service/.env
     volumes:
       - ./legal-service/evals/results:/app/evals/results
     environment:
@@ -171,9 +169,12 @@ services:
       - WEAVIATE_CLASS_NAME=LegalDocuments
       - REDIS_URL=redis://redis:6379/0
       - CACHE_ENABLED=true
-      - RERANK_ENABLED=${RERANK_ENABLED:-true}
+      - CACHE_TTL=3600
+      - LOG_LEVEL=INFO
+      - RERANK_ENABLED=${RERANK_ENABLED:-false}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - MARITACA_API_KEY=${MARITACA_API_KEY}
+      - MARITACA_API_KEY=${MARITACA_API_KEY:-}
+      - MARITACA_BASE_URL=https://chat.maritaca.ai/api
       - COHERE_APIKEY=${COHERE_APIKEY:-}
       - EMBEDDING_MODEL=text-embedding-3-small
       - LANGCHAIN_TRACING_V2=${LANGCHAIN_TRACING_V2:-false}
@@ -221,7 +222,6 @@ services:
       - "3000:3000"
     environment:
       - DOCKER_CONTAINER=true
-      - VITE_API_GATEWAY_URL=http://localhost:8000
     volumes:
       - ./frontend:/app
       - /app/node_modules

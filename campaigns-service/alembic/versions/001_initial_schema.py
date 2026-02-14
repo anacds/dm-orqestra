@@ -150,6 +150,8 @@ def upgrade() -> None:
         sa.Column('body', sa.Text(), nullable=True),
         sa.Column('file_urls', sa.Text(), nullable=True),
         sa.Column('html_file_url', sa.String(), nullable=True),
+        sa.Column('ia_verdict', sa.String(), nullable=True),
+        sa.Column('ia_analysis_text', sa.Text(), nullable=True),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
         sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
         sa.ForeignKeyConstraint(['campaign_id'], ['campaigns.id'], ondelete='CASCADE'),
@@ -166,6 +168,7 @@ def upgrade() -> None:
         sa.Column('piece_id', sa.String(), nullable=False),
         sa.Column('commercial_space', sa.String(), nullable=False, server_default=''),
         sa.Column('ia_verdict', sa.String(), nullable=True),  # null = não validado por IA
+        sa.Column('ia_analysis_text', sa.Text(), nullable=True),
         sa.Column('human_verdict', sa.String(), nullable=False, server_default='pending'),
         sa.Column('reviewed_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('reviewed_by', sa.String(), nullable=True),

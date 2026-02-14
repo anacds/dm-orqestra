@@ -1,7 +1,9 @@
+import json
 import logging
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.agent import ContentValidationAgent
@@ -162,5 +164,76 @@ async def analyze_piece(
     except Exception as e:
         logger.exception("analyze_piece error: %s", e)
         raise HTTPException(500, f"Error analyzing piece: {e}") from e
+
+
+@router_ai.post("/ai/analyze-piece/stream")
+async def analyze_piece_stream(
+    body: AnalyzePieceRequest,
+    agent: ContentValidationAgent = Depends(get_agent),
+    db: Session = Depends(get_db),
+    current_user: Dict = Depends(get_current_user),
+):
+    """Valida peça criativa com streaming SSE de progresso (para EMAIL/APP)."""
+    require_ai_validation_access(current_user)
+    cache = get_cache()
+
+    cid = body.campaign_id or (
+        body.content.get("campaign_id") if isinstance(body.content, dict) else None
+    )
+    cid = str(cid) if cid else None
+    content_dict = body.content if isinstance(body.content, dict) else {}
+
+    async def event_generator():
+        try:
+            async for event in agent.astream_with_progress(
+                task=body.task,
+                channel=body.channel,
+                content=body.content,
+            ):
+                if event["type"] == "step":
+                    yield f"event: step\ndata: {json.dumps(event['data'])}\n\n"
+                elif event["type"] == "result":
+                    result = event["data"]
+                    final_verdict = result.get("final_verdict") or {}
+                    resp = AnalyzePieceResponse(
+                        validation_result=result.get("validation_result") or {},
+                        specs_result=result.get("specs_result"),
+                        orchestration_result=result.get("orchestration_result"),
+                        compliance_result=result.get("compliance_result"),
+                        branding_result=result.get("branding_result"),
+                        requires_human_approval=result.get("requires_human_approval", False),
+                        human_approval_reason=result.get("human_approval_reason"),
+                        failure_stage=final_verdict.get("failure_stage"),
+                        stages_completed=final_verdict.get("stages_completed"),
+                        final_verdict=final_verdict if final_verdict else None,
+                    )
+
+                    if cid and body.channel in ("EMAIL", "APP"):
+                        content_hash = ValidationCacheManager.compute_content_hash(
+                            channel=body.channel,
+                            content=content_dict,
+                            retrieved_content_hash=result.get("retrieved_content_hash"),
+                        )
+                        if content_hash:
+                            payload = _response_to_dict(resp)
+                            cache.set(cid, body.channel, content_hash, payload)
+                            try:
+                                db.add(PieceValidationAudit(
+                                    campaign_id=cid,
+                                    channel=body.channel,
+                                    content_hash=content_hash,
+                                    response_json=payload,
+                                ))
+                                db.commit()
+                            except Exception as e:
+                                db.rollback()
+                                logger.error("Erro ao salvar audit (stream): %s", e)
+
+                    yield f"event: result\ndata: {json.dumps(resp.model_dump())}\n\n"
+        except Exception as e:
+            logger.exception("analyze_piece_stream error: %s", e)
+            yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 

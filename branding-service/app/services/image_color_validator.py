@@ -146,6 +146,11 @@ def validate_image_branding(image: str) -> Dict[str, Any]:
 
     colors_with_counts = _extract_dominant_colors(img)
     has_primary = False
+    total_pixels = sum(count for _, count in colors_with_counts)
+    unapproved_pixels = 0
+    unapproved_colors: List[str] = []
+    _NEUTRAL = {"#ffffff", "#fff", "#fefefe", "#f5f5f5", "#f8f9ff",
+                "#000000", "#000", "#0a0a0a", "#1a1a1a"}
 
     for hex_color, count in colors_with_counts:
         dominant_colors.append({"color": hex_color, "count": count})
@@ -154,25 +159,44 @@ def validate_image_branding(image: str) -> Dict[str, Any]:
         if _is_primary_color(normalized):
             has_primary = True
 
-        # Ignora branco/cinza muito claro e preto (background comum)
-        if normalized in ("#ffffff", "#fff", "#fefefe", "#f5f5f5", "#f8f9ff"):
-            continue
-        if normalized in ("#000000", "#000", "#0a0a0a", "#1a1a1a"):
+        if normalized in _NEUTRAL:
             continue
 
         if not _color_in_palette(normalized):
-            violations.append(
-                {
-                    "rule": "unapproved_color",
-                    "category": "colors",
-                    "severity": "critical",
-                    "value": hex_color,
-                    "message": f"Cor {hex_color} não está na paleta aprovada da marca",
-                }
-            )
+            unapproved_pixels += count
+            unapproved_colors.append(hex_color)
+
+    unapproved_pct = (unapproved_pixels / total_pixels * 100) if total_pixels > 0 else 0
+
+    if unapproved_pct > 50:
+        violations.append(
+            {
+                "rule": "unapproved_color_ratio",
+                "category": "colors",
+                "severity": "critical",
+                "value": f"{unapproved_pct:.0f}%",
+                "message": (
+                    f"Cores fora da paleta ocupam {unapproved_pct:.0f}% dos pixels "
+                    f"(máximo permitido: 50%). "
+                    f"Cores: {', '.join(unapproved_colors)}"
+                ),
+            }
+        )
+    elif unapproved_colors:
+        violations.append(
+            {
+                "rule": "unapproved_color_minor",
+                "category": "colors",
+                "severity": "info",
+                "value": f"{unapproved_pct:.0f}%",
+                "message": (
+                    f"Cores fora da paleta detectadas ({unapproved_pct:.0f}% dos pixels, "
+                    f"dentro do limite de 50%): {', '.join(unapproved_colors)}"
+                ),
+            }
+        )
 
     if not has_primary and dominant_colors:
-        # Só avisa se há cores significativas e nenhuma é primária
         violations.append(
             {
                 "rule": "missing_primary_color",

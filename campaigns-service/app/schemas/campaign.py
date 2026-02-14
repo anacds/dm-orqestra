@@ -88,8 +88,10 @@ class CreativePieceResponse(BaseModel):
     text: Optional[str] = None
     title: Optional[str] = None
     body: Optional[str] = None
-    file_urls: Optional[str] = Field(None, alias="fileUrls")  # JSON string for App files
-    html_file_url: Optional[str] = Field(None, alias="htmlFileUrl")  # URL for E-mail HTML
+    file_urls: Optional[str] = Field(None, alias="fileUrls")
+    html_file_url: Optional[str] = Field(None, alias="htmlFileUrl")
+    ia_verdict: Optional[str] = Field(None, alias="iaVerdict")
+    ia_analysis_text: Optional[str] = Field(None, alias="iaAnalysisText")
     created_at: datetime = Field(alias="createdAt")
     updated_at: datetime = Field(alias="updatedAt")
     
@@ -113,6 +115,8 @@ class CreativePieceCreate(BaseModel):
     text: Optional[str] = Field(None, description="Text content for SMS")
     title: Optional[str] = Field(None, max_length=50, description="Title for Push (max 50 chars)")
     body: Optional[str] = Field(None, max_length=120, description="Body for Push (max 120 chars)")
+    ia_verdict: Optional[str] = Field(None, alias="iaVerdict")
+    ia_analysis_text: Optional[str] = Field(None, alias="iaAnalysisText")
     
     model_config = {"populate_by_name": True}
     
@@ -158,6 +162,10 @@ class CampaignResponse(BaseModel):
     comments: Optional[List[CommentResponse]] = None
     creative_pieces: Optional[List[CreativePieceResponse]] = Field(None, alias="creativePieces")
     piece_reviews: Optional[List["PieceReviewResponse"]] = Field(None, alias="pieceReviews")
+    approved_piece_count: int = Field(0, alias="approvedPieceCount")
+    total_piece_count: int = Field(0, alias="totalPieceCount")
+    has_rejected_pieces: bool = Field(False, alias="hasRejectedPieces")
+    all_pieces_approved: bool = Field(False, alias="allPiecesApproved")
 
     model_config = {"from_attributes": True, "populate_by_name": True}
 
@@ -176,6 +184,7 @@ class PieceReviewItem(BaseModel):
     piece_id: str = Field(..., alias="pieceId")
     commercial_space: Optional[str] = Field(None, alias="commercialSpace")
     ia_verdict: Optional[str] = Field(None, alias="iaVerdict", description="approved | rejected | null (não validado por IA)")
+    ia_analysis_text: Optional[str] = Field(None, alias="iaAnalysisText")
 
     model_config = {"populate_by_name": True}
 
@@ -197,7 +206,9 @@ class PieceReviewResponse(BaseModel):
     piece_id: str = Field(alias="pieceId")
     commercial_space: str = Field(alias="commercialSpace", default="")
     ia_verdict: Optional[str] = Field(None, alias="iaVerdict")
+    ia_analysis_text: Optional[str] = Field(None, alias="iaAnalysisText")
     human_verdict: str = Field(alias="humanVerdict")
+    effective_status: str = Field(alias="effectiveStatus")
     reviewed_at: Optional[datetime] = Field(None, alias="reviewedAt")
     reviewed_by: Optional[str] = Field(None, alias="reviewedBy")
     reviewed_by_name: Optional[str] = Field(None, alias="reviewedByName")
@@ -218,6 +229,15 @@ class ReviewPieceRequest(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+class UpdatePieceIaAnalysisRequest(BaseModel):
+    """Request body for PATCH /campaigns/{id}/creative-pieces/{piece_id}/ia-analysis."""
+
+    ia_verdict: str = Field(..., alias="iaVerdict", description="approved | rejected")
+    ia_analysis_text: Optional[str] = Field(None, alias="iaAnalysisText")
+
+    model_config = {"populate_by_name": True}
+
+
 class UpdateIaVerdictRequest(BaseModel):
     """Request body for PATCH /campaigns/{id}/piece-reviews/ia-verdict.
 
@@ -229,6 +249,7 @@ class UpdateIaVerdictRequest(BaseModel):
     piece_id: str = Field(..., alias="pieceId")
     commercial_space: Optional[str] = Field(None, alias="commercialSpace")
     ia_verdict: str = Field(..., alias="iaVerdict", description="approved | rejected")
+    ia_analysis_text: Optional[str] = Field(None, alias="iaAnalysisText")
 
     model_config = {"populate_by_name": True}
 

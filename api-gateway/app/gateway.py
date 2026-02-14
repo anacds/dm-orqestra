@@ -2,6 +2,7 @@ import time
 
 import httpx
 from fastapi import Request, HTTPException, status
+from fastapi.responses import StreamingResponse
 from typing import Optional
 from app.config import AUTH_SERVICE_URL, CAMPAIGNS_SERVICE_URL, BRIEFING_ENHANCER_SERVICE_URL, CONTENT_VALIDATION_SERVICE_URL
 from app.auth import validate_and_extract_user, should_skip_auth
@@ -125,6 +126,72 @@ async def proxy_request(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Gateway error: {str(e)}"
         )
+
+
+async def proxy_request_stream(
+    request: Request,
+    service_url: str,
+    path: str,
+    body: Optional[bytes] = None,
+    user_context: Optional[dict] = None,
+) -> StreamingResponse:
+    """Proxy SSE streaming request to downstream service."""
+    url = f"{service_url}{path}"
+
+    proxy_headers: dict[str, str] = {}
+    if user_context:
+        import base64
+
+        def to_ascii_safe(value: str) -> str:
+            if not value:
+                return ""
+            try:
+                value.encode("ascii")
+                return value
+            except UnicodeEncodeError:
+                encoded = base64.b64encode(value.encode("utf-8")).decode("ascii")
+                return f"base64:{encoded}"
+
+        proxy_headers["X-User-Id"] = to_ascii_safe(str(user_context.get("id", "")))
+        proxy_headers["X-User-Email"] = to_ascii_safe(str(user_context.get("email", "")))
+        proxy_headers["X-User-Role"] = to_ascii_safe(str(user_context.get("role", "")))
+        proxy_headers["X-User-Is-Active"] = str(user_context.get("is_active", False))
+
+    auth_header = request.headers.get("authorization")
+    if auth_header:
+        proxy_headers["authorization"] = auth_header
+    proxy_headers["content-type"] = "application/json"
+
+    target_service = _resolve_target_name(service_url)
+
+    async def stream_generator():
+        try:
+            async with httpx.AsyncClient(timeout=180.0) as client:
+                async with client.stream(
+                    "POST", url, headers=proxy_headers, content=body
+                ) as response:
+                    PROXY_REQUESTS.labels(
+                        target_service=target_service,
+                        method="POST",
+                        status_code=str(response.status_code),
+                    ).inc()
+                    async for chunk in response.aiter_bytes():
+                        yield chunk
+        except httpx.TimeoutException:
+            UPSTREAM_ERRORS.labels(target_service=target_service, error_type="timeout").inc()
+            yield b"event: error\ndata: {\"error\": \"Service timeout\"}\n\n"
+        except httpx.ConnectError:
+            UPSTREAM_ERRORS.labels(target_service=target_service, error_type="connection").inc()
+            yield b"event: error\ndata: {\"error\": \"Service unavailable\"}\n\n"
+        except Exception as e:
+            UPSTREAM_ERRORS.labels(target_service=target_service, error_type="other").inc()
+            yield f"event: error\ndata: {{\"error\": \"{e}\"}}\n\n".encode()
+
+    return StreamingResponse(
+        stream_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 _SERVICE_URL_NAMES = {

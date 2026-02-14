@@ -16,6 +16,7 @@ from app.agent.tools import (
     validate_image_brand_compliance,
     fetch_channel_specs,
 )
+from langgraph.config import get_stream_writer
 from app.core.validators import validate_piece_format_and_size, validate_piece_specs
 from app.core.metrics import (
     NODE_DURATION,
@@ -85,10 +86,13 @@ def validate_channel_node(state: ValidationGraphState) -> Dict[str, Any]:
     - EMAIL/APP: canal reconhecido → retrieve_content.
     - Limites numéricos (chars, KB, pixels) ficam no validate_specs.
     """
+    writer = get_stream_writer()
+    writer({"node": "validate_channel", "status": "started", "label": "Validando estrutura da peça"})
     channel = (state.get("channel") or "").upper()
     content = state.get("content") or {}
 
     if channel not in ("SMS", "PUSH", "EMAIL", "APP"):
+        writer({"node": "validate_channel", "status": "done"})
         return {
             "validation_result": {"valid": False, "message": f"Canal inválido: {channel}", "errors": [], "details": {}},
             "validation_valid": False,
@@ -103,8 +107,10 @@ def validate_channel_node(state: ValidationGraphState) -> Dict[str, Any]:
         }
         if valid:
             out["content_for_compliance"] = content
+        writer({"node": "validate_channel", "status": "done"})
         return out
 
+    writer({"node": "validate_channel", "status": "done"})
     return {
         "validation_result": {"valid": True, "message": f"Canal {channel} -> retrieve_content", "errors": None, "details": {"channel": channel}},
         "validation_valid": True,
@@ -116,6 +122,8 @@ async def retrieve_content_node(state: ValidationGraphState) -> Dict[str, Any]:
     2) retrieve_content: chama campaigns-service (MCP).
     Sucesso -> validate_specs. Erro -> peça necessita aprovação humana.
     """
+    writer = get_stream_writer()
+    writer({"node": "retrieve_content", "status": "started", "label": "Extraindo conteúdo da peça"})
     channel = (state.get("channel") or "").upper()
     content = state.get("content") or {}
 
@@ -244,6 +252,7 @@ async def retrieve_content_node(state: ValidationGraphState) -> Dict[str, Any]:
     else:
         content_for_compliance = {"html": raw}
 
+    writer({"node": "retrieve_content", "status": "done"})
     return {
         "retrieve_ok": True,
         "content_for_compliance": content_for_compliance,
@@ -264,6 +273,8 @@ async def validate_specs_node(state: ValidationGraphState) -> Dict[str, Any]:
 
     Fallback: se MCP indisponível, usa channel_specs.yaml local.
     """
+    writer = get_stream_writer()
+    writer({"node": "validate_specs", "status": "started", "label": "Verificando especificações técnicas"})
     _node_start = time.perf_counter()
     channel = (state.get("channel") or "").upper()
     content = state.get("content") or {}
@@ -327,6 +338,7 @@ async def validate_specs_node(state: ValidationGraphState) -> Dict[str, Any]:
     NODE_DURATION.labels(node="validate_specs", channel=channel).observe(time.perf_counter() - _node_start)
     SPECS_RESULT.labels(channel=channel, result="pass" if specs_valid else "fail").inc()
 
+    writer({"node": "validate_specs", "status": "done"})
     return {
         "specs_ok": specs_valid,
         "specs_result": specs_result,
@@ -340,6 +352,8 @@ async def validate_compliance_node(state: ValidationGraphState) -> Dict[str, Any
     Roda em paralelo com specs e branding — sem guards.
     Depende apenas de content_for_compliance (preenchido por validate_channel ou retrieve_content).
     """
+    writer = get_stream_writer()
+    writer({"node": "validate_compliance", "status": "started", "label": "Consultando diretrizes jurídicas"})
     _node_start = time.perf_counter()
     channel = (state.get("channel") or "").upper()
     content_for_compliance = state.get("content_for_compliance") or {}
@@ -378,6 +392,7 @@ async def validate_compliance_node(state: ValidationGraphState) -> Dict[str, Any
 
     NODE_DURATION.labels(node="validate_compliance", channel=channel).observe(time.perf_counter() - _node_start)
 
+    writer({"node": "validate_compliance", "status": "done"})
     return {
         "compliance_ok": True,
         "compliance_result": {
@@ -399,6 +414,8 @@ async def validate_branding_node(state: ValidationGraphState) -> Dict[str, Any]:
     - APP: valida imagem (cores dominantes contra paleta aprovada)
     - SMS/PUSH: skip (sem conteúdo visual para validar)
     """
+    writer = get_stream_writer()
+    writer({"node": "validate_branding", "status": "started", "label": "Analisando conformidade visual"})
     _node_start = time.perf_counter()
     channel = (state.get("channel") or "").upper()
     html_for_branding = state.get("html_for_branding")
@@ -407,6 +424,7 @@ async def validate_branding_node(state: ValidationGraphState) -> Dict[str, Any]:
     if channel in ("SMS", "PUSH") or (not html_for_branding and not image_for_branding):
         logger.info("validate_branding: skipping (channel=%s, has_html=%s, has_image=%s)",
                      channel, bool(html_for_branding), bool(image_for_branding))
+        writer({"node": "validate_branding", "status": "done"})
         return {
             "branding_ok": True,
             "branding_result": None,
@@ -466,6 +484,7 @@ async def validate_branding_node(state: ValidationGraphState) -> Dict[str, Any]:
     NODE_DURATION.labels(node="validate_branding", channel=channel).observe(time.perf_counter() - _node_start)
     BRANDING_RESULT.labels(channel=channel, compliant=str(compliant).lower()).inc()
 
+    writer({"node": "validate_branding", "status": "done"})
     return {
         "branding_ok": True,
         "branding_result": branding_result,
@@ -484,6 +503,8 @@ def issue_final_verdict_node(state: ValidationGraphState) -> Dict[str, Any]:
     - retrieve_content falhou → specs/branding/compliance não executaram
     - Os 3 executaram (paralelo) → agrega tudo
     """
+    writer = get_stream_writer()
+    writer({"node": "issue_final_verdict", "status": "started", "label": "Gerando resultado final"})
     validation_result = state.get("validation_result") or {}
     validation_valid = state.get("validation_valid", False)
     retrieve_ok = state.get("retrieve_ok", False)
@@ -507,6 +528,7 @@ def issue_final_verdict_node(state: ValidationGraphState) -> Dict[str, Any]:
     if not validation_valid:
         failure_stage = "validate_channel"
         validation_msg = validation_result.get("message", "Formato ou canal inválido")
+        writer({"node": "issue_final_verdict", "status": "done"})
         return _build_verdict(
             decision="REPROVADO",
             summary=f"Formato: {validation_msg}",
@@ -522,6 +544,7 @@ def issue_final_verdict_node(state: ValidationGraphState) -> Dict[str, Any]:
     if channel in ("EMAIL", "APP") and not retrieve_ok:
         failure_stage = "retrieve_content"
         err = retrieve_error or "Falha ao buscar conteúdo da peça"
+        writer({"node": "issue_final_verdict", "status": "done"})
         return _build_verdict(
             decision="REPROVADO",
             summary=f"Retrieve: {err}",
@@ -607,6 +630,7 @@ def issue_final_verdict_node(state: ValidationGraphState) -> Dict[str, Any]:
     else:
         summary = "Reprovado."
 
+    writer({"node": "issue_final_verdict", "status": "done"})
     return _build_verdict(
         decision=final_decision,
         summary=summary,
