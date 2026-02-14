@@ -12,9 +12,12 @@ class Settings(BaseSettings):
     PORT: int = 8001
   
     DATABASE_URL: str = ""
- 
+    REDIS_URL: str = "redis://redis:6379/2"
+    CACHE_ENABLED: bool = True
+    CACHE_TTL: int = 86400  # 24h in seconds
+
     CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:8000"]
-    
+
     class Config:
         env_file = ".env"
         case_sensitive = True

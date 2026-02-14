@@ -6,21 +6,12 @@ import org.apache.commons.codec.net.QuotedPrintableCodec;
 import org.apache.commons.codec.net.URLCodec;
 import org.apache.commons.text.StringEscapeUtils;
 import org.springframework.stereotype.Service;
-
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.regex.Pattern;
 
-/**
- * Service responsible for detecting and decoding various email HTML encodings.
- * 
- * Handles the following encoding types commonly found in email HTML:
- * - URL Encoding (%XX)
- * - HTML Entities (&lt;, &gt;, &amp;, etc.)
- * - Quoted-Printable (=XX, soft line breaks with =)
- * - Base64
- */
+
 @Service
 @Slf4j
 public class HtmlDecoderService {
@@ -42,12 +33,6 @@ public class HtmlDecoderService {
         this.urlCodec = new URLCodec(StandardCharsets.UTF_8.name());
     }
 
-    /**
-     * Decodes HTML content by detecting and applying appropriate decodings in cascade.
-     * 
-     * @param content The potentially encoded HTML content
-     * @return Decoded HTML ready for rendering
-     */
     public String decode(String content) {
         if (content == null || content.isEmpty()) {
             return content;
@@ -87,9 +72,7 @@ public class HtmlDecoderService {
         return result;
     }
 
-    /**
-     * Decodes content that might be pure Base64.
-     */
+
     public String decodeBase64Content(String content) {
         if (isBase64Encoded(content)) {
             return decodeBase64(content);

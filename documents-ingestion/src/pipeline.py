@@ -15,7 +15,6 @@ from src.utils.logging_config import setup_logging
 
 logger = logging.getLogger(__name__)
 
-# Caminho do arquivo de configuração
 CONFIG_PATH = Path(__file__).parent.parent / "config" / "ingestion.yaml"
 
 
@@ -35,7 +34,6 @@ def get_collection_name(chunker_type: str, config: Optional[Dict] = None) -> str
     strategies = config.get("strategies", {})
     strategy_config = strategies.get(chunker_type, {})
     
-    # Retorna collection configurada ou padrão baseado no tipo
     default_collections = {
         "section": "LegalDocuments",
         "semantic": "LegalDocumentsSemanticChunks",
@@ -48,7 +46,6 @@ class IngestionPipeline:
     def __init__(
         self,
         documents_dir: Path,
-        embedding_provider: Optional[str] = None,
         embedding_model: Optional[str] = None,
         weaviate_url: Optional[str] = None,
         chunk_min_size: int = 100,
@@ -60,9 +57,7 @@ class IngestionPipeline:
         self.documents_dir = Path(documents_dir)
         self.ingestion_run_id = str(uuid.uuid4())
         self.chunker_type = chunker_type
-        self.clear_before_ingest = clear_before_ingest
-        
-        # Carrega configuração e determina collection name
+        self.clear_before_ingest = clear_before_ingest        
         self.config = load_ingestion_config()
         self.collection_name = collection_name or get_collection_name(chunker_type, self.config)
 
@@ -72,12 +67,9 @@ class IngestionPipeline:
             self.chunker = SemanticChunker(
                 min_chunk_size=chunk_min_size,
                 max_chunk_size=chunk_max_size,
-                embedding_provider=embedding_provider,
                 embedding_model=embedding_model,
             )
-        self.embedding_service = create_embedding_service(
-            provider=embedding_provider, model=embedding_model
-        )
+        self.embedding_service = create_embedding_service(model=embedding_model)
         
         # Passa collection_name para o indexer
         self.indexer = create_weaviate_indexer(
@@ -208,7 +200,6 @@ def main():
     setup_logging(level=log_level, structured=structured)
 
     documents_dir = Path(os.getenv("DOCUMENTS_DIR", "doc-juridico"))
-    embedding_provider = os.getenv("EMBEDDING_PROVIDER", "openai")
     embedding_model = os.getenv("EMBEDDING_MODEL")
     weaviate_url = os.getenv("WEAVIATE_URL", "http://localhost:8080")
     chunker_type = os.getenv("CHUNKER_TYPE", "section")
@@ -232,7 +223,6 @@ def main():
 
     pipeline = IngestionPipeline(
         documents_dir=documents_dir,
-        embedding_provider=embedding_provider,
         embedding_model=embedding_model,
         weaviate_url=weaviate_url,
         chunker_type=chunker_type,

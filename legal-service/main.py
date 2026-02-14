@@ -41,6 +41,12 @@ async def lifespan(app: FastAPI):
             agent.close()
     except Exception:
         pass
+    # Garante que todos os traces pendentes sejam enviados ao LangSmith
+    try:
+        from langsmith import Client as _LsClient
+        _LsClient().flush()
+    except Exception:
+        pass
 
 
 app = FastAPI(

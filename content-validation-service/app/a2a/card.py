@@ -1,7 +1,4 @@
-"""A2A Agent Card for the Content Validation orchestrator."""
-
 from a2a.types import AgentCapabilities, AgentCard, AgentSkill
-
 from app.core.config import settings
 
 

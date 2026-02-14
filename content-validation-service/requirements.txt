@@ -13,10 +13,13 @@ mcp>=1.26.0
 # A2A Protocol
 a2a-sdk[http-server]>=0.3.0
 
-# Database (persist piece validation for GET on reload)
+# Database (audit log)
 sqlalchemy>=2.0.0
 alembic>=1.13.0
 psycopg2-binary>=2.9.9
+
+# Cache (Redis)
+redis>=5.0.0
 
 # Specs validation
 PyYAML>=6.0
@@ -25,3 +28,6 @@ Pillow>=10.0.0
 # Observability
 prometheus-client>=0.21.0
 prometheus-fastapi-instrumentator>=7.0.0
+
+# Tracing
+langsmith>=0.1.0

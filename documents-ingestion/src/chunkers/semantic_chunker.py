@@ -16,7 +16,6 @@ class SemanticChunker:
         min_chunk_size: int = 100,
         max_chunk_size: int = 800,
         chunk_overlap: Optional[int] = None,
-        embedding_provider: Optional[str] = None,
         embedding_model: Optional[str] = None,
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
@@ -37,7 +36,6 @@ class SemanticChunker:
             r'[_-]BANNER[_-]': 'APP',
         }
 
-        embedding_provider = embedding_provider or os.getenv("EMBEDDING_PROVIDER", "openai")
         embedding_model = embedding_model or os.getenv("EMBEDDING_MODEL")
         api_key = api_key or os.getenv("OPENAI_API_KEY")
         

@@ -1,10 +1,7 @@
 import contextlib
 import logging
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.routing import Mount
-
 from app.routes import router
 from app.core.config import settings
 from app.core.s3_client import ensure_bucket_exists
@@ -39,7 +36,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,

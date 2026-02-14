@@ -6,7 +6,6 @@ import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.rendering.PDFRenderer;
 import org.springframework.stereotype.Service;
-
 import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.image.BufferedImage;
@@ -14,21 +13,13 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Base64;
 
-/**
- * Service responsible for image processing operations.
- */
+
 @Service
 @Slf4j
 public class ImageProcessingService {
 
     private static final int DEFAULT_DPI = 300;
 
-    /**
-     * Converts a PDF document to a BufferedImage.
-     * 
-     * @param pdfBytes The PDF content as bytes
-     * @return BufferedImage of the first page
-     */
     public BufferedImage convertPdfToImage(byte[] pdfBytes) {
         try (PDDocument document = Loader.loadPDF(pdfBytes)) {
             PDFRenderer pdfRenderer = new PDFRenderer(document);
@@ -40,13 +31,7 @@ public class ImageProcessingService {
         }
     }
 
-    /**
-     * Reduces the size of an image by applying a scale factor.
-     * 
-     * @param originalImage The original image
-     * @param scale Scale factor (0.5 = 50% of original size)
-     * @return Scaled image
-     */
+
     public BufferedImage scaleImage(BufferedImage originalImage, float scale) {
         int newWidth = Math.round(originalImage.getWidth() * scale);
         int newHeight = Math.round(originalImage.getHeight() * scale);
@@ -70,13 +55,7 @@ public class ImageProcessingService {
         return scaledImage;
     }
 
-    /**
-     * Converts a BufferedImage to a Base64 encoded string.
-     * 
-     * @param image The image to convert
-     * @param format The output format (PNG, JPEG)
-     * @return Base64 encoded image string
-     */
+
     public String convertToBase64(BufferedImage image, String format) {
         try {
             ByteArrayOutputStream outputStream = new ByteArrayOutputStream();

@@ -1,3 +1,4 @@
+import os
 from fastapi import FastAPI, Request, Response, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi.middleware import SlowAPIMiddleware
@@ -9,6 +10,7 @@ from app.auth import validate_and_extract_user, should_skip_auth
 from app.metrics import AUTH_VALIDATIONS
 from prometheus_fastapi_instrumentator import Instrumentator
 import logging
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -150,5 +152,48 @@ async def root():
         "service": SERVICE_NAME,
         "version": SERVICE_VERSION,
         "status": "running"
+    }
+
+
+# A2A Agent Discovery Registry 
+_A2A_AGENTS = [
+    {"name": "content-validation", "base_url": CONTENT_VALIDATION_SERVICE_URL},
+    {"name": "legal", "base_url": os.getenv("LEGAL_SERVICE_URL", "http://legal-service:8005")},
+]
+
+
+@app.get(
+    "/a2a/discovery",
+    summary="A2A Agent Discovery Registry",
+    description="Retorna os Agent Cards dos agentes A2A registrados na plataforma.",
+    tags=["a2a"],
+)
+async def a2a_discovery():
+    agents = []
+    async with httpx.AsyncClient(timeout=5.0) as client:
+        for agent in _A2A_AGENTS:
+            card_url = f"{agent['base_url']}/a2a/.well-known/agent-card.json"
+            try:
+                resp = await client.get(card_url)
+                if resp.status_code == 200:
+                    agents.append(resp.json())
+                else:
+                    agents.append({
+                        "name": agent["name"],
+                        "status": "unavailable",
+                        "error": f"HTTP {resp.status_code}",
+                    })
+            except Exception as e:
+                agents.append({
+                    "name": agent["name"],
+                    "status": "unavailable",
+                    "error": str(e),
+                })
+
+    return {
+        "registry": "Orqestra A2A Agent Registry",
+        "protocol_version": "1.0",
+        "agents_count": len([a for a in agents if "status" not in a]),
+        "agents": agents,
     }
 

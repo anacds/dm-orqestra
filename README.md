@@ -1,189 +1,186 @@
-# Orqestra - Sistema de Gerenciamento de Campanhas CRM
+# Orqestra
 
-Sistema completo de gerenciamento de campanhas de CRM com validação jurídica baseada em IA, aprimoramento de textos e análise de conteúdo.
+Plataforma de gerenciamento de campanhas de CRM com validação automatizada de conteúdo. Combina microserviços REST, agentes baseados em LangGraph, comunicação via MCP (Model Context Protocol) e A2A (Agent-to-Agent Protocol).
 
-## 🏗️ Arquitetura
+> [!IMPORTANT]
+> **Documentação completa:** [`dm_orqestra-ana-silva.pdf`](./dm_orqestra-ana-silva.pdf) (44 páginas)
+> Consulte a documentação em anexo para explicações sobre a Arquitetura do projeto, funcionalidades, detalhes da implementação, justificativas detalhadas e melhorias futuras.
 
-O projeto é composto por uma arquitetura de microserviços:
+## Arquitetura
 
-- **API Gateway**: Roteamento centralizado, autenticação e rate limiting
-- **Auth Service**: Gerenciamento de usuários e autenticação JWT
-- **Campaigns Service**: Gerenciamento completo do ciclo de vida de campanhas
-- **Briefing Enhancer Service**: Aprimoramento de textos usando IA (LangGraph + OpenAI)
-- **Content Service**: Análise e geração de conteúdo para campanhas
-- **Legal Service**: Validação jurídica de comunicações usando RAG (Weaviate + OpenAI)
-- **Frontend**: Interface React com TypeScript
+```mermaid
+graph TD
+    FE["Frontend React :3000"]
+    GW["API Gateway :8000"]
 
-## 📋 Pré-requisitos
+    AUTH["Auth :8002"]
+    CAMP["Campaigns :8003"]
+    BRIEF["Briefing Enhancer :8001"]
+    CVS["Content Validation :8004"]
 
-- **Docker** e **Docker Compose** instalados
-- **OpenAI API Key** configurada (obrigatória)
-- Mínimo **8GB de RAM** disponível para Docker
+    LEGAL["Legal Service :8005"]
+    HTML["HTML Converter :8011"]
+    BRAND["Branding :8012"]
 
-## 🚀 Execução
+    LLM["Maritaca AI / OpenAI / Cohere"]
 
-### 1. Configurar Variáveis de Ambiente
+    FE -->|HTTP + JWT| GW
 
-Crie um arquivo `.env` na raiz do projeto (opcional, pode usar variáveis de ambiente do sistema):
+    GW -->|REST| AUTH
+    GW -->|REST| CAMP
+    GW -->|REST| BRIEF
+    GW -->|REST| CVS
 
-```bash
-OPENAI_API_KEY=sua_chave_openai_aqui
-NVIDIA_APIKEY=sua_chave_nvidia_aqui  # Opcional - necessário para reranking
-EMBEDDING_PROVIDER=openai
-EMBEDDING_MODEL=text-embedding-3-small
-LOG_LEVEL=INFO
+    CVS -->|MCP| CAMP
+    CVS -->|A2A| LEGAL
+    CVS -->|MCP| HTML
+    CVS -->|MCP| BRAND
+
+    BRIEF -->|LLM| LLM
+    LEGAL -->|LLM| LLM
+
+    LEGAL -->|RAG| WEAV[("Weaviate :8080")]
+
+    subgraph DADOS["Infraestrutura"]
+        direction LR
+        PG[("PostgreSQL :5432")]
+        REDIS["Redis :6379"]
+        WEAV
+        S3["LocalStack S3 :4566"]
+    end
+
+    subgraph OBS["Observabilidade"]
+        direction LR
+        GRAF["Grafana :3001"]
+        META["Metabase :3002"]
+        PROM["Prometheus :9090"]
+    end
+
+    style FE fill:#61dafb,color:#000
+    style GW fill:#009485,color:#fff
+    style AUTH fill:#ff6b6b,color:#fff
+    style CAMP fill:#4ecdc4,color:#000
+    style BRIEF fill:#95e1d3,color:#000
+    style CVS fill:#f38181,color:#fff
+    style LEGAL fill:#a29bfe,color:#fff
+    style HTML fill:#ffeaa7,color:#000
+    style BRAND fill:#dfe6e9,color:#000
+    style LLM fill:#fdcb6e,color:#000
+    style PG fill:#336791,color:#fff
+    style WEAV fill:#00b894,color:#fff
+    style REDIS fill:#d63031,color:#fff
+    style S3 fill:#ffd93d,color:#000
+    style PROM fill:#e17055,color:#fff
+    style GRAF fill:#636e72,color:#fff
+    style META fill:#636e72,color:#fff
+    style DADOS fill:none,stroke:#336791
+    style OBS fill:none,stroke:#636e72
 ```
 
-Ou exporte as variáveis:
+## Serviços
+
+| Serviço | Porta | O que faz |
+|---|---|---|
+| **API Gateway** | 8000 | Proxy reverso com autenticação JWT e rate limiting |
+| **Auth Service** | 8002 | Registro, login, tokens JWT (access + refresh) |
+| **Campaigns Service** | 8003 | CRUD de campanhas, peças criativas, upload S3. Expõe MCP tools |
+| **Briefing Enhancer** | 8001 | Aprimora objetivos de campanha via LLM (LangGraph) |
+| **Content Validation** | 8004 | Orquestra validação de peças: formato, specs, branding (MCP) e compliance (A2A) |
+| **Legal Service** | 8005 | Validação jurídica via RAG (Weaviate + LangGraph). Expõe A2A |
+| **Branding Service** | 8012 | Validação determinística de marca (cores, fontes, logo). Expõe MCP tools |
+| **HTML Converter** | 8011 | Converte HTML de email em imagem (Spring Boot). Expõe MCP tool |
+| **Frontend** | 3000 | Interface React + TypeScript + Vite + Tailwind |
+
+### Protocolos de comunicação
+
+- **REST**: Gateway roteia para Auth, Campaigns, Briefing Enhancer e Content Validation
+- **MCP (Model Context Protocol)**: Content Validation consome tools de Campaigns, Branding e HTML Converter
+- **A2A (Agent-to-Agent Protocol)**: Content Validation envia peças ao Legal Service para parecer jurídico
+
+## Pré-requisitos
+
+- Docker e Docker Compose
+- Chave da OpenAI (`OPENAI_API_KEY`)
+- Recomendado: chave da Maritaca (`MARITACA_API_KEY`) para a configuração de LLM com melhor accuracy
+
+## Execução
+
+### 1. Configurar variáveis de ambiente
 
 ```bash
-export OPENAI_API_KEY=sua_chave_openai_aqui
+cp .env.example .env
 ```
 
-### 2. Subir Todos os Serviços
+Edite o `.env` com suas chaves. Apenas `OPENAI_API_KEY` é obrigatória. Veja `.env.example` para detalhes sobre cada variável.
+
+### 2. Subir os serviços
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
-Este comando irá:
-- Criar e iniciar todos os containers
-- Configurar os bancos de dados
-- Inicializar os serviços de infraestrutura (PostgreSQL, Redis, Weaviate, LocalStack)
+Isso inicia todos os containers, executa as migrations (Alembic) e carrega os dados pré-processados no Weaviate.
 
-### 3. Executar Ingestão de Documentos no Weaviate
+### 3. Acessar
 
-**⚠️ IMPORTANTE**: A ingestão de documentos jurídicos é necessária para o funcionamento do Legal Service. Execute este passo **apenas uma vez** após subir os serviços:
+| Recurso | URL |
+|---|---|
+| Frontend | http://localhost:3000 |
+| API Gateway (Swagger) | http://localhost:8000/docs |
+| Grafana | http://localhost:3001 (admin / orqestra) |
+| Metabase | http://localhost:3002 |
+| Prometheus | http://localhost:9090 |
+
+### Usuário padrão
+
+O seed cria um usuário para testes:
+
+```
+Email: ana@email.com
+Senha: 123
+```
+
+## Infraestrutura
+
+| Componente | Porta | Uso |
+|---|---|---|
+| PostgreSQL | 5432 | Banco principal (um database por serviço) |
+| Redis | 6379 | Cache de validações e enhancements (DB 0, 1, 2) |
+| Weaviate | 8080 | Vector database para RAG do Legal Service |
+| LocalStack (S3) | 4566 | Armazenamento de peças criativas (email HTML, imagens app) |
+
+## Comandos úteis
 
 ```bash
-docker-compose run --rm documents-ingestion
+# Ver logs de um serviço
+docker compose logs -f legal-service
+
+# Parar tudo
+docker compose down
+
+# Parar e limpar volumes (reset completo)
+docker compose down -v
+
+# Rebuild de um serviço
+docker compose build content-validation-service
+docker compose up -d content-validation-service
 ```
 
-Este job irá:
-- Extrair documentos PDF da pasta `doc-juridico`
-- Processar e criar chunks semânticos
-- Indexar no Weaviate para busca RAG
+## Estrutura do repositório
 
-**Nota**: O job é batch e termina automaticamente após a conclusão. Se precisar re-executar, simplesmente rode o comando novamente.
-
-### 4. Verificar Status dos Serviços
-
-```bash
-docker-compose ps
 ```
-
-Todos os serviços devem estar com status `Up` ou `Up (healthy)`.
-
-## 🌐 Acessos
-
-Após subir os serviços, você pode acessar:
-
-- **Frontend**: http://localhost:3000
-- **API Gateway**: http://localhost:8000
-- **API Gateway Docs**: http://localhost:8000/docs
-- **Weaviate**: http://localhost:8080
-- **Legal Service**: http://localhost:8005
-- **Legal Service Docs**: http://localhost:8005/docs
-
-## 📚 Serviços e Portas
-
-| Serviço | Porta | Descrição |
-|---------|-------|-----------|
-| Frontend | 3000 | Interface React |
-| API Gateway | 8000 | Gateway centralizado |
-| Briefing Enhancer | 8001 | Aprimoramento de textos |
-| Auth Service | 8002 | Autenticação |
-| Campaigns Service | 8003 | Gerenciamento de campanhas |
-| Content Service | 8004 | Análise de conteúdo |
-| Legal Service | 8005 | Validação jurídica |
-| PostgreSQL | 5432 | Banco de dados |
-| Redis | 6379 | Cache |
-| Weaviate | 8080 | Vector database |
-| LocalStack | 4566 | S3 local |
-
-## 🔧 Comandos Úteis
-
-### Ver logs de um serviço específico
-```bash
-docker-compose logs -f legal-service
+├── api-gateway/                  Proxy reverso (FastAPI)
+├── auth-service/                 Autenticação JWT (FastAPI)
+├── briefing-enhancer-service/    Aprimoramento de briefings (LangGraph)
+├── campaigns-service/            Gestão de campanhas + MCP server (FastAPI)
+├── content-validation-service/   Orquestrador de validação (LangGraph)
+├── legal-service/                Validação jurídica RAG + A2A (LangGraph)
+├── branding-service/             Validação de marca via MCP (FastAPI)
+├── html-converter-service/       HTML para imagem + MCP (Spring Boot)
+├── frontend/                     SPA React + TypeScript
+├── documents-ingestion/          Pipeline de ingestão de PDFs no Weaviate
+├── monitoring/                   Prometheus, Grafana, Metabase
+├── postman-collections/          Collection Postman com todos os endpoints
+├── docker-compose.yml            Orquestração de todos os serviços
+└── .env.example                  Variáveis de ambiente necessárias
 ```
-
-### Parar todos os serviços
-```bash
-docker-compose down
-```
-
-### Parar e remover volumes (limpar dados)
-```bash
-docker-compose down -v
-```
-
-### Reconstruir um serviço específico
-```bash
-docker-compose build legal-service
-docker-compose up -d legal-service
-```
-
-### Verificar saúde do Weaviate
-```bash
-curl http://localhost:8080/v1/.well-known/ready
-```
-
-## 🐛 Troubleshooting
-
-### Serviços não iniciam
-
-1. Verifique se todas as portas estão livres:
-```bash
-docker-compose ps
-```
-
-2. Verifique os logs:
-```bash
-docker-compose logs
-```
-
-### Legal Service retorna erro "Nenhum documento encontrado"
-
-Execute a ingestão de documentos:
-```bash
-docker-compose run --rm documents-ingestion
-```
-
-### Erro de autenticação (401 Unauthorized)
-
-Verifique se o `SECRET_KEY` está configurado corretamente. O valor padrão em desenvolvimento é `dev-secret-key-change-in-production`.
-
-### Weaviate não conecta
-
-1. Verifique se o Weaviate está saudável:
-```bash
-curl http://localhost:8080/v1/.well-known/ready
-```
-
-2. Verifique os logs:
-```bash
-docker-compose logs weaviate
-```
-
-## 📖 Documentação Adicional
-
-- [API Gateway README](api-gateway/README.md)
-- [Auth Service README](auth-service/README.md)
-- [Campaigns Service README](campaigns-service/README.md)
-- [Briefing Enhancer Service README](briefing-enhancer-service/README.md)
-
-## 🔐 Segurança
-
-- Em produção, altere o `SECRET_KEY` padrão
-- Configure `ENVIRONMENT=production` para habilitar cookies seguros
-- Revise as configurações de CORS para seu domínio
-- Mantenha as variáveis de ambiente seguras (use secrets management)
-
-## 📝 Notas
-
-- O projeto usa **LocalStack** para S3 local em desenvolvimento
-- **Weaviate** é usado para busca vetorial e RAG no Legal Service
-- **Redis** é usado para cache no Legal Service
-- Todos os serviços compartilham a mesma rede Docker para comunicação interna
-

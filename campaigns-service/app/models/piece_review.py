@@ -1,7 +1,4 @@
-"""Per-piece review state (IA verdict snapshot + human verdict) for CONTENT_REVIEW workflow."""
-
 from __future__ import annotations
-
 import enum
 import uuid
 from datetime import datetime

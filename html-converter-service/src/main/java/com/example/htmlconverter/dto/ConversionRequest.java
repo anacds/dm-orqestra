@@ -7,9 +7,6 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/**
- * Request DTO for HTML to image conversion.
- */
 @Data
 @Builder
 @NoArgsConstructor
@@ -34,9 +31,7 @@ public class ConversionRequest {
     @Builder.Default
     private ImageFormat imageFormat = ImageFormat.PNG;
     
-    /**
-     * Supported image output formats.
-     */
+
     public enum ImageFormat {
         PNG, JPEG
     }

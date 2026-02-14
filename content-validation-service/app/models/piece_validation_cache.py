@@ -1,39 +1,19 @@
+"""Audit table for piece validation results (permanent log in PostgreSQL)."""
+
 from __future__ import annotations
 
-import hashlib
 import uuid
+
 from sqlalchemy import Column, DateTime, Index, String, func
 from sqlalchemy.dialects.postgresql import JSONB
 
 from app.core.database import Base
 
 
-def content_hash_sms(body: str | None) -> str:
-    """Same algorithm as frontend calculateContentHash for SMS."""
-    s = f"SMS:{body or ''}"
-    return hashlib.sha256(s.encode("utf-8")).hexdigest()
+class PieceValidationAudit(Base):
+    """Permanent audit log of every piece validation executed."""
 
-
-def content_hash_push(title: str | None, body: str | None) -> str:
-    """Same algorithm as frontend calculateContentHash for Push."""
-    s = f"Push:{title or ''}:{body or ''}"
-    return hashlib.sha256(s.encode("utf-8")).hexdigest()
-
-
-def content_hash_email(piece_id: str) -> str:
-    """Lookup key for Email validation cache (campaign_id + piece_id)."""
-    s = f"EMAIL:{piece_id or ''}"
-    return hashlib.sha256(s.encode("utf-8")).hexdigest()
-
-
-def content_hash_app(piece_id: str, commercial_space: str) -> str:
-    """Lookup key for App validation cache (one row per space)."""
-    s = f"APP:{piece_id or ''}:{commercial_space or ''}"
-    return hashlib.sha256(s.encode("utf-8")).hexdigest()
-
-
-class PieceValidationCache(Base):
-    __tablename__ = "piece_validation_cache"
+    __tablename__ = "piece_validation_audit"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     campaign_id = Column(String, nullable=False, index=True)
@@ -44,10 +24,13 @@ class PieceValidationCache(Base):
 
     __table_args__ = (
         Index(
-            "ix_piece_validation_cache_lookup",
+            "ix_piece_validation_audit_lookup",
             "campaign_id",
             "channel",
             "content_hash",
-            unique=True,
+        ),
+        Index(
+            "ix_piece_validation_audit_created_at",
+            "created_at",
         ),
     )

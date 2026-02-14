@@ -3,7 +3,6 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from datetime import timedelta
 from typing import Optional
-
 from app.core.database import get_db
 from app.core.rate_limit import limiter, get_login_rate_limit, get_register_rate_limit
 from app.core.auth_config import load_auth_config

@@ -6,10 +6,6 @@ BUSINESS_ANALYST_ROLE = "Analista de negócios"
 
 
 def require_business_analyst(current_user: Dict) -> None:
-    """
-    Validate that the current user has the 'Analista de negócios' role.
-    Raises HTTPException 403 if user doesn't have the required role.
-    """
     user_role = current_user.get("role")
     
     if user_role != BUSINESS_ANALYST_ROLE:

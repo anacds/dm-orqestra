@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     A2A_BASE_URL: str = "http://localhost:8004"
     # Infrastructure (sempre injetado via docker-compose; vazio = erro explícito se esquecido)
     DATABASE_URL: str = ""
+    REDIS_URL: str = "redis://redis:6379/1"
+    CACHE_ENABLED: bool = True
+    CACHE_TTL: int = 86400  # 24h in seconds
 
     CORS_ORIGINS: List[str] = ["http://localhost:3000"]
 

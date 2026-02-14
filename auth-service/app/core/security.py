@@ -22,7 +22,7 @@ def get_password_hash(password: str) -> str:
     return hashed.decode('utf-8')
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
-    """Create JWT access token."""
+    """Create a JWT access token."""
     to_encode = data.copy()
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
@@ -40,11 +40,11 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     return encoded_jwt
 
 def create_refresh_token() -> str:
-    """Generate secure refresh token."""
+    """Generate a refresh token."""
     return secrets.token_urlsafe(32)
 
 def decode_access_token(token: str) -> Optional[dict]:
-    """Decode and validate JWT access token."""
+    """Decode and validate the JWT access token."""
     try:
         config = load_auth_config()
         auth_config = config.get("auth", {})
@@ -79,7 +79,6 @@ async def get_current_user(
     token: str = Depends(get_token_from_cookie_or_header),
     db: Session = Depends(get_db)
 ) -> User:
-    """FastAPI dependency to get current authenticated user."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",

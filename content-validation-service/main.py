@@ -1,4 +1,5 @@
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,10 +16,25 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("Starting Content Validation Service...")
+    yield
+    logger.info("Shutting down Content Validation Service...")
+    # Garante que todos os traces pendentes sejam enviados ao LangSmith
+    try:
+        from langsmith import Client as _LsClient
+        _LsClient().flush()
+    except Exception:
+        pass
+
+
 app = FastAPI(
     title="Content Validation Service",
     description="Orchestrator for content validation. Uses LangGraph (validate format/size, then orchestrate).",
     version=settings.SERVICE_VERSION,
+    lifespan=lifespan,
 )
 
 app.add_middleware(

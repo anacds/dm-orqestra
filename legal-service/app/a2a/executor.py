@@ -1,16 +1,12 @@
-"""A2A Agent Executor: bridges A2A protocol and LegalAgent validation."""
-
 import logging
 import re
 from typing import Any
-
 from a2a.server.agent_execution import AgentExecutor
 from a2a.server.agent_execution import RequestContext
 from a2a.server.events.event_queue import EventQueue
 from a2a.types import DataPart, Part
 from a2a.utils.message import new_agent_parts_message
 from pydantic import ValidationError as PydanticValidationError
-
 from app.api.routes import get_agent
 from app.api.schemas import (
     AppContent,
@@ -26,14 +22,12 @@ logger = logging.getLogger(__name__)
 
 
 def _strip_html(html: str) -> str:
-    """Remove HTML tags and normalize whitespace."""
     text = re.sub(r"<[^>]+>", " ", html)
     text = re.sub(r"\s+", " ", text).strip()
     return text
 
 
 def _extract_data_part_json(context: RequestContext) -> dict:
-    """Extract ValidateRequest-shaped JSON from the user message's DataPart."""
     msg = context.message
     items = getattr(msg, "content", None) or getattr(msg, "parts", None) or []
     if not msg or not items:
@@ -54,7 +48,6 @@ def _extract_data_part_json(context: RequestContext) -> dict:
 
 
 def _invoke_payload(data: ValidateRequest) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Run LegalAgent.invoke and return (output_dict, audit_info)."""
     agent = get_agent()
     content_title = None
     content_body = None
@@ -66,14 +59,7 @@ def _invoke_payload(data: ValidateRequest) -> tuple[dict[str, Any], dict[str, An
     elif isinstance(data.content, SMSContent):
         content_body = data.content.body
     elif isinstance(data.content, EmailContent):
-        # --- CÓDIGO LEGADO: EMAIL aceitava html OU image ---
-        # if data.content.image:
-        #     content_image = data.content.image
-        # else:
-        #     content_body = _strip_html(data.content.html)
-        # --- FIM CÓDIGO LEGADO ---
-        
-        # EMAIL agora pode ter html E image (análise visual + textual)
+
         if data.content.html:
             content_body = _strip_html(data.content.html)
         if data.content.image:
@@ -90,12 +76,6 @@ def _invoke_payload(data: ValidateRequest) -> tuple[dict[str, Any], dict[str, An
     elif content_body:
         content_str = content_body
     
-    # --- CÓDIGO LEGADO: sobrescrevia content_str para imagem ---
-    # if content_image:
-    #     content_str = f"[{data.channel} 1 imagem]" if not content_str else content_str
-    # --- FIM CÓDIGO LEGADO ---
-    
-    # Para EMAIL com html+image, mantém o texto e adiciona indicador de imagem
     if content_image and not content_body:
         content_str = f"[{data.channel} 1 imagem]"
     elif content_image and content_body:
@@ -126,11 +106,7 @@ def _invoke_payload(data: ValidateRequest) -> tuple[dict[str, Any], dict[str, An
     search_meta = internal.get("search_metadata") or {}
     llm_model = None
     if getattr(agent, "channel_to_model", None):
-        # --- CÓDIGO LEGADO: usava modelo do canal diretamente ---
-        # llm_model = agent.channel_to_model.get(data.channel)
-        # --- FIM CÓDIGO LEGADO ---
-        
-        # EMAIL com imagem usa modelo de fallback (APP)
+
         if data.channel == "EMAIL" and content_image:
             llm_model = agent.channel_to_model.get("APP")
         else:
@@ -213,7 +189,6 @@ class LegalAgentExecutor(AgentExecutor):
             task_id=context.task_id,
         )
         await event_queue.enqueue_event(msg)
-        # Response is always Message (synchronous); no Task.
 
     async def cancel(
         self,

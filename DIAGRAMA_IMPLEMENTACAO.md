@@ -1,348 +1,538 @@
-# Diagrama da Solução - Estado Atual da Implementação
+# Diagrama da Solução Orqestra — Estado Atual
 
-## Arquitetura de Microsserviços
+> **Nota:** O frontend (React SPA) não é detalhado neste documento. O foco é a arquitetura de backend, serviços de IA e infraestrutura.
+
+## Arquitetura Geral
+
+> O diagrama visual completo está disponível em `assets/arquitetura_orqestra.png`.
 
 ```mermaid
-graph TB
-    subgraph "Frontend"
-        FE[React SPA<br/>Port: 3000<br/>React Router 6]
-        FE_PAGES[Páginas:<br/>- Login<br/>- Register<br/>- Index<br/>- Campaigns<br/>- CampaignDetail<br/>- CampaignNew<br/>- Settings]
-        FE --> FE_PAGES
-    end
+graph TD
+    FE["Frontend React :3000<br/><i>TypeScript · Vite · Tailwind</i>"]
+    GW["API Gateway :8000<br/><i>FastAPI · Python</i>"]
 
-    subgraph "API Gateway"
-        GW[FastAPI Gateway<br/>Port: 8000<br/>Proxy/Roteamento]
-    end
+    AUTH["Auth :8002<br/><i>FastAPI · bcrypt</i>"]
+    CAMP["Campaigns :8003<br/><i>FastAPI · MCP Server</i>"]
+    BRIEF["Briefing Enhancer :8001<br/><i>FastAPI · LangGraph · LangChain</i>"]
+    CVS["Content Validation :8004<br/><i>FastAPI · LangGraph</i>"]
 
-    subgraph "Microsserviços"
-        subgraph "Auth Service"
-            AUTH[FastAPI<br/>Port: 8002]
-            AUTH_ROUTES[Endpoints:<br/>POST /register<br/>POST /login<br/>POST /refresh<br/>POST /logout<br/>GET /me<br/>GET /users/:id]
-            AUTH_DB[(PostgreSQL<br/>auth_service)]
-            AUTH_TABLES[Tables:<br/>- users<br/>- refresh_tokens<br/>- login_audits]
-            AUTH --> AUTH_ROUTES
-            AUTH --> AUTH_DB
-            AUTH_DB --> AUTH_TABLES
-        end
+    LEGAL["Legal Service :8005<br/><i>FastAPI · LangGraph · LangChain · RAG</i>"]
+    HTML["HTML Converter :8011<br/><i>Spring Boot · Java · MCP Server</i>"]
+    BRAND["Branding :8012<br/><i>FastAPI · MCP Server</i>"]
 
-        subgraph "Campaigns Service"
-            CAMP[FastAPI<br/>Port: 8003]
-            CAMP_ROUTES[Endpoints:<br/>GET /campaigns<br/>GET /campaigns/:id<br/>POST /campaigns<br/>PUT /campaigns/:id<br/>DELETE /campaigns/:id<br/>POST /campaigns/:id/comments<br/>POST /campaigns/:id/creative-pieces<br/>POST /campaigns/:id/creative-pieces/upload-app<br/>POST /campaigns/:id/creative-pieces/upload-email<br/>DELETE /campaigns/:id/creative-pieces/app/:space<br/>DELETE /campaigns/:id/creative-pieces/email]
-            CAMP_DB[(PostgreSQL<br/>campaigns_service)]
-            CAMP_TABLES[Tables:<br/>- campaigns<br/>- comments<br/>- creative_pieces]
-            CAMP --> CAMP_ROUTES
-            CAMP --> CAMP_DB
-            CAMP_DB --> CAMP_TABLES
-        end
-
-        subgraph "Briefing Enhancer Service"
-            BRIEF[FastAPI + LangGraph<br/>Port: 8001]
-            BRIEF_ROUTES[Endpoints:<br/>POST /enhance-objective<br/>PATCH /ai-interactions/:id/decision<br/>GET /health]
-            BRIEF_DB[(PostgreSQL<br/>briefing_enhancer)]
-            BRIEF_TABLES[Tables:<br/>- enhanceable_fields<br/>- ai_interactions]
-            BRIEF_GRAPH[LangGraph Workflow:<br/>1. fetch_field_info<br/>2. enhance_text<br/>Checkpointing opcional]
-            BRIEF_LLM[OpenAI Integration:<br/>- GPT-4o<br/>- Moderation Middleware<br/>- Config via YAML]
-            BRIEF --> BRIEF_ROUTES
-            BRIEF --> BRIEF_GRAPH
-            BRIEF_GRAPH --> BRIEF_LLM
-            BRIEF --> BRIEF_DB
-            BRIEF_DB --> BRIEF_TABLES
-        end
-
-        subgraph "AI Studio Service"
-            AI[FastAPI<br/>Port: 8004]
-            AI_ROUTES[Endpoints:<br/>POST /ai/analyze-piece<br/>GET /ai/analyze-piece/:campaign_id/:channel]
-            AI_DB[(PostgreSQL<br/>ai_studio)]
-            AI_TABLES[Tables:<br/>- creative_piece_analysis]
-            AI --> AI_ROUTES
-            AI --> AI_DB
-            AI_DB --> AI_TABLES
-        end
-    end
-
-    subgraph "Infraestrutura"
-        S3[LocalStack S3<br/>Port: 4566<br/>Bucket: orqestra-creative-pieces]
-        PG[(PostgreSQL 16<br/>Port: 5432<br/>Múltiplos databases)]
-    end
+    LLM["Maritaca AI · OpenAI · Cohere"]
 
     FE -->|HTTP + JWT| GW
-    GW -->|/api/auth/*| AUTH
-    GW -->|/api/campaigns/*| CAMP
-    GW -->|/api/enhance-objective<br/>/api/ai-interactions| BRIEF
-    GW -->|/api/ai/analyze-piece<br/>/api/ai/generate-text| AI
 
-    CAMP -->|Valida token| AUTH
-    BRIEF -->|Valida token| AUTH
-    AI -->|Valida token| AUTH
-    CAMP -->|Upload/Download| S3
-    CAMP -->|Busca campanha| CAMP_DB
-    AI -->|Busca campanha| CAMP
+    GW -->|REST| AUTH
+    GW -->|REST| CAMP
+    GW -->|REST| BRIEF
+    GW -->|REST| CVS
 
-    AUTH --> AUTH_DB
-    CAMP --> CAMP_DB
-    BRIEF --> BRIEF_DB
-    AI --> AI_DB
-    AUTH_DB --> PG
-    CAMP_DB --> PG
-    BRIEF_DB --> PG
-    AI_DB --> PG
+    CVS -->|MCP| CAMP
+    CVS -->|A2A| LEGAL
+    CVS -->|MCP| HTML
+    CVS -->|MCP| BRAND
 
-    style FE fill:#61dafb
-    style GW fill:#009485
-    style AUTH fill:#ff6b6b
-    style CAMP fill:#4ecdc4
-    style BRIEF fill:#95e1d3
-    style AI fill:#f38181
-    style S3 fill:#ffd93d
-    style PG fill:#336791
+    BRIEF -->|LLM| LLM
+    LEGAL -->|LLM| LLM
+
+    LEGAL -->|RAG| WEAV[("Weaviate :8080")]
+
+    subgraph DADOS["Infraestrutura de Dados"]
+        direction LR
+        PG[("PostgreSQL :5432<br/>6 databases")]
+        REDIS["Redis :6379<br/>3 DBs"]
+        WEAV
+        S3["S3 :4566"]
+    end
+
+    subgraph OBS["Observabilidade"]
+        direction LR
+        GRAF["Grafana :3001"]
+        META["Metabase :3002"]
+        PROM["Prometheus :9090"]
+    end
+
+    style FE fill:#61dafb,color:#000
+    style GW fill:#009485,color:#fff
+    style AUTH fill:#ff6b6b,color:#fff
+    style CAMP fill:#4ecdc4,color:#000
+    style BRIEF fill:#95e1d3,color:#000
+    style CVS fill:#f38181,color:#fff
+    style LEGAL fill:#a29bfe,color:#fff
+    style HTML fill:#ffeaa7,color:#000
+    style BRAND fill:#dfe6e9,color:#000
+    style LLM fill:#fdcb6e,color:#000
+    style PG fill:#336791,color:#fff
+    style WEAV fill:#00b894,color:#fff
+    style REDIS fill:#d63031,color:#fff
+    style S3 fill:#ffd93d,color:#000
+    style PROM fill:#e17055,color:#fff
+    style GRAF fill:#636e72,color:#fff
+    style META fill:#636e72,color:#fff
+    style DADOS fill:none,stroke:#336791
+    style OBS fill:none,stroke:#636e72
 ```
 
-## Fluxo de Autenticação
+**Conexões de dados** (omitidas do diagrama para clareza):
+- **PostgreSQL** ← Auth, Campaigns, Briefing Enhancer, Content Validation, Legal Service, Metabase
+- **Redis** ← Legal Service (DB 0), Content Validation (DB 1), Briefing Enhancer (DB 2)
+- **S3** ← Campaigns (upload/download de peças)
+- **Prometheus** ← coleta métricas de todos os serviços → Grafana
+
+## Protocolos de Comunicacao
+
+```mermaid
+graph LR
+    subgraph "REST — HTTP/JSON"
+        R2[API Gateway] --> R3[Auth Service]
+        R2 --> R4[Campaigns Service]
+        R2 --> R5[Briefing Enhancer]
+        R2 --> R6[Content Validation]
+    end
+
+    subgraph "MCP — Model Context Protocol"
+        M1[Content Validation] -->|retrieve_piece_content<br/>get_channel_specs| M2[Campaigns MCP]
+        M1 -->|convert_html_to_image| M3[HTML Converter MCP]
+        M1 -->|validate_email_brand<br/>validate_image_brand<br/>get_brand_guidelines| M4[Branding MCP]
+    end
+
+    subgraph "A2A — Agent-to-Agent"
+        A1[Content Validation] -->|VALIDATE_COMMUNICATION| A2[Legal Service]
+    end
+```
+
+## Fluxo de Validacao de Conteudo
 
 ```mermaid
 sequenceDiagram
-    participant U as Usuário
-    participant FE as Frontend
+    participant GW as API Gateway
+    participant CVS as Content Validation
+    participant REDIS as Redis (cache)
+    participant CAMP_MCP as Campaigns (MCP)
+    participant HTML_MCP as HTML Converter (MCP)
+    participant BRAND_MCP as Branding (MCP)
+    participant LEGAL as Legal Service (A2A)
+    participant WEAV as Weaviate
+
+    GW->>CVS: POST /ai/analyze-piece
+
+    CVS->>REDIS: verificar cache (content_hash)
+    alt Cache hit
+        REDIS-->>CVS: resultado em cache
+        CVS-->>GW: resultado consolidado
+    end
+
+    par Buscar conteudo e specs
+        CVS->>CAMP_MCP: retrieve_piece_content
+        CAMP_MCP-->>CVS: conteudo da peca
+        CVS->>CAMP_MCP: get_channel_specs
+        CAMP_MCP-->>CVS: specs do canal
+    end
+
+    alt Canal EMAIL
+        CVS->>HTML_MCP: convert_html_to_image
+        HTML_MCP-->>CVS: imagem Base64
+    end
+
+    CVS->>CVS: validate_specs (deterministico)
+
+    par Validacoes em paralelo
+        CVS->>BRAND_MCP: validate_email_brand / validate_image_brand
+        BRAND_MCP-->>CVS: resultado branding
+        CVS->>LEGAL: A2A VALIDATE_COMMUNICATION
+        LEGAL->>WEAV: hybrid search (RAG)
+        WEAV-->>LEGAL: chunks regulatorios
+        LEGAL->>LEGAL: LLM analisa conformidade
+        LEGAL-->>CVS: APROVADO / REPROVADO
+    end
+
+    CVS->>CVS: issue_final_verdict (agrega resultados)
+    CVS->>REDIS: salvar em cache (TTL 24h)
+    CVS->>CVS: salvar auditoria (PostgreSQL)
+    CVS-->>GW: resultado consolidado
+```
+
+## Fluxo de Autenticacao
+
+```mermaid
+sequenceDiagram
     participant GW as API Gateway
     participant AUTH as Auth Service
     participant DB as PostgreSQL
 
-    U->>FE: Login (email + password)
-    FE->>GW: POST /api/auth/login
-    GW->>AUTH: POST /login (proxy)
-    AUTH->>DB: Validar credenciais
-    DB-->>AUTH: User data
-    AUTH->>AUTH: Gerar JWT tokens
-    AUTH->>AUTH: Set httpOnly cookies
-    AUTH-->>GW: TokenResponse + Set-Cookie
-    GW-->>FE: TokenResponse + Set-Cookie
-    FE->>FE: Armazenar tokens (cookies)
-    
-    Note over FE,GW: Próximas requisições
-    U->>FE: Ação protegida
-    FE->>GW: Request + Cookie (access_token)
-    GW->>AUTH: GET /me (validação)
-    AUTH->>DB: Verificar token
-    DB-->>AUTH: User válido
-    AUTH-->>GW: User data
-    GW->>GW: Proxy para serviço destino
+    GW->>AUTH: POST /api/auth/login
+    AUTH->>DB: validar credenciais
+    DB-->>AUTH: user data
+    AUTH->>AUTH: gerar JWT (access + refresh)
+    AUTH-->>GW: tokens + Set-Cookie (httpOnly)
+
+    Note over GW,AUTH: Requisicoes seguintes
+    GW->>GW: validar JWT localmente
+    GW->>GW: injetar headers X-User-*
+    GW->>GW: proxy para servico destino
 ```
 
-## Fluxo de Criação de Campanha
+## Fluxo de Aprimoramento de Briefing
 
 ```mermaid
 sequenceDiagram
-    participant U as Business Analyst
-    participant FE as Frontend
-    participant GW as API Gateway
-    participant CAMP as Campaigns Service
-    participant AUTH as Auth Service
-    participant DB as PostgreSQL
-
-    U->>FE: Criar nova campanha
-    FE->>GW: POST /api/campaigns (com dados)
-    GW->>CAMP: POST /campaigns (proxy)
-    CAMP->>AUTH: GET /me (validar token)
-    AUTH-->>CAMP: User data (role)
-    CAMP->>CAMP: Verificar role = Business Analyst
-    CAMP->>DB: INSERT campaign
-    DB-->>CAMP: Campaign criada
-    CAMP-->>GW: CampaignResponse
-    GW-->>FE: CampaignResponse
-    FE->>FE: Atualizar lista
-```
-
-## Fluxo de Aprimoramento de Texto (Briefing Enhancer)
-
-```mermaid
-sequenceDiagram
-    participant U as Business Analyst
-    participant FE as Frontend
     participant GW as API Gateway
     participant BRIEF as Briefing Enhancer
-    participant AUTH as Auth Service
-    participant GRAPH as LangGraph
-    participant LLM as OpenAI
+    participant REDIS as Redis (cache)
     participant DB as PostgreSQL
+    participant LLM as Maritaca / OpenAI
 
-    U->>FE: Aprimorar objetivo
-    FE->>GW: POST /api/enhance-objective
-    GW->>BRIEF: POST /enhance-objective (proxy)
-    BRIEF->>AUTH: GET /me (validar token)
-    AUTH-->>BRIEF: User data (role)
-    BRIEF->>BRIEF: Verificar role = Business Analyst
-    BRIEF->>GRAPH: Executar workflow
-    GRAPH->>DB: Buscar field_info
-    DB-->>GRAPH: Field metadata
-    GRAPH->>LLM: Chamar OpenAI (GPT-4o)
-    LLM->>LLM: Moderation check
-    LLM-->>GRAPH: Texto aprimorado
-    GRAPH->>DB: Salvar interação
-    GRAPH-->>BRIEF: EnhancedTextResponse
-    BRIEF-->>GW: Response
-    GW-->>FE: Response
-    FE->>FE: Exibir texto aprimorado
-```
+    GW->>BRIEF: POST /api/enhance-objective
 
-## Fluxo de Upload de Peça Criativa
-
-```mermaid
-sequenceDiagram
-    participant U as Creative Analyst
-    participant FE as Frontend
-    participant GW as API Gateway
-    participant CAMP as Campaigns Service
-    participant AUTH as Auth Service
-    participant S3 as LocalStack S3
-    participant DB as PostgreSQL
-
-    U->>FE: Upload arquivo App/E-mail
-    FE->>GW: POST /api/campaigns/:id/creative-pieces/upload-app
-    GW->>CAMP: POST /campaigns/:id/creative-pieces/upload-app
-    CAMP->>AUTH: GET /me (validar token)
-    AUTH-->>CAMP: User data (role)
-    CAMP->>CAMP: Verificar role = Creative Analyst
-    CAMP->>CAMP: Verificar status campanha
-    CAMP->>S3: Upload arquivo
-    S3-->>CAMP: File URL
-    CAMP->>DB: INSERT/UPDATE creative_piece
-    DB-->>CAMP: CreativePiece salvo
-    CAMP-->>GW: CreativePieceResponse
-    GW-->>FE: Response com URL pública
-    FE->>FE: Exibir preview
-```
-
-## Fluxo de Análise de Peça Criativa (AI Studio)
-
-```mermaid
-sequenceDiagram
-    participant U as User
-    participant FE as Frontend
-    participant GW as API Gateway
-    participant AI as AI Studio Service
-    participant AUTH as Auth Service
-    participant CAMP as Campaigns Service
-    participant DB as PostgreSQL
-
-    U->>FE: Analisar peça SMS/Push
-    FE->>GW: POST /api/ai/analyze-piece
-    GW->>AI: POST /ai/analyze-piece
-    AI->>AUTH: GET /me (validar token)
-    AUTH-->>AI: User data
-    AI->>AI: Calcular hash do conteúdo
-    AI->>DB: Verificar análise existente
-    alt Análise já existe
-        DB-->>AI: Análise existente
-    else Nova análise
-        AI->>CAMP: GET /campaigns/:id
-        CAMP-->>AI: Campaign data
-        AI->>AI: Validar contra briefing
-        AI->>DB: INSERT creative_piece_analysis
-        DB-->>AI: Análise criada
+    BRIEF->>REDIS: verificar cache
+    alt Cache hit
+        REDIS-->>BRIEF: texto aprimorado em cache
+        BRIEF-->>GW: texto original + aprimorado
     end
-    AI-->>GW: AnalyzePieceResponse
-    GW-->>FE: Response
-    FE->>FE: Exibir validação
+
+    BRIEF->>DB: buscar field_info (diretrizes)
+    DB-->>BRIEF: metadados do campo
+
+    BRIEF->>LLM: sabiazinho-4 (principal)
+    alt Fallback
+        BRIEF->>LLM: gpt-5-nano (se Maritaca indisponivel)
+    end
+    LLM-->>BRIEF: texto aprimorado
+
+    BRIEF->>REDIS: salvar em cache (TTL 24h)
+    BRIEF->>DB: salvar ai_interaction (auditoria)
+    BRIEF-->>GW: texto original + aprimorado
 ```
 
-## Componentes Implementados
+## Fluxo de Ciclo de Vida da Campanha
 
-### Frontend (React)
-- ✅ Sistema de roteamento (React Router 6)
-- ✅ Páginas: Login, Register, Index, Campaigns, CampaignDetail, CampaignNew, Settings
-- ✅ Proteção de rotas (ProtectedRoute)
-- ✅ Integração com API Gateway
-- ✅ UI Components (Radix UI + TailwindCSS)
-
-### API Gateway
-- ✅ Roteamento baseado em path
-- ✅ Proxy transparente de requisições
-- ✅ Repasse de headers de autenticação
-- ✅ Repasse de cookies (Set-Cookie)
-- ✅ Tratamento de erros e timeouts
-
-### Auth Service
-- ✅ Registro de usuários
-- ✅ Login com JWT
-- ✅ Refresh tokens
-- ✅ Logout
-- ✅ Validação de tokens (/me)
-- ✅ Rate limiting
-- ✅ Auditoria de login
-- ✅ Cookies httpOnly
-
-### Campaigns Service
-- ✅ CRUD completo de campanhas
-- ✅ Sistema de comentários
-- ✅ Gerenciamento de peças criativas (App e E-mail)
-- ✅ Upload de arquivos para S3
-- ✅ Validação de permissões por role
-- ✅ Workflow de status de campanha
-- ✅ Integração com Auth Service
-
-### Briefing Enhancer Service
-- ✅ Aprimoramento de texto usando LangGraph
-- ✅ Integração com OpenAI (GPT-4o)
-- ✅ Moderation middleware
-- ✅ Checkpointing opcional (LangSmith)
-- ✅ Histórico de interações
-- ✅ Decisões do usuário (approved/rejected)
-- ✅ Configuração via YAML
-
-### AI Studio Service
-- ✅ Análise de peças criativas (SMS e Push)
-- ✅ Validação contra briefing
-- ✅ Cache por hash de conteúdo
-- ✅ Integração com Campaigns Service
-- ✅ Análise de validação (valid/invalid/warning)
-
-### Infraestrutura
-- ✅ PostgreSQL 16 (múltiplos databases)
-- ✅ LocalStack S3 (armazenamento de arquivos)
-- ✅ Docker Compose (orquestração)
-- ✅ Health checks
-
-## Comunicação Entre Serviços
-
-| Origem | Destino | Propósito | Protocolo |
-|--------|---------|-----------|-----------|
-| Frontend | API Gateway | Todas as requisições | HTTP + JWT (cookies) |
-| API Gateway | Auth Service | Roteamento /api/auth/* | HTTP |
-| API Gateway | Campaigns Service | Roteamento /api/campaigns/* | HTTP |
-| API Gateway | Briefing Enhancer | Roteamento /api/enhance-objective | HTTP |
-| API Gateway | AI Studio | Roteamento /api/ai/* | HTTP |
-| Campaigns Service | Auth Service | Validação de token | HTTP |
-| Briefing Enhancer | Auth Service | Validação de token | HTTP |
-| AI Studio | Auth Service | Validação de token | HTTP |
-| AI Studio | Campaigns Service | Buscar dados da campanha | HTTP |
-| Campaigns Service | LocalStack S3 | Upload/Download arquivos | S3 API |
+```mermaid
+stateDiagram-v2
+    [*] --> DRAFT: Analista de Negocios cria
+    DRAFT --> CREATIVE_STAGE: Analista de Negocios envia para criacao
+    CREATIVE_STAGE --> CONTENT_REVIEW: Analista de Criacao submete pecas
+    CONTENT_REVIEW --> CONTENT_ADJUSTMENT: Gestor de Marketing rejeita peca
+    CONTENT_ADJUSTMENT --> CONTENT_REVIEW: Analista de Criacao resubmete
+    CONTENT_REVIEW --> CAMPAIGN_BUILDING: Gestor de Marketing aprova todas
+    CAMPAIGN_BUILDING --> CAMPAIGN_PUBLISHED: Analista de Campanhas publica
+    CAMPAIGN_PUBLISHED --> [*]
+```
 
 ## Bancos de Dados
 
-### auth_service
-- `users` - Usuários do sistema
-- `refresh_tokens` - Tokens de refresh
-- `login_audits` - Auditoria de logins
+```mermaid
+erDiagram
+    auth_service {
+        users PK
+        refresh_tokens FK
+        login_audits FK
+    }
+    campaigns_service {
+        campaigns PK
+        comments FK
+        creative_pieces FK
+        piece_review FK
+        piece_review_event FK
+        campaign_status_event FK
+        channel_specs PK
+    }
+    briefing_enhancer {
+        enhanceable_fields PK
+        ai_interactions FK
+    }
+    content_validation {
+        piece_validation_audit PK
+    }
+    legal_service {
+        legal_validation_audits PK
+    }
+    metabase {
+        metabase_internal string
+    }
+```
 
-### campaigns_service
-- `campaigns` - Campanhas
-- `comments` - Comentários nas campanhas
-- `creative_pieces` - Peças criativas (App, E-mail, SMS, Push)
+## Estrategia de Cache (Redis)
 
-### briefing_enhancer
-- `enhanceable_fields` - Campos aprimoráveis
-- `ai_interactions` - Histórico de interações com IA
+| Servico | Redis DB | TTL | Chave | Proposito |
+|---------|----------|-----|-------|-----------|
+| Legal Service | DB 0 | 1h | `legal:{channel}:{content_hash}` | Cache de validacoes regulatorias |
+| Content Validation | DB 1 | 24h | `validation:{campaign_id}:{channel}:{content_hash}` | Cache de resultados completos de validacao |
+| Briefing Enhancer | DB 2 | 24h | `enhancement:{user}:{field}:{text_hash}` | Cache de textos aprimorados |
 
-### ai_studio
-- `creative_piece_analysis` - Análises de peças criativas
+Todos os servicos mantêm registros permanentes de auditoria em PostgreSQL, independente do cache Redis.
 
-## Tecnologias Utilizadas
+## Mapa de Portas
 
-- **Frontend**: React 18, TypeScript, Vite, TailwindCSS, Radix UI
-- **Backend**: FastAPI, Python 3.11+
-- **IA**: LangGraph, LangChain, OpenAI API
-- **Banco de Dados**: PostgreSQL 16
-- **Storage**: LocalStack (S3)
-- **Orquestração**: Docker Compose
-- **Autenticação**: JWT, httpOnly cookies
+| Servico | Porta | Protocolo | Descricao |
+|---------|-------|-----------|-----------|
+| API Gateway | 8000 | REST | Roteamento + JWT + Rate Limit |
+| Briefing Enhancer | 8001 | REST | Aprimoramento de briefing com IA |
+| Auth Service | 8002 | REST | Autenticacao e autorizacao |
+| Campaigns Service | 8003 | REST + MCP | Gestao de campanhas e pecas |
+| Content Validation | 8004 | REST + A2A | Orquestracao de validacao (LangGraph) |
+| Legal Service | 8005 | REST + A2A | Validacao regulatoria (RAG) |
+| HTML Converter | 8011 | MCP | Conversao HTML para imagem (Java) |
+| Branding Service | 8012 | MCP | Validacao de marca (deterministico) |
+| PostgreSQL | 5432 | SQL | 6 databases (auth, campaigns, briefing, content-validation, legal, metabase) |
+| LocalStack S3 | 4566 | S3 API | Armazenamento de arquivos (email HTML, imagens app) |
+| Weaviate | 8080 / 50051 | HTTP / gRPC | Base vetorial — documentos regulatorios |
+| Redis | 6379 | Redis | Cache — DB 0 (Legal), DB 1 (Content Validation), DB 2 (Briefing Enhancer) |
+| Prometheus | 9090 | HTTP | Coleta de metricas |
+| Grafana | 3001 | HTTP | Dashboards tecnicos |
+| Metabase | 3002 | HTTP | Dashboards de negocio |
 
+## Comunicacao Entre Servicos
+
+| Origem | Destino | Protocolo | Proposito |
+|--------|---------|-----------|-----------|
+| API Gateway | Auth Service | REST | Roteamento /api/auth/* |
+| API Gateway | Campaigns Service | REST | Roteamento /api/campaigns/* |
+| API Gateway | Briefing Enhancer | REST | Roteamento /api/enhance-objective, /api/ai-interactions |
+| API Gateway | Content Validation | REST | Roteamento /api/ai/analyze-piece |
+| Campaigns Service | Auth Service | REST | Validacao de token |
+| Briefing Enhancer | Auth Service | REST | Validacao de token |
+| Content Validation | Auth Service | REST | Validacao de token |
+| Content Validation | Campaigns Service | MCP | retrieve_piece_content, get_channel_specs |
+| Content Validation | HTML Converter | MCP | convert_html_to_image |
+| Content Validation | Branding Service | MCP | validate_email_brand, validate_image_brand, get_brand_guidelines |
+| Content Validation | Legal Service | A2A | VALIDATE_COMMUNICATION |
+| Legal Service | Weaviate | HTTP/gRPC | Hybrid search (RAG — chunking semantico) |
+| Legal Service | Redis | Redis | Cache de validacoes (DB 0, TTL 1h) |
+| Content Validation | Redis | Redis | Cache de resultados (DB 1, TTL 24h) |
+| Briefing Enhancer | Redis | Redis | Cache de aprimoramentos (DB 2, TTL 24h) |
+| Campaigns Service | LocalStack S3 | S3 API | Upload/download de arquivos |
+
+## LLMs e APIs Externas
+
+| Servico | Provedor | Modelo | Uso |
+|---------|----------|--------|-----|
+| Briefing Enhancer | Maritaca AI | sabiazinho-4 | Aprimoramento de texto (principal) |
+| Briefing Enhancer | OpenAI | gpt-5-nano | Aprimoramento de texto (fallback) |
+| Legal Service | Maritaca AI | sabiazinho-4 | Validacao regulatoria SMS/PUSH |
+| Legal Service | OpenAI | gpt-5-nano | Validacao regulatoria EMAIL/APP (com imagem) |
+| Legal Service | OpenAI | text-embedding-3-small | Embeddings para RAG |
+| Legal Service | Cohere | Rerank v3 | Reranking (desabilitado — degradou recall nos experimentos) |
+
+> **Nota:** O Content Validation Service nao invoca LLMs diretamente. Ele orquestra chamadas a servicos especializados (Legal, Branding, HTML Converter, Campaigns) via LangGraph.
+
+## Perfis de Usuario
+
+| Perfil | Permissoes |
+|--------|-----------|
+| Analista de Negocios | Cria campanhas, edita briefing, movimenta status, visualiza |
+| Analista de Criacao | Submete pecas criativas, solicita validacao IA, submete para revisao |
+| Analista de Campanhas | Visualiza campanhas, faz download de pecas |
+| Gestor de Marketing | Aprova/rejeita pecas, solicita validacao IA adicional, veredito final |
+
+## Tecnologias
+
+- **Backend**: FastAPI (Python 3.11+), Spring Boot (Java — HTML Converter)
+- **Frontend**: React 18, TypeScript, Vite, Tailwind CSS (detalhamento fora deste documento)
+- **IA/ML**: LangGraph, LangChain, OpenAI API, Maritaca AI API
+- **Banco de Dados**: PostgreSQL 16 (6 databases)
+- **Vetorial**: Weaviate 1.29 (hybrid search, embeddings OpenAI, chunking semantico)
+- **Cache**: Redis 7 (3 databases isolados por servico)
+- **Storage**: LocalStack S3
+- **Observabilidade**: Prometheus, Grafana (tecnico), Metabase (negocio)
+- **Orquestracao**: Docker Compose
+- **Autenticacao**: JWT (httpOnly cookies)
+- **Protocolos**: REST, MCP (Model Context Protocol), A2A (Agent-to-Agent)
+
+---
+
+## Arquitetura de Producao (AWS)
+
+```mermaid
+graph TD
+    subgraph L1["Internet"]
+        USER["Usuarios"]
+    end
+
+    subgraph L2["Servicos Globais AWS — fora da VPC"]
+        direction LR
+        R53["Route 53<br/>DNS"]
+        CF["CloudFront<br/>CDN Global"]
+        WAF["WAF<br/>Firewall"]
+        S3FE["S3<br/>Frontend"]
+    end
+
+    subgraph L2B["Servicos Gerenciados AWS — fora da VPC"]
+        direction LR
+        CW["CloudWatch<br/>Logs e Metricas"]
+        AMG["Managed<br/>Grafana"]
+        SM["Secrets<br/>Manager"]
+        ECR["ECR<br/>Imagens Docker"]
+    end
+
+    subgraph VPC["VPC"]
+
+        subgraph L3["Sub-rede Publica"]
+            ALB["Application Load Balancer"]
+            NATGW["NAT Gateway"]
+        end
+
+        subgraph PRIV["Sub-rede Privada"]
+
+            subgraph ECS["ECS Fargate"]
+                direction LR
+                GW_F["API Gateway"]
+                AUTH_F["Auth"]
+                CAMP_F["Campaigns"]
+                BRIEF_F["Briefing<br/>Enhancer"]
+            end
+
+            subgraph ECS2["ECS Fargate"]
+                direction LR
+                CVS_F["Content<br/>Validation"]
+                LEGAL_F["Legal<br/>Service"]
+                HTML_F["HTML<br/>Converter"]
+                BRAND_F["Branding"]
+            end
+
+            subgraph ECS3["ECS Fargate"]
+                META_F["Metabase"]
+            end
+
+        end
+
+        subgraph DADOS["Sub-rede de Dados"]
+            direction LR
+            RDS[("RDS PostgreSQL<br/>Multi-AZ")]
+            ELASTI["ElastiCache<br/>Redis"]
+            WEAV_F["Weaviate<br/>ECS"]
+            S3B["S3<br/>Pecas Criativas"]
+        end
+
+    end
+
+    subgraph L6["APIs Externas — internet"]
+        direction LR
+        MARITACA["Maritaca AI"]
+        OPENAI["OpenAI"]
+        COHERE["Cohere"]
+    end
+
+    USER -->|HTTPS| R53
+    R53 --> CF
+    CF --> WAF
+    CF -.->|static assets| S3FE
+    WAF --> ALB
+
+    ALB --> GW_F
+    GW_F --> AUTH_F
+    GW_F --> CAMP_F
+    GW_F --> BRIEF_F
+    GW_F --> CVS_F
+
+    CVS_F -->|MCP| CAMP_F
+    CVS_F -->|MCP| HTML_F
+    CVS_F -->|MCP| BRAND_F
+    CVS_F -->|A2A| LEGAL_F
+
+    ECS -->|NAT Gateway| MARITACA
+    ECS2 -->|NAT Gateway| OPENAI
+    ECS2 -.->|NAT Gateway| COHERE
+
+    AUTH_F --> RDS
+    CAMP_F --> RDS
+    BRIEF_F --> RDS
+    CVS_F --> RDS
+    LEGAL_F --> RDS
+    META_F --> RDS
+
+    LEGAL_F --> ELASTI
+    CVS_F --> ELASTI
+    BRIEF_F --> ELASTI
+
+    LEGAL_F --> WEAV_F
+    CAMP_F --> S3B
+
+    CW -.->|metricas| ECS
+    CW -.->|metricas| ECS2
+    AMG -.-> CW
+
+    style L1 fill:none,stroke:#636e72
+    style L2 fill:none,stroke:#ff9900
+    style L2B fill:none,stroke:#ff9900
+    style VPC fill:none,stroke:#232f3e
+    style L3 fill:none,stroke:#4ecdc4
+    style PRIV fill:none,stroke:#f38181
+    style ECS fill:none,stroke:#f38181
+    style ECS2 fill:none,stroke:#a29bfe
+    style ECS3 fill:none,stroke:#636e72
+    style L6 fill:none,stroke:#fdcb6e
+    style DADOS fill:none,stroke:#336791
+    style NATGW fill:#4ecdc4,color:#000
+    style ALB fill:#4ecdc4,color:#000
+    style GW_F fill:#009485,color:#fff
+    style AUTH_F fill:#ff6b6b,color:#fff
+    style CAMP_F fill:#4ecdc4,color:#000
+    style BRIEF_F fill:#95e1d3,color:#000
+    style CVS_F fill:#f38181,color:#fff
+    style LEGAL_F fill:#a29bfe,color:#fff
+    style HTML_F fill:#ffeaa7,color:#000
+    style BRAND_F fill:#dfe6e9,color:#000
+    style META_F fill:#636e72,color:#fff
+    style RDS fill:#336791,color:#fff
+    style ELASTI fill:#d63031,color:#fff
+    style WEAV_F fill:#00b894,color:#fff
+    style S3B fill:#ffd93d,color:#000
+    style S3FE fill:#ffd93d,color:#000
+    style R53 fill:#ff9900,color:#000
+    style CF fill:#ff9900,color:#000
+    style WAF fill:#ff9900,color:#000
+    style SM fill:#ff9900,color:#000
+    style ECR fill:#ff9900,color:#000
+    style CW fill:#ff9900,color:#000
+    style AMG fill:#ff9900,color:#000
+```
+
+### Decisoes de Arquitetura AWS
+
+| Componente Local | Equivalente AWS | Justificativa |
+|-----------------|----------------|---------------|
+| Docker Compose | **ECS Fargate** | Serverless containers, sem gerenciar EC2 |
+| PostgreSQL (container) | **RDS PostgreSQL Multi-AZ** | Alta disponibilidade, backups automaticos |
+| Redis (container) | **ElastiCache Redis** | Gerenciado, replicacao automatica |
+| LocalStack S3 | **S3** | Servico nativo, sem mudanca de codigo |
+| Weaviate (container) | **Weaviate em ECS ou EC2** | Sem equivalente gerenciado AWS; EC2 com EBS para persistencia |
+| Frontend (container Vite) | **S3 + CloudFront** | SPA servida como static assets via CDN |
+| Prometheus + Grafana | **CloudWatch + Amazon Managed Grafana** | Gerenciados, sem manutencao |
+| Metabase (container) | **Metabase em ECS Fargate** | Mantem a ferramenta, mas gerenciado |
+| `.env` files | **Secrets Manager** | Rotacao automatica de segredos, auditoria |
+| Rede Docker default | **VPC com sub-redes publica/privada** | Segregacao real de rede |
+| — | **WAF** | Protecao contra ataques web (OWASP top 10) |
+| — | **Route 53 + CloudFront** | DNS gerenciado + CDN + HTTPS automatico |
+| — | **ECR** | Registro privado de imagens Docker |
+
+### Seguranca de Rede
+
+```
+Internet
+  |
+  v
++-----------------------------+
+|  Sub-rede Publica           |
+|  - ALB (porta 443)          |
+|  - NAT Gateway (saida)      |
++----------+------------------+
+           | Security Group: apenas ALB -> ECS
+           v
++-----------------------------+
+|  Sub-rede Privada           |
+|  - ECS Fargate (servicos)   |
+|  - Sem IP publico           |
+|  - Saida via NAT Gateway    |
++----------+------------------+
+           | Security Group: apenas ECS -> Data
+           v
++-----------------------------+
+|  Sub-rede de Dados          |
+|  - RDS PostgreSQL           |
+|  - ElastiCache Redis        |
+|  - Weaviate (EC2/ECS)       |
+|  - Sem acesso a internet    |
++-----------------------------+
+```

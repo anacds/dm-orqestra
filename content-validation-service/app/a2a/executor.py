@@ -1,16 +1,11 @@
-"""A2A Agent Executor: bridges A2A protocol and ContentValidationAgent."""
-
 from __future__ import annotations
-
 import logging
 from typing import Any
-
 from a2a.server.agent_execution import AgentExecutor, RequestContext
 from a2a.server.events.event_queue import EventQueue
 from a2a.types import DataPart, Part
 from a2a.utils.message import new_agent_parts_message
 from pydantic import ValidationError as PydanticValidationError
-
 from app.api.routes import get_agent
 from app.api.schemas import AnalyzePieceRequest
 

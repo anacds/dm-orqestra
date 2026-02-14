@@ -1,13 +1,3 @@
-"""
-MCP Server integrado ao campaigns-service.
-
-Expõe tools para:
-- retrieve_piece_content: download de peças criativas (HTML ou imagem)
-- get_channel_specs: especificações técnicas por canal/espaço comercial
-
-Acessa banco e S3 diretamente (sem proxy HTTP).
-"""
-
 import base64
 import logging
 from typing import Any, Dict, Optional
@@ -38,10 +28,6 @@ mcp = FastMCP(
     transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
 )
 
-
-# ---------------------------------------------------------------------------
-# Tool 1: retrieve_piece_content
-# ---------------------------------------------------------------------------
 
 @mcp.tool()
 async def retrieve_piece_content(
@@ -111,10 +97,6 @@ async def retrieve_piece_content(
         db.close()
 
 
-# ---------------------------------------------------------------------------
-# Tool 2: get_channel_specs
-# ---------------------------------------------------------------------------
-
 @mcp.tool()
 async def get_channel_specs(
     channel: str,
@@ -159,7 +141,6 @@ async def get_channel_specs(
 
     db = SessionLocal()
     try:
-        # Specs genéricos do canal (commercial_space IS NULL)
         generic_rows = (
             db.query(ChannelSpec)
             .filter(

@@ -20,5 +20,9 @@ torch>=2.0.0
 accelerate>=0.25.0
 psycopg[binary]>=3.1.0
 pyyaml>=6.0.1
+redis>=5.0.0
 prometheus-client>=0.21.0
 prometheus-fastapi-instrumentator>=7.0.0
+
+# Tracing
+langsmith>=0.1.0

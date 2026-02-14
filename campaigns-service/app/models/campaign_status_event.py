@@ -1,5 +1,3 @@
-"""Immutable audit log of campaign status transitions."""
-
 from __future__ import annotations
 
 import uuid
@@ -9,7 +7,7 @@ from app.core.database import Base
 
 class CampaignStatusEvent(Base):
     """
-    Registro imutável de transições de status da campanha.
+    Registro de transições de status da campanha.
     
     Esta tabela é append-only: nunca atualiza ou deleta registros.
     O histórico completo pode ser reconstruído ordenando por created_at.

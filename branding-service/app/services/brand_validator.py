@@ -16,43 +16,27 @@ class Violation:
 
 class BrandValidator:
     """Validates HTML email against Orqestra brand guidelines."""
-    
-    # Brand colors
-    APPROVED_COLORS = {
-        # Primary brand colors
-        '#6B7FFF', '#6b7fff',
-        '#8B9FFF', '#8b9fff',
-        
-        # Neutral backgrounds
-        '#FFFFFF', '#ffffff',
-        '#F5F5F5', '#f5f5f5',
-        '#F8F9FF', '#f8f9ff',
-        
-        # Text colors
-        '#333333', '#333',
-        '#555555', '#555',
-        '#666666', '#666',
-        '#888888', '#888',
-        '#999999', '#999',
-        '#CCCCCC', '#ccc',
-        
-        # Dark variations
-        '#000000', '#000',
-        '#1A1A1A',
-        '#2A2A2A',
-        '#0A0A0A',
-    }
-    
-    # Primary colors (must be present)
-    PRIMARY_COLORS = {'#6B7FFF', '#6b7fff', '#8B9FFF', '#8b9fff'}
-    
-    # Approved fonts
-    APPROVED_FONTS = ['arial', 'helvetica', 'sans-serif']
-    
-    # Prohibited fonts
-    PROHIBITED_FONTS = ['comic sans', 'comic sans ms']
 
-    # Prohibited URL shorteners
+    APPROVED_COLORS = {
+        # Primárias
+        '#6b7fff', '#8b9fff',
+        # Backgrounds neutros
+        '#ffffff', '#f5f5f5', '#f8f9ff',
+        # Texto
+        '#333333', '#555555', '#666666',
+        '#888888', '#999999', '#cccccc',
+        # Escuros
+        '#000000', '#1a1a1a', '#2a2a2a', '#0a0a0a',
+    }
+
+    PRIMARY_COLORS = {'#6b7fff', '#8b9fff'}
+    APPROVED_FONTS = ['arial', 'helvetica', 'sans-serif']
+    MIN_FONT_SIZE_PX = 12
+    LOGO_MIN_HEIGHT_PX = 40
+    LOGO_MAX_HEIGHT_PX = 80
+    MAX_CONTAINER_WIDTH_PX = 600
+    ALLOWED_BODY_BACKGROUNDS = {'#ffffff', '#f5f5f5', '#000000'}
+    ALLOWED_DOMAINS = ('orqestra.com.br', 'orqestra.ai', 'orqestra.com')
     PROHIBITED_SHORTENERS = (
         'bit.ly', 'bitly.com',
         'tinyurl.com', 'tiny.cc',
@@ -62,28 +46,19 @@ class BrandValidator:
         'adf.ly', 'j.mp',
     )
 
+    MAX_ROTATION_DEG = 2
+
     def __init__(self):
         self.violations: List[Violation] = []
     
     def validate(self, html: str) -> Dict[str, Any]:
-        """
-        Main validation method.
-        
-        Args:
-            html: HTML string to validate
-            
-        Returns:
-            Dictionary with validation results
-        """
         self.violations = []
         soup = BeautifulSoup(html, 'html.parser')
         
-        # Extract all styles
         inline_styles = self._extract_inline_styles(soup)
         style_tag_css = self._extract_style_tags(soup)
         all_styles = inline_styles + '\n' + style_tag_css
         
-        # Run validations
         self._validate_colors(all_styles, soup)
         self._validate_fonts(all_styles)
         self._validate_logo(soup)
@@ -142,14 +117,13 @@ class BrandValidator:
         return [self._normalize_color(c) for c in colors]
     
     def _validate_colors(self, css: str, soup: BeautifulSoup):
-        """Validate color usage."""
         used_colors = self._extract_colors(css)
-        
+
         for color in used_colors:
             normalized = self._normalize_color(color)
             if normalized not in self.APPROVED_COLORS:
-                # Skip transparent and very light grays
-                if normalized not in ['#000000', '#ffffff'] and not re.match(r'#[ef][ef][ef][ef][ef][ef]', normalized):
+                # Skip very light grays (close to white)
+                if not re.match(r'#[ef][ef][ef][ef][ef][ef]', normalized):
                     self.violations.append(Violation(
                         rule='unapproved_color',
                         category='colors',
@@ -157,13 +131,11 @@ class BrandValidator:
                         value=color,
                         message=f'Cor {color} não está na paleta aprovada da marca'
                     ))
-        
-        # Check if primary color is present
+
         has_primary = any(
-            self._normalize_color(c) in self.PRIMARY_COLORS 
+            self._normalize_color(c) in self.PRIMARY_COLORS
             for c in used_colors
         )
-        
         if not has_primary:
             self.violations.append(Violation(
                 rule='missing_primary_color',
@@ -173,52 +145,35 @@ class BrandValidator:
             ))
     
     def _validate_fonts(self, css: str):
-        """Validate font usage."""
         font_families = re.findall(r'font-family\s*:\s*([^;]+)', css, re.IGNORECASE)
-        
+
         for font_family in font_families:
             normalized = font_family.lower().replace('"', '').replace("'", '')
-            
-            # Check for prohibited fonts
-            for prohibited in self.PROHIBITED_FONTS:
-                if prohibited in normalized:
-                    self.violations.append(Violation(
-                        rule='prohibited_font',
-                        category='typography',
-                        severity='critical',
-                        value=font_family.strip(),
-                        message=f'Fonte proibida detectada: {prohibited}'
-                    ))
-                    break
-            
-            # Check if uses approved fonts
             fonts = [f.strip() for f in normalized.split(',')]
             has_approved = any(f in self.APPROVED_FONTS for f in fonts)
-            
-            if not has_approved and not any(prohibited in normalized for prohibited in self.PROHIBITED_FONTS):
+
+            if not has_approved:
                 self.violations.append(Violation(
                     rule='unapproved_font',
                     category='typography',
-                    severity='warning',
+                    severity='critical',
                     value=font_family.strip(),
-                    message='Fonte não está na lista de fontes aprovadas'
+                    message=f'Fonte não aprovada: {font_family.strip()}. Permitidas: Arial, Helvetica, sans-serif'
                 ))
-        
-        # Check font sizes
+
         font_sizes = re.findall(r'font-size\s*:\s*(\d+)px', css, re.IGNORECASE)
         for size_str in font_sizes:
             size = int(size_str)
-            if size < 12:
+            if size < self.MIN_FONT_SIZE_PX:
                 self.violations.append(Violation(
                     rule='font_size_too_small',
                     category='typography',
                     severity='warning',
                     value=f'{size}px',
-                    message=f'Tamanho de fonte muito pequeno: {size}px (mínimo 12px)'
+                    message=f'Tamanho de fonte muito pequeno: {size}px (mínimo {self.MIN_FONT_SIZE_PX}px)'
                 ))
     
     def _validate_logo(self, soup: BeautifulSoup):
-        """Validate logo presence and attributes."""
         logo_candidates = (
             soup.find_all('img', class_=re.compile(r'logo', re.IGNORECASE)) +
             soup.find_all('img', id=re.compile(r'logo', re.IGNORECASE)) +
@@ -250,21 +205,21 @@ class BrandValidator:
                 height = int(height_match.group(1))
             
             if height:
-                if height < 40:
+                if height < self.LOGO_MIN_HEIGHT_PX:
                     self.violations.append(Violation(
                         rule='logo_too_small',
                         category='logo',
                         severity='warning',
                         value=f'{height}px',
-                        message=f'Logo muito pequeno: {height}px (mínimo 40px)'
+                        message=f'Logo muito pequeno: {height}px (mínimo {self.LOGO_MIN_HEIGHT_PX}px)'
                     ))
-                elif height > 80:
+                elif height > self.LOGO_MAX_HEIGHT_PX:
                     self.violations.append(Violation(
                         rule='logo_too_large',
                         category='logo',
                         severity='warning',
                         value=f'{height}px',
-                        message=f'Logo muito grande: {height}px (máximo 80px)'
+                        message=f'Logo muito grande: {height}px (máximo {self.LOGO_MAX_HEIGHT_PX}px)'
                     ))
             
             alt = logo.get('alt', '').lower()
@@ -277,7 +232,6 @@ class BrandValidator:
                 ))
     
     def _validate_layout(self, soup: BeautifulSoup):
-        """Validate layout structure."""
         container = (
             soup.find('div', class_=re.compile(r'container|email-container', re.IGNORECASE)) or
             soup.find('table', role='presentation')
@@ -294,22 +248,22 @@ class BrandValidator:
             elif width_attr:
                 width = int(width_attr)
             
-            if width and width > 650:
+            if width and width > self.MAX_CONTAINER_WIDTH_PX:
                 self.violations.append(Violation(
                     rule='container_too_wide',
                     category='layout',
                     severity='warning',
                     value=f'{width}px',
-                    message=f'Container muito largo: {width}px (máximo recomendado 600px)'
+                    message=f'Container muito largo: {width}px (máximo {self.MAX_CONTAINER_WIDTH_PX}px)'
                 ))
-        
+
         body = soup.find('body')
         if body:
             style = body.get('style', '')
             bg_match = re.search(r'background-color\s*:\s*([^;]+)', style)
             if bg_match:
                 bg_color = self._normalize_color(bg_match.group(1))
-                if bg_color not in ['#ffffff', '#f5f5f5', '#000000']:
+                if bg_color not in self.ALLOWED_BODY_BACKGROUNDS:
                     self.violations.append(Violation(
                         rule='non_neutral_background',
                         category='layout',
@@ -319,7 +273,6 @@ class BrandValidator:
                     ))
     
     def _validate_ctas(self, soup: BeautifulSoup):
-        """Validate Call-to-Action buttons."""
         ctas = (
             soup.find_all('a', class_=re.compile(r'cta|button', re.IGNORECASE)) +
             soup.find_all('a', style=re.compile(r'background', re.IGNORECASE))
@@ -355,7 +308,6 @@ class BrandValidator:
                     ))
     
     def _validate_footer(self, soup: BeautifulSoup):
-        """Validate footer requirements."""
         footer = soup.find(['footer', 'div'], class_=re.compile(r'footer', re.IGNORECASE))
         
         if not footer:
@@ -373,18 +325,17 @@ class BrandValidator:
             return
         
         footer_text = footer.get_text().lower()
-        
+
         has_copyright = '©' in footer.get_text() and 'orqestra' in footer_text
         if not has_copyright:
             self.violations.append(Violation(
                 rule='missing_copyright',
                 category='footer',
                 severity='warning',
-                message='Copyright "© 2026 Orqestra" não encontrado no footer'
+                message='Copyright com "© Orqestra" não encontrado no footer'
             ))
 
     def _validate_links(self, soup: BeautifulSoup) -> None:
-        """Validate links: official domains, no generic shorteners, transparency."""
         anchors = soup.find_all('a', href=True)
 
         for anchor in anchors:
@@ -392,14 +343,12 @@ class BrandValidator:
             if not href:
                 continue
 
-            # Skip non-http(s) links (mailto, tel, #anchor, relative)
             href_lower = href.lower()
             if href_lower.startswith(('mailto:', 'tel:', '#', 'javascript:')):
                 continue
             if href.startswith('/') and not href.startswith('//'):
                 continue
 
-            # Resolve protocol-relative (//example.com)
             if href_lower.startswith('//'):
                 href = 'https:' + href
                 href_lower = href.lower()
@@ -424,11 +373,7 @@ class BrandValidator:
                     break
             else:
                 # Check if domain is allowed (Orqestra official)
-                is_allowed = (
-                    'orqestra.com.br' in domain
-                    or 'orqestra.ai' in domain
-                    or 'orqestra.com' in domain
-                )
+                is_allowed = any(d in domain for d in self.ALLOWED_DOMAINS)
                 if not is_allowed:
                     self.violations.append(Violation(
                         rule='unapproved_link_domain',
@@ -439,7 +384,6 @@ class BrandValidator:
                     ))
 
     def _validate_prohibited_elements(self, css: str, html: str):
-        """Validate prohibited styling elements."""
         if re.search(r'@keyframes.*blink', css, re.IGNORECASE | re.DOTALL):
             self.violations.append(Violation(
                 rule='prohibited_blink_animation',
@@ -463,17 +407,16 @@ class BrandValidator:
             angle_match = re.search(r'(-?\d+)', transform)
             if angle_match:
                 angle = abs(int(angle_match.group(1)))
-                if angle > 2:
+                if angle > self.MAX_ROTATION_DEG:
                     self.violations.append(Violation(
                         rule='prohibited_rotation',
                         category='prohibited',
                         severity='warning',
                         value=f'{angle}deg',
-                        message=f'Rotação excessiva detectada: {angle}° (máximo 2°)'
+                        message=f'Rotação excessiva detectada: {angle}° (máximo {self.MAX_ROTATION_DEG}°)'
                     ))
     
     def _generate_report(self) -> Dict[str, Any]:
-        """Generate validation report."""
         critical = sum(1 for v in self.violations if v.severity == 'critical')
         warning = sum(1 for v in self.violations if v.severity == 'warning')
         info = sum(1 for v in self.violations if v.severity == 'info')
@@ -508,15 +451,56 @@ class BrandValidator:
         }
 
 
+    @classmethod
+    def get_guidelines(cls) -> Dict[str, Any]:
+        primary = sorted({c for c in cls.PRIMARY_COLORS})
+        neutrals = sorted({c for c in cls.APPROVED_COLORS if c in ('#ffffff', '#f5f5f5', '#f8f9ff')})
+        text = sorted({c for c in cls.APPROVED_COLORS if c in (
+            '#333333', '#555555', '#666666', '#888888', '#999999', '#cccccc',
+        )})
+        dark = sorted({c for c in cls.APPROVED_COLORS if c in (
+            '#000000', '#1a1a1a', '#2a2a2a', '#0a0a0a',
+        )})
+
+        return {
+            'colors': {
+                'primary': primary,
+                'neutrals': neutrals,
+                'text': text,
+                'dark': dark,
+            },
+            'typography': {
+                'approved_fonts': [f.title() if f != 'sans-serif' else f for f in cls.APPROVED_FONTS],
+                'min_font_size': f'{cls.MIN_FONT_SIZE_PX}px',
+            },
+            'logo': {
+                'min_height': f'{cls.LOGO_MIN_HEIGHT_PX}px',
+                'max_height': f'{cls.LOGO_MAX_HEIGHT_PX}px',
+                'required_alt_text': 'Orqestra',
+            },
+            'layout': {
+                'max_container_width': f'{cls.MAX_CONTAINER_WIDTH_PX}px',
+                'allowed_backgrounds': sorted(cls.ALLOWED_BODY_BACKGROUNDS),
+            },
+            'cta': {
+                'background_color': '#6B7FFF',
+                'text_color': '#FFFFFF',
+            },
+            'footer': {
+                'required_copyright': 'Orqestra (com simbolo ©)',
+            },
+            'links': {
+                'allowed_domains': list(cls.ALLOWED_DOMAINS),
+                'prohibited_shorteners': list(cls.PROHIBITED_SHORTENERS),
+            },
+            'prohibited': {
+                'blink_animations': True,
+                'text_shadow': True,
+                'max_rotation': f'{cls.MAX_ROTATION_DEG}deg',
+            },
+        }
+
+
 def validate_email_branding(html: str) -> Dict[str, Any]:
-    """
-    Convenience function to validate email HTML.
-    
-    Args:
-        html: HTML string to validate
-        
-    Returns:
-        Validation report dictionary
-    """
     validator = BrandValidator()
     return validator.validate(html)

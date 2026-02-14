@@ -25,14 +25,6 @@ def retrieve_node(state: AgentState, retriever: HybridWeaviateRetriever) -> Dict
     if not task:
         raise ValueError("task é obrigatório")
     
-    # --- CÓDIGO LEGADO: apenas APP usava content_image ---
-    # if channel != "APP" and not body_text:
-    #     raise ValueError("content (ou content_body) é obrigatório para canais além de APP")
-    # if channel == "APP" and not content_image:
-    #     raise ValueError("Para APP, informe content_image")
-    # --- FIM CÓDIGO LEGADO ---
-    
-    # EMAIL agora pode ter content_image (análise visual)
     if channel == "APP" and not content_image:
         raise ValueError("Para APP, informe content_image")
     if channel == "EMAIL" and not content_image and not body_text:
@@ -43,10 +35,8 @@ def retrieve_node(state: AgentState, retriever: HybridWeaviateRetriever) -> Dict
     if channel == "PUSH" and content_title and content_body:
         query_text = f"{task} para {channel}: título: {content_title}, corpo: {content_body}"
     elif channel == "EMAIL" and content_image:
-        # EMAIL com imagem: busca diretrizes visuais (similar a APP)
         query_text = f"{task} para {channel}: diretrizes para comunicação visual de e-mail, layout, creatives"
     elif channel == "EMAIL" and content_body:
-        # --- CÓDIGO LEGADO: EMAIL com HTML/texto ---
         query_text = f"{task} para {channel}: corpo: {content_body}"
     elif channel == "APP" and content_image:
         query_text = f"{task} para {channel}: diretrizes para comunicação in-app, telas, creatives"
@@ -131,19 +121,6 @@ def generate_node(
     if not task:
         raise ValueError("task é obrigatório")
     
-    # --- CÓDIGO LEGADO: apenas APP usava content_image ---
-    # if channel != "APP" and not content:
-    #     raise ValueError("content é obrigatório para canais além de APP")
-    # if channel == "APP" and not content_image:
-    #     raise ValueError("Para APP, informe content_image")
-    # --- FIM CÓDIGO LEGADO ---
-    
-    # --- CÓDIGO LEGADO: EMAIL aceitava apenas image OU content ---
-    # if channel == "EMAIL" and not content_image and not content:
-    #     raise ValueError("Para EMAIL, informe content_image ou content")
-    # --- FIM CÓDIGO LEGADO ---
-    
-    # EMAIL agora pode ter content_image E/OU content (análise visual + textual)
     if channel == "APP" and not content_image:
         raise ValueError("Para APP, informe content_image")
     if channel == "EMAIL" and not content_image and not content:
@@ -151,13 +128,8 @@ def generate_node(
     if channel not in ("APP", "EMAIL") and not content:
         raise ValueError("content é obrigatório para canais além de APP/EMAIL")
 
-    # --- CÓDIGO LEGADO: selecionava LLM apenas pelo canal ---
-    # llm = channel_to_llm.get(channel) if channel else None
-    # --- FIM CÓDIGO LEGADO ---
-    
-    # EMAIL com imagem usa modelo de fallback (APP) que suporta visão
     if channel == "EMAIL" and content_image:
-        llm = channel_to_llm.get("APP")  # Usa modelo do APP (OpenAI com visão)
+        llm = channel_to_llm.get("APP")  
         logger.info("EMAIL com imagem: usando LLM de fallback (APP) - %s", llm.model_name if llm else "default")
     else:
         llm = channel_to_llm.get(channel) if channel else None
@@ -173,24 +145,16 @@ def generate_node(
         if channel == "PUSH" and content_title and content_body:
             content_description = f"TÍTULO: {content_title}\n\nCORPO: {content_body}"
         elif channel == "EMAIL" and content_image and content_body:
-            # EMAIL com HTML + imagem (análise visual e textual)
             content_description = f"CORPO DO E-MAIL:\n{content_body}\n\n[1 imagem anexa do e-mail renderizado para análise visual]"
         elif channel == "EMAIL" and content_image:
-            # EMAIL apenas com imagem
             content_description = "Comunicação de e-mail (1 imagem anexa do e-mail renderizado)."
         elif channel == "EMAIL" and content_body:
-            # --- CÓDIGO LEGADO: EMAIL apenas com HTML/texto ---
             content_description = f"CORPO (HTML): {content_body}"
         elif channel == "APP":
             content_description = "Comunicação in-app (1 imagem anexa)."
         else:
             content_description = content or ""
 
-        # --- CÓDIGO LEGADO: apenas APP enviava imagem ---
-        # image=content_image if channel == "APP" else None
-        # --- FIM CÓDIGO LEGADO ---
-        
-        # EMAIL e APP agora podem enviar imagem
         image_to_send = content_image if channel in ("APP", "EMAIL") and content_image else None
 
         messages = build_validation_messages(
@@ -204,7 +168,6 @@ def generate_node(
 
         logger.info("Generating structured validation response...")
 
-        # Identifica provider/model para métricas
         model_name = getattr(llm, "model_name", "unknown")
         base_url = getattr(llm, "openai_api_base", "") or ""
         provider = "maritaca" if "maritaca" in base_url else "openai"
@@ -233,7 +196,6 @@ def generate_node(
                     provider=provider, model=model_name, channel=ch_label,
                 ).observe(time.perf_counter() - llm_start)
 
-                # Registra tokens se disponíveis
                 usage = getattr(response, "usage_metadata", None) or getattr(response, "response_metadata", {}).get("token_usage")
                 if usage:
                     input_tokens = usage.get("input_tokens") or usage.get("prompt_tokens") or 0

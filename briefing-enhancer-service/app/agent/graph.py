@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 _config_cache = None
 
 def _load_models_config():
-    """Load models configuration from YAML file. Caches result for subsequent calls."""
+    """Load models configuration from YAML. Caches result for subsequent calls."""
     global _config_cache
     if _config_cache is None:
         config_file = Path("config/models.yaml")
@@ -119,8 +119,6 @@ async def run_enhancement_graph(
         api_key = openai_api_key
 
     if _is_reasoning_model(model_name):
-        # Modelos de raciocínio: usam max_completion_tokens
-        # (reasoning_tokens + resposta), não suportam temperature
         chat_model = ChatOpenAI(
             model=model_name,
             api_key=api_key,
@@ -188,7 +186,16 @@ async def run_enhancement_graph(
             "text": text,
             "campaign_name": campaign_name,
         }
-        config = {"configurable": {"thread_id": thread_id}}
+        config = {
+            "configurable": {"thread_id": thread_id},
+            "metadata": {
+                "field_name": field_name,
+                "campaign_name": campaign_name,
+                "provider": provider,
+                "model": model_name,
+            },
+            "tags": [field_name, provider],
+        }
         try:
             logger.info(f"Invoking graph with checkpointing - thread_id: {thread_id}")
             logger.debug(f"Config: {config}")
@@ -232,7 +239,16 @@ async def run_enhancement_graph(
             "previous_fields_summary": None,
             "campaign_name": campaign_name
         }
-        result = await graph.ainvoke(full_initial_state)
+        no_cp_config = {
+            "metadata": {
+                "field_name": field_name,
+                "campaign_name": campaign_name,
+                "provider": provider,
+                "model": model_name,
+            },
+            "tags": [field_name, provider],
+        }
+        result = await graph.ainvoke(full_initial_state, config=no_cp_config)
         logger.info("Graph execution completed without checkpointing")
     
     _elapsed = time.perf_counter() - _start
@@ -255,13 +271,6 @@ async def run_enhancement_graph(
         "explanation": explanation
     }
 
-
-# -----------------------------------------------------------------------------
-# Compiled graph for LangGraph Studio (langgraph dev).
-# This version uses stub functions for db/llm dependencies so the graph
-# structure can be visualized without requiring actual connections.
-# Input example: {"field_name": "nome_campanha", "text": "promo especial"}
-# -----------------------------------------------------------------------------
 
 def _create_studio_graph():
     """Create a graph instance for LangGraph Studio visualization.

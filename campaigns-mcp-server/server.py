@@ -1,10 +1,3 @@
-"""
-Campaigns MCP Server – expõe a tool retrieve_piece_content que chama o
-GET /api/campaigns/{id}/creative-pieces/{piece_id}/content do campaigns-service.
-
-Usa Starlette + uvicorn para controlar host/porta (mcp.run() não aceita host/port).
-"""
-
 import contextlib
 import logging
 from typing import Optional
@@ -23,9 +16,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Desabilita validação de Host para chamadas Docker (content-validation -> campaigns-mcp).
-# FastMCP usa host=127.0.0.1 por padrão e habilita DNS rebinding com allowed_hosts locais;
-# em Docker o client envia Host: campaigns-mcp-server:8010 -> 421 Misdirected Request.
 mcp = FastMCP(
     "campaigns-mcp-server",
     instructions="MCP server que expõe o download de peças criativas (HTML ou imagem) do campaigns-service.",

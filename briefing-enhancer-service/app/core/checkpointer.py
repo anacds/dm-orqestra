@@ -1,15 +1,12 @@
-"""
-Checkpointer configuration for LangGraph using PostgreSQL.
-"""
 import logging
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 import psycopg
 import psycopg_pool
 from app.core.config import settings
+from langgraph.checkpoint.postgres import PostgresSaver as SyncPostgresSaver
 
 logger = logging.getLogger(__name__)
 
-# Connection pool for checkpointing (async)
 _checkpoint_pool: psycopg_pool.AsyncConnectionPool | None = None
 _checkpoint_saver: AsyncPostgresSaver | None = None
 _setup_done: bool = False
@@ -38,19 +35,15 @@ def _run_setup_with_autocommit():
     
     logger.info("Checking if checkpoints tables exist...")
     
-    # Create a separate connection with autocommit for setup
-    # This is needed because CREATE INDEX CONCURRENTLY cannot run in a transaction
+    
     with psycopg.connect(settings.DATABASE_URL, autocommit=True) as conn:
-        # Check if tables already exist
+
         if _check_tables_exist(conn):
             logger.info("Checkpoints tables already exist, skipping setup")
             _setup_done = True
             return
         
         logger.info("Running AsyncPostgresSaver setup with autocommit...")
-        # Use AsyncPostgresSaver for setup (it can work with sync connection for setup)
-        # But we need to use async methods for actual checkpointing
-        from langgraph.checkpoint.postgres import PostgresSaver as SyncPostgresSaver
         saver = SyncPostgresSaver(conn)
         saver.setup()
         logger.info("PostgresSaver tables and indexes created/verified")
@@ -64,7 +57,6 @@ async def get_checkpoint_pool() -> psycopg_pool.AsyncConnectionPool:
     
     if _checkpoint_pool is None:
         logger.info("Initializing async checkpoint connection pool...")
-        # Create async connection pool from DATABASE_URL
         _checkpoint_pool = psycopg_pool.AsyncConnectionPool(
             conninfo=settings.DATABASE_URL,
             min_size=1,
@@ -89,14 +81,9 @@ async def get_checkpoint_saver() -> AsyncPostgresSaver:
     if _checkpoint_saver is None:
         logger.info("Initializing AsyncPostgresSaver...")
         
-        # Run setup first (with autocommit for CREATE INDEX CONCURRENTLY)
         _run_setup_with_autocommit()
-        
-        # Get async connection pool
         pool = await get_checkpoint_pool()
-        
-        # Create AsyncPostgresSaver with the async connection pool
-        # AsyncPostgresSaver accepts an AsyncConnectionPool directly
+
         try:
             _checkpoint_saver = AsyncPostgresSaver(pool)
             logger.info("AsyncPostgresSaver initialized successfully with async connection pool")
@@ -108,7 +95,6 @@ async def get_checkpoint_saver() -> AsyncPostgresSaver:
 
 
 async def close_checkpoint_pool():
-    """Close the checkpoint connection pool and saver (for cleanup)."""
     global _checkpoint_pool, _checkpoint_saver, _setup_done
     
     _checkpoint_saver = None

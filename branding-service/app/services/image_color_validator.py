@@ -1,24 +1,15 @@
-"""
-Validação de cores em imagens contra a paleta da marca Orqestra.
-
-Extrai as cores principais da imagem e verifica conformidade com as cores aprovadas.
-Determinístico - não usa IA/LLM.
-"""
 import base64
 import io
 import re
 from collections import Counter
 from typing import Dict, Any, List, Set
-
 from PIL import Image
-
 from app.services.brand_validator import BrandValidator
 
-# Reutiliza paleta do BrandValidator
 APPROVED_COLORS: Set[str] = BrandValidator.APPROVED_COLORS
 PRIMARY_COLORS: Set[str] = BrandValidator.PRIMARY_COLORS
 
-# Tolerância para considerar cores "próximas" (evitar falsos positivos por compressão)
+# Tolerância para considerar cores "próximas" 
 _COLOR_TOLERANCE = 25  # delta RGB máximo para considerar equivalente
 _DOMINANT_COUNT = 8  # número de cores dominantes a analisar
 _SAMPLE_SIZE = (80, 80)  # redimensionar para extração rápida
@@ -39,7 +30,7 @@ def _extract_base64_payload(image_input: str) -> bytes:
 
 
 def _rgb_to_hex(r: int, g: int, b: int) -> str:
-    """Converte RGB para hex normalizado."""
+    """Converte RGB para hex."""
     return f"#{r:02x}{g:02x}{b:02x}".lower()
 
 

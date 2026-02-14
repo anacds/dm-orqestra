@@ -1,8 +1,5 @@
-"""Prometheus custom metrics for the Briefing Enhancer Service."""
-
 from prometheus_client import Counter, Histogram
 
-# --- Enhancement pipeline ---
 ENHANCEMENT_TOTAL = Counter(
     "be_enhancement_total",
     "Total de requisições de aprimoramento de texto",
@@ -16,14 +13,12 @@ ENHANCEMENT_DURATION = Histogram(
     buckets=(0.5, 1, 2, 5, 10, 20, 30, 60),
 )
 
-# --- LLM ---
 LLM_INVOCATIONS = Counter(
     "be_llm_invocations_total",
     "Total de invocações LLM para aprimoramento",
     ["provider", "model"],
 )
 
-# --- Moderation ---
 MODERATION_REJECTIONS = Counter(
     "be_moderation_rejections_total",
     "Total de rejeições por moderação de conteúdo",

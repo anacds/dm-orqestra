@@ -9,8 +9,7 @@ _config_cache: Dict[str, Any] = None
 
 def load_auth_config() -> Dict[str, Any]:
     """
-    Load auth configuration from YAML file.
-    Caches the configuration for subsequent calls.
+    Load auth configuration from YAML and caches it.
     """
     global _config_cache
     if _config_cache is None:

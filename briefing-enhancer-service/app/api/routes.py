@@ -62,9 +62,7 @@ async def enhance_objective(
     db: Session = Depends(get_db),
     current_user: Dict = Depends(get_current_user)
 ):
-    """
-    Enhance text using AI based on field type - only for business analysts.
-    """
+
     require_business_analyst(current_user)
     try:
         return await AIService.enhance_objective(request_data, db, current_user["id"])
@@ -138,9 +136,7 @@ async def update_interaction_decision(
     db: Session = Depends(get_db),
     current_user: Dict = Depends(get_current_user)
 ):
-    """
-    Update user decision for an AI interaction - only for business analysts.
-    """
+
     require_business_analyst(current_user)
     try:
         await AIService.update_interaction_decision(

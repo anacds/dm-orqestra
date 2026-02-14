@@ -7,22 +7,18 @@ from sqlalchemy.orm import Session
 from app.agent import ContentValidationAgent
 from app.api.schemas import AnalyzePieceRequest, AnalyzePieceResponse
 from app.core.auth_client import get_current_user
+from app.core.cache import ValidationCacheManager
 from app.core.config import settings
-from app.core.permissions import require_creative_analyst, require_ai_validation_access
 from app.core.database import get_db
-from app.models.piece_validation_cache import (
-    PieceValidationCache,
-    content_hash_app,
-    content_hash_email,
-    content_hash_push,
-    content_hash_sms,
-)
+from app.core.permissions import require_ai_validation_access
+from app.models.piece_validation_cache import PieceValidationAudit
 
 router = APIRouter()
 router_ai = APIRouter()
 logger = logging.getLogger(__name__)
 
 _agent: Optional[ContentValidationAgent] = None
+_cache: Optional[ValidationCacheManager] = None
 
 
 def get_agent() -> ContentValidationAgent:
@@ -31,6 +27,17 @@ def get_agent() -> ContentValidationAgent:
         _agent = ContentValidationAgent()
         logger.info("ContentValidationAgent initialized")
     return _agent
+
+
+def get_cache() -> ValidationCacheManager:
+    global _cache
+    if _cache is None:
+        _cache = ValidationCacheManager(
+            redis_url=settings.REDIS_URL,
+            enabled=settings.CACHE_ENABLED,
+            ttl=settings.CACHE_TTL,
+        )
+    return _cache
 
 
 def _response_to_dict(resp: AnalyzePieceResponse) -> dict[str, Any]:
@@ -67,8 +74,39 @@ async def analyze_piece(
     db: Session = Depends(get_db),
     current_user: Dict = Depends(get_current_user),
 ):
-    """Valida canal, retrieve (MCP), validate_compliance (A2A), issue_final_verdict. Persiste parecer para SMS/PUSH se campaign_id enviado."""
+    """Valida peça criativa com cache transparente.
+
+    SMS/PUSH: hash calculável a partir do conteúdo inline → cache check antes
+    do agente. EMAIL/APP: hash depende do conteúdo real (fetch via MCP) →
+    cache check só é possível após retrieve, feito dentro do agente.
+    """
     require_ai_validation_access(current_user)
+    cache = get_cache()
+
+    # ── Resolve campaign_id ───────────────────────────────────────────
+    cid = body.campaign_id or (
+        body.content.get("campaign_id") if isinstance(body.content, dict) else None
+    )
+    cid = str(cid) if cid else None
+    content_dict = body.content if isinstance(body.content, dict) else {}
+
+    # ── Cache check (transparente para SMS/PUSH) ─────────────────────
+    pre_hash: str | None = None
+    if cid and body.channel in ("SMS", "PUSH"):
+        pre_hash = ValidationCacheManager.compute_content_hash(
+            channel=body.channel,
+            content=content_dict,
+        )
+        if pre_hash:
+            cached = cache.get(cid, body.channel, pre_hash)
+            if cached:
+                logger.info(
+                    "Cache HIT (transparente) campaign_id=%s channel=%s",
+                    cid, body.channel,
+                )
+                return AnalyzePieceResponse(**cached)
+
+    # ── Executar agente ───────────────────────────────────────────────
     try:
         result = await agent.ainvoke(
             task=body.task,
@@ -88,51 +126,36 @@ async def analyze_piece(
             stages_completed=final_verdict.get("stages_completed"),
             final_verdict=final_verdict if final_verdict else None,
         )
-        cid = body.campaign_id or (body.content.get("campaign_id") if isinstance(body.content, dict) else None)
-        cid = str(cid) if cid else None
-        ch = body.content if isinstance(body.content, dict) else {}
 
+        # ── Persistir cache + auditoria ──────────────────────────────
         if cid and body.channel in ("SMS", "PUSH", "EMAIL", "APP"):
-            if body.channel == "SMS":
-                h = content_hash_sms(ch.get("body") if isinstance(ch.get("body"), str) else None)
-            elif body.channel == "PUSH":
-                h = content_hash_push(
-                    ch.get("title") if isinstance(ch.get("title"), str) else None,
-                    ch.get("body") if isinstance(ch.get("body"), str) else None,
-                )
-            elif body.channel == "EMAIL":
-                pid = ch.get("piece_id") or ch.get("pieceId")
-                if pid:
-                    h = content_hash_email(str(pid))
-                else:
-                    h = None
-            else:
-                pid = ch.get("piece_id") or ch.get("pieceId")
-                space = ch.get("commercial_space") or ch.get("commercialSpace")
-                if pid and space:
-                    h = content_hash_app(str(pid), str(space))
-                else:
-                    h = None
+            content_hash = pre_hash or ValidationCacheManager.compute_content_hash(
+                channel=body.channel,
+                content=content_dict,
+                retrieved_content_hash=result.get("retrieved_content_hash"),
+            )
 
-            if h:
-                row = db.query(PieceValidationCache).filter(
-                    PieceValidationCache.campaign_id == cid,
-                    PieceValidationCache.channel == body.channel,
-                    PieceValidationCache.content_hash == h,
-                ).first()
+            if content_hash:
                 payload = _response_to_dict(resp)
-                if row:
-                    row.response_json = payload
-                    db.commit()
-                else:
-                    db.add(PieceValidationCache(
+
+                cache.set(cid, body.channel, content_hash, payload)
+
+                try:
+                    db.add(PieceValidationAudit(
                         campaign_id=cid,
                         channel=body.channel,
-                        content_hash=h,
+                        content_hash=content_hash,
                         response_json=payload,
                     ))
                     db.commit()
-                logger.info("Cached analyze-piece campaign_id=%s channel=%s content_hash=%s", cid, body.channel, h[:16])
+                    logger.info(
+                        "Audit saved campaign_id=%s channel=%s hash=%s",
+                        cid, body.channel, content_hash[:16],
+                    )
+                except Exception as e:
+                    db.rollback()
+                    logger.error("Erro ao salvar audit: %s", e)
+
         return resp
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
@@ -141,59 +164,3 @@ async def analyze_piece(
         raise HTTPException(500, f"Error analyzing piece: {e}") from e
 
 
-@router_ai.get("/ai/analyze-piece/{campaign_id}/{channel}", response_model=AnalyzePieceResponse)
-async def get_analyze_piece(
-    campaign_id: str,
-    channel: str,
-    piece_id: Optional[str] = Query(None, description="ID da peça (E-mail ou App). Obrigatório para EMAIL/APP."),
-    commercial_space: Optional[str] = Query(None, description="Espaço comercial. Obrigatório para APP."),
-    db: Session = Depends(get_db),
-    current_user: Dict = Depends(get_current_user),
-):
-    """Retorna parecer persistido para SMS/PUSH/EMAIL/APP.
-
-    Para SMS/PUSH: retorna o resultado mais recente (sem necessidade de hash).
-    Para EMAIL: requer piece_id.
-    Para APP: requer piece_id e commercial_space.
-    """
-    require_ai_validation_access(current_user)
-    ch = channel.upper().replace("-", "").replace(" ", "")
-    if ch not in ("SMS", "PUSH", "EMAIL", "APP"):
-        raise HTTPException(400, "GET suporta apenas canal SMS, PUSH, EMAIL ou APP.")
-
-    if ch in ("SMS", "PUSH"):
-        # Busca a entrada mais recente para este campaign_id + channel
-        row = db.query(PieceValidationCache).filter(
-            PieceValidationCache.campaign_id == campaign_id,
-            PieceValidationCache.channel == ch,
-        ).order_by(PieceValidationCache.created_at.desc()).first()
-    elif ch == "EMAIL":
-        if not piece_id:
-            raise HTTPException(400, "Para EMAIL, informe piece_id.")
-        h = content_hash_email(piece_id)
-        row = db.query(PieceValidationCache).filter(
-            PieceValidationCache.campaign_id == campaign_id,
-            PieceValidationCache.channel == ch,
-            PieceValidationCache.content_hash == h,
-        ).first()
-    else:
-        if not piece_id or not commercial_space:
-            raise HTTPException(400, "Para APP, informe piece_id e commercial_space.")
-        h = content_hash_app(piece_id, commercial_space)
-        row = db.query(PieceValidationCache).filter(
-            PieceValidationCache.campaign_id == campaign_id,
-            PieceValidationCache.channel == ch,
-            PieceValidationCache.content_hash == h,
-        ).first()
-
-    if not row:
-        raise HTTPException(404, "Parecer não encontrado para este conteúdo.")
-    return AnalyzePieceResponse(**row.response_json)
-
-
-@router_ai.post("/ai/generate-text")
-async def generate_text(
-    current_user: Dict = Depends(get_current_user),
-):
-    require_ai_validation_access(current_user)
-    raise HTTPException(501, "Not implemented. Use analyze-piece or legal-service.")

@@ -1,9 +1,7 @@
-from datetime import timedelta, datetime
+from datetime import timedelta, datetime, timezone
 from uuid import uuid4
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
-
-from app.core.config import settings
 from app.core.auth_config import load_auth_config
 from app.core.security import verify_password, get_password_hash, create_access_token, create_refresh_token
 from app.core.login_audit import log_login_attempt
@@ -14,11 +12,9 @@ from app.schemas.auth import UserCreate, UserResponse, RefreshTokenRequest, Toke
 
 
 class AuthService:
-    """Business logic for authentication operations."""
 
     @staticmethod
     def register_user(db: Session, user_data: UserCreate) -> UserResponse:
-        """Register a new user."""
         existing_user = db.query(User).filter(User.email == user_data.email).first()
         if existing_user:
             USER_REGISTRATIONS.labels(result="duplicate").inc()
@@ -57,7 +53,6 @@ class AuthService:
         ip_address: str = None,
         user_agent: str = None
     ) -> TokenResponse:
-        """Authenticate user and return access/refresh tokens."""
         user = db.query(User).filter(User.email == email).first()
         
         if not user or not verify_password(password, user.hashed_password):
@@ -101,7 +96,7 @@ class AuthService:
         )
         
         refresh_token_value = create_refresh_token()
-        refresh_token_expires = datetime.utcnow() + timedelta(days=auth_config.get("refresh_token_expire_days", 7))
+        refresh_token_expires = datetime.now(timezone.utc) + timedelta(days=auth_config.get("refresh_token_expire_days", 7))
         
         refresh_token = RefreshToken(
             id=str(uuid4()),
@@ -131,7 +126,6 @@ class AuthService:
     
     @staticmethod
     def refresh_access_token(db: Session, token_data: RefreshTokenRequest) -> TokenResponse:
-        """Refresh access token using valid refresh token."""
         refresh_token = db.query(RefreshToken).filter(
             RefreshToken.token == token_data.refresh_token,
             RefreshToken.is_revoked == False
@@ -144,7 +138,7 @@ class AuthService:
                 detail="Invalid refresh token"
             )
         
-        if refresh_token.expires_at < datetime.utcnow():
+        if refresh_token.expires_at < datetime.now(timezone.utc):
             TOKEN_REFRESHES.labels(result="expired").inc()
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -175,7 +169,6 @@ class AuthService:
     
     @staticmethod
     def logout_user(db: Session, refresh_token: str, user_id: str) -> dict:
-        """Revoke refresh token on logout."""
         LOGOUTS.inc()
         token = db.query(RefreshToken).filter(
             RefreshToken.token == refresh_token,
@@ -190,7 +183,6 @@ class AuthService:
     
     @staticmethod
     def get_current_user_info(user: User) -> UserResponse:
-        """Convert User model to UserResponse schema."""
         return UserResponse(
             id=user.id,
             email=user.email,

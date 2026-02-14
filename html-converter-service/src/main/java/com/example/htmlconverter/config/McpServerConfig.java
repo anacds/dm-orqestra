@@ -20,12 +20,7 @@ import org.springframework.web.servlet.function.ServerResponse;
 
 import java.util.Map;
 
-/**
- * MCP Server configuration for exposing HTML conversion as an MCP tool.
- * 
- * This allows AI agents to consume the HTML-to-image conversion service
- * through the Model Context Protocol, regardless of the underlying implementation.
- */
+
 @Configuration
 @Slf4j
 public class McpServerConfig {
@@ -64,27 +59,19 @@ public class McpServerConfig {
         }
         """;
 
-    /**
-     * Creates the MCP transport provider using Server-Sent Events over WebMVC.
-     * This provides the communication layer for the MCP protocol.
-     */
+
     @Bean
     public WebMvcSseServerTransportProvider mcpTransportProvider(ObjectMapper objectMapper) {
         log.info("Initializing MCP SSE transport provider at /mcp");
         return new WebMvcSseServerTransportProvider(objectMapper, "/mcp/message");
     }
 
-    /**
-     * Exposes the MCP router function to handle MCP protocol requests.
-     */
+
     @Bean
     public RouterFunction<ServerResponse> mcpRouterFunction(WebMvcSseServerTransportProvider transportProvider) {
         return transportProvider.getRouterFunction();
     }
 
-    /**
-     * Creates and configures the MCP Server with the HTML conversion tool.
-     */
     @Bean
     public McpSyncServer mcpServer(
             WebMvcSseServerTransportProvider transportProvider,
@@ -110,14 +97,11 @@ public class McpServerConfig {
         return server;
     }
 
-    /**
-     * Creates the HTML-to-image tool specification with its handler.
-     */
+
     private McpServerFeatures.SyncToolSpecification createHtmlToImageTool(
             HtmlConversionService htmlConversionService,
             ObjectMapper objectMapper) {
         
-        // Build the Tool using the constructor that accepts schema as String
         Tool tool = new McpSchema.Tool(TOOL_NAME, TOOL_DESCRIPTION, INPUT_SCHEMA);
 
         return new McpServerFeatures.SyncToolSpecification(
@@ -126,7 +110,6 @@ public class McpServerConfig {
                 log.info("MCP tool '{}' invoked", TOOL_NAME);
                 
                 try {
-                    // Extract arguments with defaults
                     String htmlContent = extractString(arguments, "htmlContent");
                     Float scale = extractFloat(arguments, "scale", 0.5f);
                     String format = extractString(arguments, "imageFormat", "PNG");
@@ -134,17 +117,14 @@ public class McpServerConfig {
                     log.debug("Converting HTML ({} chars) with scale={}, format={}", 
                               htmlContent.length(), scale, format);
 
-                    // Build the conversion request
                     ConversionRequest request = ConversionRequest.builder()
                         .htmlContent(htmlContent)
                         .scale(scale)
                         .imageFormat(ConversionRequest.ImageFormat.valueOf(format.toUpperCase()))
                         .build();
 
-                    // Execute conversion
                     ConversionResponse response = htmlConversionService.convert(request);
 
-                    // Build result JSON
                     String resultJson = objectMapper.writeValueAsString(Map.of(
                         "success", true,
                         "base64Image", response.getBase64Image(),
@@ -181,9 +161,6 @@ public class McpServerConfig {
         );
     }
 
-    /**
-     * Extracts a required string argument.
-     */
     private String extractString(Map<String, Object> arguments, String key) {
         Object value = arguments.get(key);
         if (value == null) {
@@ -192,17 +169,11 @@ public class McpServerConfig {
         return value.toString();
     }
 
-    /**
-     * Extracts an optional string argument with a default value.
-     */
     private String extractString(Map<String, Object> arguments, String key, String defaultValue) {
         Object value = arguments.get(key);
         return value != null ? value.toString() : defaultValue;
     }
 
-    /**
-     * Extracts an optional float argument with a default value.
-     */
     private Float extractFloat(Map<String, Object> arguments, String key, Float defaultValue) {
         Object value = arguments.get(key);
         if (value == null) {

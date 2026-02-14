@@ -4,7 +4,6 @@ from app.core.database import Base
 import uuid
 import hashlib
 
-
 class LegalValidationAudit(Base):
     __tablename__ = "legal_validation_audits"
     

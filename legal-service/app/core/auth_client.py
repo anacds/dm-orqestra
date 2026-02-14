@@ -1,15 +1,15 @@
 from typing import Dict
-from fastapi import Depends, HTTPException, status, Request
+from fastapi import HTTPException, status, Request
 import base64
 
 
 async def get_current_user(request: Request) -> Dict:
     """
-    obtém o usuário atual dos cabeçalhos definidos pelo api gateway.
+    Obtém o usuário atual dos cabeçalhos definidos pelo api gateway.
     o gateway valida a autenticação e passa o contexto do usuário via cabeçalhos.
     """
     def decode_header_value(value: str) -> str:
-        """decodifica o valor do cabeçalho codificado em base64, se necessário."""
+        """Decodifica o valor do cabeçalho codificado em base64, se necessário."""
         if not value:
             return ""
         if value.startswith("base64:"):

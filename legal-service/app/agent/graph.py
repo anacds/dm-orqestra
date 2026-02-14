@@ -4,10 +4,8 @@ import logging
 import os
 import time
 from typing import Optional
-
 from langgraph.graph import StateGraph, END
 from langchain_openai import ChatOpenAI
-
 from app.agent.state import AgentState
 from app.agent.nodes import retrieve_node, generate_node
 from app.agent.retriever import HybridWeaviateRetriever
@@ -25,7 +23,6 @@ logger = logging.getLogger(__name__)
 
 
 class LegalAgent:
-    """Agent for legal validation using RAG with Weaviate."""
 
     def __init__(
         self,
@@ -39,7 +36,6 @@ class LegalAgent:
         collection_override: Optional[str] = None,
         rerank_override: Optional[bool] = None,
     ):
-        # Armazena overrides para logging/metadata
         self.alpha_override = alpha_override
         self.collection_override = collection_override
         self.rerank_override = rerank_override
@@ -74,7 +70,7 @@ class LegalAgent:
         default_llm = None
 
         def _is_reasoning_model(name: str) -> bool:
-            """Detecta modelos de raciocínio (OpenAI o-series e gpt-5)."""
+            """Detecta modelos de raciocínio"""
             _lower = name.lower()
             return any(tag in _lower for tag in ("gpt-5", "o1", "o3", "o4"))
 
@@ -103,8 +99,6 @@ class LegalAgent:
                             f"Canal {ch} usa provider=openai mas OPENAI_API_KEY não está definida."
                         )
                     if _is_reasoning_model(model_name):
-                        # Modelos de raciocínio: usam max_completion_tokens
-                        # (reasoning_tokens + resposta), não suportam temperature
                         llm_by_provider[key] = ChatOpenAI(
                             model=model_name,
                             api_key=openai_api_key,
@@ -164,7 +158,6 @@ class LegalAgent:
             "cache_enabled": str(settings.CACHE_ENABLED),
         })
         
-        # Log overrides se ativos (para experimentos)
         if alpha_override is not None:
             alpha_desc = "BM25 only" if alpha_override == 0.0 else ("Semantic only" if alpha_override == 1.0 else f"Hybrid")
             logger.info(f"[EXPERIMENT] Alpha override: {alpha_override} ({alpha_desc})")
@@ -215,21 +208,10 @@ class LegalAgent:
         if not task:
             raise ValueError("task é obrigatório")
         
-        # --- CÓDIGO LEGADO: apenas APP aceitava content_image ---
-        # if channel != "APP":
-        #     if not content_body and not content:
-        #         raise ValueError("task e content (ou content_body) são obrigatórios")
-        #     content_body = content_body or content
-        # elif not content_image:
-        #     raise ValueError("Para channel=APP, informe content_image")
-        # --- FIM CÓDIGO LEGADO ---
-        
-        # EMAIL agora pode ter content_image (análise visual) ou content_body
         if channel == "APP":
             if not content_image:
                 raise ValueError("Para channel=APP, informe content_image")
         elif channel == "EMAIL":
-            # EMAIL pode ter image (visual) ou body
             if not content_image and not content_body and not content:
                 raise ValueError("Para channel=EMAIL, informe content_image ou content_body")
             if not content_image:
@@ -242,7 +224,6 @@ class LegalAgent:
         if not content_body:
             content_body = content
 
-        # Monta cache key incluindo TODOS os campos relevantes por canal
         cache_parts = [channel or ""]
         if content_title:
             cache_parts.append(content_title)
@@ -278,9 +259,16 @@ class LegalAgent:
         logger.info(f"Invoking agent with structured input: task={task}, channel={channel}")
         
         ch_label = channel or "unknown"
+        langsmith_config = {
+            "metadata": {
+                "channel": ch_label,
+                "task": task,
+            },
+            "tags": [ch_label, task],
+        }
         start = time.perf_counter()
         try:
-            result = self.app.invoke(initial_state)
+            result = self.app.invoke(initial_state, config=langsmith_config)
         except Exception as exc:
             elapsed = time.perf_counter() - start
             AGENT_DURATION.labels(channel=ch_label).observe(elapsed)
@@ -318,17 +306,9 @@ class LegalAgent:
             self.cache.close()
 
 
-# -----------------------------------------------------------------------------
-# Compiled graph for LangGraph Studio (langgraph dev).
-# Requires: WEAVIATE_URL, OPENAI_API_KEY (and optionally MARITACA_API_KEY, REDIS_URL).
-# Input example: {"task": "VALIDATE_COMMUNICATION", "channel": "SMS", "content": "Orqestra: ..."}
-# -----------------------------------------------------------------------------
-# Lazy initialization para evitar criar conexão Weaviate ao importar módulo
 _global_agent = None
 
-
 def get_graph():
-    """Retorna o graph compilado (lazy initialization)."""
     global _global_agent
     if _global_agent is None:
         _global_agent = LegalAgent()
@@ -336,7 +316,6 @@ def get_graph():
 
 
 def _cleanup_global_agent():
-    """Fecha conexões do agent global ao encerrar o processo."""
     global _global_agent
     if _global_agent is not None:
         try:
@@ -345,13 +324,8 @@ def _cleanup_global_agent():
         except Exception as e:
             logger.warning(f"Error closing global agent: {e}")
 
-
-# Registra cleanup para quando o processo terminar
 atexit.register(_cleanup_global_agent)
 
-
-# Para compatibilidade com LangGraph Studio que espera 'graph' no nível do módulo
-# Usa property-like pattern via __getattr__
 def __getattr__(name):
     if name == "graph":
         return get_graph()

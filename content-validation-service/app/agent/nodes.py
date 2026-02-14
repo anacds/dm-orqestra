@@ -1,13 +1,12 @@
 from __future__ import annotations
-
 import base64
+import hashlib
 import logging
 import os
 import re
 import time
 from datetime import datetime
 from typing import Any, Dict
-
 from app.agent.state import ValidationGraphState
 from app.agent.tools import (
     retrieve_piece_content,
@@ -17,11 +16,9 @@ from app.agent.tools import (
     validate_image_brand_compliance,
     fetch_channel_specs,
 )
-from app.agent.validate_piece import validate_piece_format_and_size, validate_piece_specs
+from app.core.validators import validate_piece_format_and_size, validate_piece_specs
 from app.core.metrics import (
     NODE_DURATION,
-    MCP_CALLS,
-    MCP_DURATION,
     A2A_CALLS,
     A2A_DURATION,
     SPECS_RESULT,
@@ -31,10 +28,7 @@ from app.core.metrics import (
 logger = logging.getLogger(__name__)
 
 _DATA_URL_IMAGE = re.compile(r"^data:image/(png|jpeg|jpg|webp|gif);base64,[A-Za-z0-9+/=]+$")
-
-# Pasta para salvar imagens de debug (montada como volume Docker)
 DEBUG_IMAGES_DIR = os.environ.get("DEBUG_IMAGES_DIR", "/app/debug_images")
-
 
 def _save_debug_image(base64_image: str, image_format: str, piece_id: Any, campaign_id: Any) -> str | None:
     """Salva imagem convertida em pasta local para debug."""
@@ -83,10 +77,6 @@ def _is_data_url_image(raw: str) -> bool:
     return bool(_DATA_URL_IMAGE.match(raw.strip()))
 
 
-# ===========================================================================
-# NODE 1: validate_channel
-# ===========================================================================
-
 def validate_channel_node(state: ValidationGraphState) -> Dict[str, Any]:
     """
     1) validate_channel: valida estrutura (canal, campos, tipos).
@@ -120,10 +110,6 @@ def validate_channel_node(state: ValidationGraphState) -> Dict[str, Any]:
         "validation_valid": True,
     }
 
-
-# ===========================================================================
-# NODE 2: retrieve_content
-# ===========================================================================
 
 async def retrieve_content_node(state: ValidationGraphState) -> Dict[str, Any]:
     """
@@ -182,7 +168,7 @@ async def retrieve_content_node(state: ValidationGraphState) -> Dict[str, Any]:
             "human_approval_reason": f"Conteúdo da peça indisponível (MCP/campaigns): {err}",
         }
 
-    # Inicializa campos
+    retrieved_content_hash = hashlib.sha256(raw.encode("utf-8")).hexdigest()
     html_for_branding = None
     image_for_branding = None
     conversion_metadata = None
@@ -197,13 +183,8 @@ async def retrieve_content_node(state: ValidationGraphState) -> Dict[str, Any]:
                 "human_approval_reason": "Resposta do download da peça App inválida.",
             }
         content_for_compliance = {"image": raw}
-        # Guarda imagem para validação de branding (paralela a specs)
         image_for_branding = raw
     elif channel == "EMAIL":
-        # --- CÓDIGO LEGADO: enviava HTML direto para o Legal Service ---
-        # content_for_compliance = {"html": raw}
-        # --- FIM CÓDIGO LEGADO ---
-        
         try:
             logger.info("Converting EMAIL HTML to image for visual analysis...")
             conversion_result = await convert_html_to_image.ainvoke({
@@ -269,12 +250,9 @@ async def retrieve_content_node(state: ValidationGraphState) -> Dict[str, Any]:
         "html_for_branding": html_for_branding,
         "image_for_branding": image_for_branding,
         "conversion_metadata": conversion_metadata,
+        "retrieved_content_hash": retrieved_content_hash,
     }
 
-
-# ===========================================================================
-# NODE 3: validate_specs (NEW — determinístico, pós-retrieve)
-# ===========================================================================
 
 async def validate_specs_node(state: ValidationGraphState) -> Dict[str, Any]:
     """
@@ -355,10 +333,6 @@ async def validate_specs_node(state: ValidationGraphState) -> Dict[str, Any]:
     }
 
 
-# ===========================================================================
-# NODE 4: validate_compliance (legal-service via A2A)
-# ===========================================================================
-
 async def validate_compliance_node(state: ValidationGraphState) -> Dict[str, Any]:
     """
     4) validate_compliance: chama legal-service via A2A.
@@ -415,11 +389,6 @@ async def validate_compliance_node(state: ValidationGraphState) -> Dict[str, Any
     }
 
 
-# ===========================================================================
-# NODE 5: validate_branding (branding-service via MCP)
-# Roda em paralelo com validate_specs
-# ===========================================================================
-
 async def validate_branding_node(state: ValidationGraphState) -> Dict[str, Any]:
     """
     5) validate_branding: valida conformidade de marca via branding-service (MCP).
@@ -435,7 +404,6 @@ async def validate_branding_node(state: ValidationGraphState) -> Dict[str, Any]:
     html_for_branding = state.get("html_for_branding")
     image_for_branding = state.get("image_for_branding")
     
-    # SMS/PUSH: sem conteúdo visual → skip
     if channel in ("SMS", "PUSH") or (not html_for_branding and not image_for_branding):
         logger.info("validate_branding: skipping (channel=%s, has_html=%s, has_image=%s)",
                      channel, bool(html_for_branding), bool(image_for_branding))
@@ -486,7 +454,6 @@ async def validate_branding_node(state: ValidationGraphState) -> Dict[str, Any]:
         "summary": summary,
         "validation_type": "html" if (channel == "EMAIL" and html_for_branding) else "image",
     }
-    # Inclui cores dominantes para imagem (APP)
     if "dominant_colors" in result:
         branding_result["dominant_colors"] = result["dominant_colors"]
     
@@ -504,10 +471,6 @@ async def validate_branding_node(state: ValidationGraphState) -> Dict[str, Any]:
         "branding_result": branding_result,
     }
 
-
-# ===========================================================================
-# NODE 6: issue_final_verdict
-# ===========================================================================
 
 def issue_final_verdict_node(state: ValidationGraphState) -> Dict[str, Any]:
     """
@@ -527,11 +490,10 @@ def issue_final_verdict_node(state: ValidationGraphState) -> Dict[str, Any]:
     retrieve_error = state.get("retrieve_error")
     channel = (state.get("channel") or "").upper()
 
-    # Resultados dos 3 nós paralelos (None = não executou)
-    specs_ok = state.get("specs_ok")              # None | True | False
+    specs_ok = state.get("specs_ok")              
     specs_result = state.get("specs_result")
 
-    branding_ok = state.get("branding_ok")          # None | True | False
+    branding_ok = state.get("branding_ok")          
     branding_result = state.get("branding_result")
     branding_error = state.get("branding_error")
 
@@ -542,7 +504,6 @@ def issue_final_verdict_node(state: ValidationGraphState) -> Dict[str, Any]:
     stages_completed: list[str] = []
     failure_stage: str | None = None
 
-    # ── Early-fail 1: validate_channel ────────────────────────────────
     if not validation_valid:
         failure_stage = "validate_channel"
         validation_msg = validation_result.get("message", "Formato ou canal inválido")
@@ -558,7 +519,6 @@ def issue_final_verdict_node(state: ValidationGraphState) -> Dict[str, Any]:
 
     stages_completed.append("validate_channel")
 
-    # ── Early-fail 2: retrieve_content (EMAIL/APP) ────────────────────
     if channel in ("EMAIL", "APP") and not retrieve_ok:
         failure_stage = "retrieve_content"
         err = retrieve_error or "Falha ao buscar conteúdo da peça"
@@ -575,17 +535,11 @@ def issue_final_verdict_node(state: ValidationGraphState) -> Dict[str, Any]:
     if channel in ("EMAIL", "APP"):
         stages_completed.append("retrieve_content")
 
-    # ── Agregação dos 3 nós paralelos ─────────────────────────────────
-    # Cada nó contribui: aprovação/reprovação + mensagens + fontes.
-
     sources: list[dict] = []
     requires_human = False
 
-    # Cada seção contribui uma linha rotulada para o summary.
-    # Formato: "[Specs] ...", "[Marca] ...", "[Legal] ..."
     summary_lines: list[str] = []
 
-    # --- Specs ---
     specs_passed = True
     specs_warnings: list[str] = []
     if specs_ok is not None:
@@ -600,16 +554,13 @@ def issue_final_verdict_node(state: ValidationGraphState) -> Dict[str, Any]:
         if specs_warnings:
             summary_lines.append(f"[Specs] {len(specs_warnings)} aviso(s)")
 
-    # --- Branding ---
     branding_passed = True
-    branding_has_critical = False
     branding_score = 100
     if branding_ok is not None or branding_result:
         stages_completed.append("validate_branding")
     if branding_result:
         branding_score = branding_result.get("score", 100)
         branding_compliant = branding_result.get("compliant", True)
-        branding_has_critical = branding_result.get("summary", {}).get("critical", 0) > 0
         if not branding_compliant:
             branding_passed = False
             violations = branding_result.get("violations") or []
@@ -625,7 +576,6 @@ def issue_final_verdict_node(state: ValidationGraphState) -> Dict[str, Any]:
     if branding_error and not branding_result:
         summary_lines.append(f"[Marca] Erro — {branding_error[:120]}")
 
-    # --- Compliance (legal) ---
     legal_passed = True
     legal_decision = None
     legal_summary = ""
@@ -641,14 +591,12 @@ def issue_final_verdict_node(state: ValidationGraphState) -> Dict[str, Any]:
             legal_passed = False
             summary_lines.append(f"[Legal] {legal_summary}" if legal_summary else "[Legal] Reprovado")
         elif legal_summary:
-            # Legal aprovou mas pode ter observações
             summary_lines.append(f"[Legal] {legal_summary}")
     elif compliance_error:
         legal_passed = False
         summary_lines.append(f"[Legal] Erro — {compliance_error[:200]}")
         requires_human = True
 
-    # ── Decisão final: binária — APROVADO ou REPROVADO ───────────────
     all_passed = specs_passed and branding_passed and legal_passed and legal_decision == "APROVADO"
     final_decision = "APROVADO" if all_passed else "REPROVADO"
 
@@ -690,11 +638,6 @@ def _build_verdict(
     compliance_error: str | None = None,
     sources: list | None = None,
 ) -> Dict[str, Any]:
-    """Monta o payload padronizado de final_verdict + orchestration_result.
-    
-    Decisão binária: APROVADO ou REPROVADO.
-    requires_human é metadado do legal-service (independente da decisão).
-    """
     final_verdict = {
         "decision": decision,
         "requires_human_review": requires_human,

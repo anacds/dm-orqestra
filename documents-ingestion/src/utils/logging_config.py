@@ -5,11 +5,11 @@ from datetime import datetime
 
 class CleanFormatter(logging.Formatter):
     LEVEL_COLORS = {
-        "DEBUG": "\033[36m",      # cyan
-        "INFO": "\033[32m",       # green
-        "WARNING": "\033[33m",    # yellow
-        "ERROR": "\033[31m",      # red
-        "CRITICAL": "\033[35m",   # magenta
+        "DEBUG": "\033[36m",      
+        "INFO": "\033[32m",       
+        "WARNING": "\033[33m",    
+        "ERROR": "\033[31m",      
+        "CRITICAL": "\033[35m",   
     }
     RESET = "\033[0m"
 

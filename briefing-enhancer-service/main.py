@@ -26,6 +26,12 @@ async def lifespan(app: FastAPI):
     yield
     logger.info("Shutting down Briefing Enhancer Service...")
     await close_checkpoint_pool()
+    # Garante que todos os traces pendentes sejam enviados ao LangSmith
+    try:
+        from langsmith import Client as _LsClient
+        _LsClient().flush()
+    except Exception:
+        pass
 
 
 app = FastAPI(

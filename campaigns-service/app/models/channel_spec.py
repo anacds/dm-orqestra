@@ -1,10 +1,3 @@
-"""Especificações técnicas por canal e espaço comercial.
-
-Cada registro define limites de dimensão, peso e caracteres para um
-canal (SMS, PUSH, EMAIL, APP) e opcionalmente um espaço comercial.
-Gerenciável via banco — sem necessidade de deploy para novos formatos.
-"""
-
 from sqlalchemy import Column, String, Integer, Float, Boolean, DateTime
 from sqlalchemy.sql import func
 

@@ -26,7 +26,7 @@ services:
       - DATABASE_URL=postgresql://orqestra:orqestra_password@db:5432/auth_service
       - CORS_ORIGINS=["http://localhost:3000"]
       - ENVIRONMENT=development
-      - SECRET_KEY=dev-secret-key-change-in-production
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-key-change-in-production}
     depends_on:
       db:
         condition: service_healthy
@@ -89,14 +89,20 @@ services:
       - ./briefing-enhancer-service/evals/results:/app/evals/results
     environment:
       - DATABASE_URL=postgresql://orqestra:orqestra_password@db:5432/briefing_enhancer
+      - REDIS_URL=redis://redis:6379/2
+      - CACHE_ENABLED=true
+      - CACHE_TTL=86400
       - ENVIRONMENT=development
       - CORS_ORIGINS=["http://localhost:3000", "http://localhost:8000"]
       - AUTH_SERVICE_URL=http://auth-service:8002
-      # LangSmith tracing (usa @traceable)
       - LANGCHAIN_TRACING_V2=${LANGCHAIN_TRACING_V2:-false}
       - LANGCHAIN_API_KEY=${LANGCHAIN_API_KEY:-}
+      - LANGCHAIN_PROJECT=Briefing Enhancer Service
+      - LANGSMITH_TRACING_SAMPLING_RATE=${LANGSMITH_TRACING_SAMPLING_RATE:-1.0}
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       auth-service:
         condition: service_started
@@ -122,9 +128,18 @@ services:
       - BRANDING_MCP_URL=http://branding-service:8012
       - A2A_BASE_URL=http://content-validation-service:8004
       - DATABASE_URL=postgresql://orqestra:orqestra_password@db:5432/content_validation
+      - REDIS_URL=redis://redis:6379/1
+      - CACHE_ENABLED=true
+      - CACHE_TTL=86400
       - DEBUG_IMAGES_DIR=/app/debug_images
+      - LANGCHAIN_TRACING_V2=${LANGCHAIN_TRACING_V2:-false}
+      - LANGCHAIN_API_KEY=${LANGCHAIN_API_KEY:-}
+      - LANGCHAIN_PROJECT=Content Validation Service
+      - LANGSMITH_TRACING_SAMPLING_RATE=${LANGSMITH_TRACING_SAMPLING_RATE:-1.0}
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       auth-service:
         condition: service_started
@@ -153,17 +168,18 @@ services:
       - ENVIRONMENT=development
       - CORS_ORIGINS=["http://localhost:3000"]
       - WEAVIATE_URL=http://weaviate:8080
-      # Collection com chunks por seção
       - WEAVIATE_CLASS_NAME=LegalDocuments
       - REDIS_URL=redis://redis:6379/0
       - CACHE_ENABLED=true
-      # Reranking: defina como false se não tiver COHERE_APIKEY
       - RERANK_ENABLED=${RERANK_ENABLED:-true}
-      # API Keys
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - MARITACA_API_KEY=${MARITACA_API_KEY}
       - COHERE_APIKEY=${COHERE_APIKEY:-}
       - EMBEDDING_MODEL=text-embedding-3-small
+      - LANGCHAIN_TRACING_V2=${LANGCHAIN_TRACING_V2:-false}
+      - LANGCHAIN_API_KEY=${LANGCHAIN_API_KEY:-}
+      - LANGCHAIN_PROJECT=Legal Service
+      - LANGSMITH_TRACING_SAMPLING_RATE=${LANGSMITH_TRACING_SAMPLING_RATE:-1.0}
     depends_on:
       db:
         condition: service_healthy
@@ -205,7 +221,7 @@ services:
       - "3000:3000"
     environment:
       - DOCKER_CONTAINER=true
-      - VITE_API_GATEWAY_URL=http://api-gateway:8000
+      - VITE_API_GATEWAY_URL=http://localhost:8000
     volumes:
       - ./frontend:/app
       - /app/node_modules
@@ -219,13 +235,9 @@ services:
       - "4566:4566"
     environment:
       - SERVICES=s3
-      - DEBUG=1
-      - DATA_DIR=/var/lib/localstack/data
-      - DOCKER_HOST=unix:///var/run/docker.sock
       - PERSISTENCE=1
     volumes:
       - localstack_data:/var/lib/localstack
-      - /var/run/docker.sock:/var/run/docker.sock
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
       interval: 10s
@@ -243,7 +255,6 @@ services:
       - AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED=true
       - PERSISTENCE_DATA_PATH=/var/lib/weaviate
       - DEFAULT_VECTORIZER_MODULE=none
-      # Módulo de reranking (requer COHERE_APIKEY)
       - ENABLE_MODULES=reranker-cohere
       - COHERE_APIKEY=${COHERE_APIKEY:-}
       - CLUSTER_HOSTNAME=node1
@@ -269,8 +280,6 @@ services:
       retries: 5
     restart: unless-stopped
 
-  # Inicializa Weaviate com dados pré-processados (chunks + vetores)
-  # Elimina necessidade de gerar embeddings durante startup
   weaviate-init:
     build:
       context: ./legal-service
@@ -282,8 +291,6 @@ services:
       weaviate:
         condition: service_healthy
     restart: "no"
-
-  # --- Observabilidade ---
   prometheus:
     image: prom/prometheus:v2.53.0
     ports:
@@ -312,7 +319,6 @@ services:
       - prometheus
     restart: unless-stopped
 
-  # --- Business Intelligence (Metabase) ---
   metabase-db-init:
     image: postgres:16-alpine
     entrypoint: ["sh", "-c", "PGPASSWORD=orqestra_password psql -h db -U orqestra -d postgres -tc \"SELECT 1 FROM pg_database WHERE datname='metabase'\" | grep -q 1 && echo 'DB metabase already exists' || (PGPASSWORD=orqestra_password psql -h db -U orqestra -d postgres -c 'CREATE DATABASE metabase' && echo 'DB metabase created')"]

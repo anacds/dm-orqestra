@@ -11,11 +11,6 @@ PG_PORT = int(os.getenv("PG_PORT", "5432"))
 PG_USER = os.getenv("PG_USER", "orqestra")
 PG_PASS = os.getenv("PG_PASS", "orqestra_password")
 
-
-# ═════════════════════════════════════════════════════════════════════════
-# Wait for Metabase
-# ═════════════════════════════════════════════════════════════════════════
-
 def wait_for_metabase(timeout=300):
     print("Waiting for Metabase to be ready...")
     start = time.time()
@@ -32,10 +27,6 @@ def wait_for_metabase(timeout=300):
     return False
 
 
-# ═════════════════════════════════════════════════════════════════════════
-# Setup wizard
-# ═════════════════════════════════════════════════════════════════════════
-
 def is_setup_done() -> bool:
     r = requests.get(f"{BASE}/api/session/properties", timeout=10)
     if r.ok:
@@ -44,8 +35,6 @@ def is_setup_done() -> bool:
 
 
 def run_setup() -> str:
-    """Complete the Metabase setup wizard. Returns session token."""
-    # Get setup token
     r = requests.get(f"{BASE}/api/session/properties", timeout=10)
     r.raise_for_status()
     setup_token = r.json().get("setup-token")
@@ -89,10 +78,6 @@ def login() -> str:
 def headers(token: str) -> dict:
     return {"X-Metabase-Session": token, "Content-Type": "application/json"}
 
-
-# ═════════════════════════════════════════════════════════════════════════
-# Databases
-# ═════════════════════════════════════════════════════════════════════════
 
 DATABASES = [
     {"name": "Campanhas", "db": "campaigns_service"},
@@ -144,12 +129,7 @@ def create_databases(token: str) -> dict[str, int]:
     return db_ids
 
 
-# ═════════════════════════════════════════════════════════════════════════
-# Wait for database sync
-# ═════════════════════════════════════════════════════════════════════════
-
 def wait_for_sync(token: str, db_ids: dict[str, int], timeout=120):
-    """Wait for Metabase to finish syncing all databases."""
     print("  Waiting for database sync to complete...")
     start = time.time()
     while time.time() - start < timeout:
@@ -170,16 +150,11 @@ def wait_for_sync(token: str, db_ids: dict[str, int], timeout=120):
     print("  WARNING: Sync timeout, proceeding anyway.")
 
 
-# ═════════════════════════════════════════════════════════════════════════
-# Collections (folders for organizing)
-# ═════════════════════════════════════════════════════════════════════════
-
 COLLECTIONS = [
     "[Orqestra] Funil de Campanhas",
     "[Orqestra] Qualidade & Compliance",
     "[Orqestra] Adoção & Eficácia da IA",
 ]
-
 
 def create_collections(token: str) -> dict[str, int]:
     existing_r = requests.get(f"{BASE}/api/collection", headers=headers(token), timeout=10)
@@ -204,10 +179,6 @@ def create_collections(token: str) -> dict[str, int]:
 
     return coll_ids
 
-
-# ═════════════════════════════════════════════════════════════════════════
-# Questions (native SQL cards)
-# ═════════════════════════════════════════════════════════════════════════
 
 def _q(name: str, db_name: str, collection: str, sql: str, display: str = "table", full_width: bool = False):
     return {
@@ -375,22 +346,20 @@ FROM audit_interactions GROUP BY field_name ORDER BY "Aceitas" DESC
 
     _q("Peças Com vs. Sem Validação IA", "Campanhas", C3, """
 SELECT
-  channel AS "Canal",
   CASE WHEN ia_verdict IS NOT NULL THEN 'Com IA' ELSE 'Sem IA' END AS "Validação",
-  count(*) FILTER (WHERE human_verdict = 'approved') AS "Humano Aprovou",
-  count(*) FILTER (WHERE human_verdict IN ('rejected','manually_rejected')) AS "Humano Reprovou"
+  count(*) FILTER (WHERE human_verdict = 'approved') AS "Aprovadas",
+  count(*) FILTER (WHERE human_verdict IN ('rejected','manually_rejected')) AS "Reprovadas"
 FROM piece_review WHERE human_verdict != 'pending'
-GROUP BY "Canal", "Validação" ORDER BY "Canal"
+GROUP BY "Validação"
 """, "bar"),
 
     _q("Validações por Modelo LLM", "Legal Service", C3, """
 SELECT
   COALESCE(llm_model, 'N/A') AS "Modelo",
-  channel AS "Canal",
-  decision AS "Decisão",
-  count(*) AS "Total"
+  count(*) FILTER (WHERE decision = 'APROVADO') AS "Aprovadas",
+  count(*) FILTER (WHERE decision = 'REPROVADO') AS "Reprovadas"
 FROM legal_validation_audits
-GROUP BY llm_model, channel, decision ORDER BY "Total" DESC
+GROUP BY llm_model ORDER BY "Modelo"
 """, "bar"),
 ]
 
@@ -441,10 +410,6 @@ def create_questions(token: str, db_ids: dict[str, int], coll_ids: dict[str, int
 
     return card_ids
 
-
-# ═════════════════════════════════════════════════════════════════════════
-# Dashboards
-# ═════════════════════════════════════════════════════════════════════════
 
 DASHBOARD_DEFS = [
     {

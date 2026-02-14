@@ -2,11 +2,9 @@ import re
 import logging
 import os
 from typing import Optional
-
 from fastapi import APIRouter, HTTPException, Request, Depends
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
-
 from app.api.schemas import (
     AppContent,
     EmailContent,
@@ -31,7 +29,6 @@ router = APIRouter()
 
 
 def _strip_html(html: str) -> str:
-    """Remove tags HTML e normaliza espaços em branco."""
     text = re.sub(r"<[^>]+>", " ", html)
     text = re.sub(r"\s+", " ", text).strip()
     return text
@@ -40,7 +37,6 @@ _agent: Optional[LegalAgent] = None
 
 
 def get_agent() -> LegalAgent:
-    """Get or create LegalAgent instance."""
     global _agent
     if _agent is None:
         maritaca_api_key = (os.getenv("MARITACA_API_KEY") or "").strip()
@@ -92,7 +88,6 @@ async def validate_communication(
     input_data: ValidationInput,
     db: Session = Depends(get_db)
 ):
-    """Validate communication content against legal guidelines."""
     try:
         agent = get_agent()
         
@@ -108,14 +103,6 @@ async def validate_communication(
         elif isinstance(input_data.content, SMSContent):
             content_body = input_data.content.body
         elif isinstance(input_data.content, EmailContent):
-            # --- CÓDIGO LEGADO: EMAIL aceitava html OU image ---
-            # if input_data.content.image:
-            #     content_image = input_data.content.image
-            # else:
-            #     content_body = _strip_html(input_data.content.html)
-            # --- FIM CÓDIGO LEGADO ---
-            
-            # EMAIL agora pode ter html E image (análise visual + textual)
             if input_data.content.html:
                 content_body = _strip_html(input_data.content.html)
             if input_data.content.image:
@@ -136,13 +123,6 @@ async def validate_communication(
             content_str = content_body
         else:
             content_str = ""
-        
-        # --- CÓDIGO LEGADO: sobrescrevia content_str para imagem ---
-        # if content_image:
-        #     content_str = "[APP 1 imagem]"
-        # --- FIM CÓDIGO LEGADO ---
-        
-        # Para EMAIL com html+image, mantém o texto e adiciona indicador de imagem
         if content_image and not content_body:
             content_str = f"[{input_data.channel} 1 imagem]"
         elif content_image and content_body:
@@ -176,7 +156,6 @@ async def validate_communication(
             }
             output = ValidationOutput(**filtered_result)
             
-            # Usa content_str (string) para gerar hash, não o objeto Pydantic
             content_hash = LegalValidationAudit.generate_content_hash(content_str)
             search_query = None
             if search_metadata:
@@ -184,11 +163,6 @@ async def validate_communication(
             
             llm_model = None
             if input_data.channel and getattr(agent, "channel_to_model", None):
-                # --- CÓDIGO LEGADO: usava modelo do canal diretamente ---
-                # llm_model = agent.channel_to_model.get(input_data.channel)
-                # --- FIM CÓDIGO LEGADO ---
-                
-                # EMAIL com imagem usa modelo de fallback (APP)
                 if input_data.channel == "EMAIL" and content_image:
                     llm_model = agent.channel_to_model.get("APP")
                 else:

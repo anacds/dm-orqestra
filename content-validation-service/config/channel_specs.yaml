@@ -1,9 +1,3 @@
-# ============================================================================
-# Especificações técnicas por canal e espaço comercial
-# Usadas pelo validate_specs_node para validação determinística (fail-fast)
-# antes de enviar ao legal-service / branding-service.
-# ============================================================================
-
 channels:
   SMS:
     body:

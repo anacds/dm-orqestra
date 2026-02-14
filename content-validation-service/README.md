@@ -1,66 +1,38 @@
 # Content Validation Service
 
-Orchestrator for content validation using **LangGraph**. Same structure as legal-service and briefing-enhancer-service.
+Orquestrador de validação de peças criativas usando LangGraph. Valida formato, specs técnicos, branding (via MCP) e compliance jurídico (via A2A). Expõe também um Agent Card A2A.
 
-- **First step:** Validate format and size of the piece (SMS, PUSH, EMAIL, APP) via `validate` node.
-- **Second step:** Orchestrate calls (e.g. legal-service); currently a placeholder.
-- Exposes HTTP API for api-gateway routing.
-
-## Setup
-
-```bash
-cp env.example .env
-# Set LEGAL_SERVICE_URL as needed
-```
-
-## Run
-
-```bash
-uvicorn main:app --reload --port 8004
-```
+Porta: 8004
 
 ## Endpoints
 
-- `GET /` — service info
-- `GET /api/content-validation/health` — health check
-- `POST /api/ai/analyze-piece` — validate format/size + orchestrate (body: `{ "task", "channel", "content" }`)
-- `POST /api/ai/generate-text` — 501 Not Implemented
+| Método | Rota | Descrição |
+|---|---|---|
+| POST | `/api/ai/analyze-piece` | Validar peça criativa (cache transparente para SMS/PUSH) |
+| POST | `/api/ai/generate-text` | Gerar texto para canal |
 
-**A2A** (Agent-to-Agent): `GET /a2a/.well-known/agent-card.json`, `POST /a2a/v1/message:send`. Ver `app/a2a/README.md`.
+## Protocolo A2A
 
-## LangGraph Studio
+| Rota | Descrição |
+|---|---|
+| GET | `/a2a/.well-known/agent-card.json` | Agent Card |
+| POST | `/a2a/v1/message:send` | Receber mensagem A2A |
 
-To visualize and debug the graph in [LangGraph Studio](https://langchain-ai.github.io/langgraph/concepts/langgraph_studio/):
+## Integração com outros serviços
 
-**Opção rápida** (cria venv, instala deps e sobe o Studio):
+- **Campaigns Service** (MCP): busca conteúdo de peças e specs de canais
+- **Branding Service** (MCP): validação determinística de marca (email/app)
+- **HTML Converter** (MCP): converte HTML de email para imagem
+- **Legal Service** (A2A): validação jurídica de comunicações
+
+## Execução manual
 
 ```bash
-./run_studio.sh
+pip install -r requirements.txt
+alembic upgrade head
+uvicorn main:app --host 0.0.0.0 --port 8004
 ```
 
-**Manual:** Python 3.11+ required.
+## Variáveis de ambiente
 
-1. Create venv and install CLI:
-   ```bash
-   python3 -m venv .venv
-   .venv/bin/pip install -r requirements.txt 'langgraph-cli[inmem]>=0.2.6'
-   ```
-2. From this directory, create `.env` from `env.example`. For local Studio, use `localhost` URLs (e.g. `LEGAL_SERVICE_URL=http://localhost:8005`, `CAMPAIGNS_MCP_URL=http://localhost:8010`) if legal-service and campaigns-mcp-server run locally.
-3. Run (use `--tunnel` to avoid "TypeError: Failed to fetch" no Chrome 142+, Safari ou Brave):
-   ```bash
-   .venv/bin/langgraph dev --tunnel
-   ```
-   O CLI exibe uma URL com `baseUrl=...trycloudflare.com` — use-a no browser. Alternativa no **Chrome**: smith.langchain.com -> cadeado -> "Local network access" -> **Allow**.
-4. The Studio UI opens in the browser. Use the `content_validation` graph. Input shape:
-   ```json
-   {
-     "task": "VALIDATE_COMMUNICATION",
-     "channel": "SMS",
-     "content": { "body": "Olá, teste." }
-   }
-   ```
-   For EMAIL/APP use `"channel": "EMAIL"` or `"APP"` and `content` with `campaign_id`, `piece_id`, and `commercial_space` (APP only).
-
-## Docker
-
-Built as `content-validation-service`, port 8004. See `docker-compose.yml`.
+Ver `env.example`.

@@ -5,9 +5,6 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/**
- * Response DTO for HTML to image conversion.
- */
 @Data
 @Builder
 @NoArgsConstructor

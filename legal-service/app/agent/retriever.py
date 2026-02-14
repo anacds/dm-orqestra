@@ -4,6 +4,7 @@ import time
 from typing import List, Dict, Optional
 import weaviate
 from weaviate.classes.query import MetadataQuery, Filter, Rerank
+from langsmith import traceable
 from app.core.config import settings
 from app.core.models_config import load_models_config
 from app.core.metrics import (
@@ -14,12 +15,9 @@ from app.core.metrics import (
 
 logger = logging.getLogger(__name__)
 
-# text-embedding-3-small: 8191 tokens. PT/HTML ~2–2.5 chars/token -> 8k * 2 ≈ 16k; usar 14k p/ margem.
 EMBEDDING_QUERY_MAX_CHARS = 14_000
 
-
 def _truncate_for_embedding(text: str, max_chars: int = EMBEDDING_QUERY_MAX_CHARS) -> str:
-    """Trunca texto para caber no limite do modelo de embedding (8k tokens)."""
     if len(text) <= max_chars:
         return text
     truncated = text[:max_chars].rsplit(maxsplit=1)[0] or text[:max_chars]
@@ -46,22 +44,16 @@ class HybridWeaviateRetriever:
         self.weaviate_url = weaviate_url or settings.WEAVIATE_URL
         self.api_key = api_key or settings.WEAVIATE_API_KEY
         self.class_name = class_name or settings.WEAVIATE_CLASS_NAME
-        
-        # Alpha override para experimentos (0.0=BM25, 0.5=hybrid, 1.0=semantic)
         self.alpha_override = alpha_override
-        
-        # Rerank override para experimentos (True/False, None=usa config)
         self.rerank_override = rerank_override
         
         config = load_models_config()
         embeddings_config = config.get("models", {}).get("embeddings", {})
         self.embedding_model = embedding_model or embeddings_config.get("model", "text-embedding-3-small")
-        
         self.client = None
         self._connect()
     
     def _connect(self):
-        """Establish connection to Weaviate."""
         try:
             url_clean = self.weaviate_url.replace("https://", "").replace("http://", "")
             host_parts = url_clean.split("/")[0].split(":")
@@ -89,8 +81,8 @@ class HybridWeaviateRetriever:
             logger.error(f"Connection details: host={http_host if 'http_host' in locals() else 'unknown'}, port={http_port if 'http_port' in locals() else 'unknown'}, url={self.weaviate_url}")
             raise
     
+    @traceable(run_type="embedding", name="OpenAI Embedding")
     def _get_embedding(self, text: str) -> List[float]:
-        """Generate embedding vector for text using OpenAI."""
         start = time.perf_counter()
         try:
             from openai import OpenAI
@@ -110,6 +102,7 @@ class HybridWeaviateRetriever:
             logger.error(f"Error generating embedding: {e}")
             raise
     
+    @traceable(run_type="retriever", name="Weaviate Hybrid Search")
     def hybrid_search(
         self,
         query: str,
@@ -132,7 +125,6 @@ class HybridWeaviateRetriever:
         Returns:
             List of document chunks with metadata
         """
-        # Usa alpha_override se definido (para experimentos)
         if self.alpha_override is not None:
             alpha = self.alpha_override
             alpha_desc = "BM25 only" if alpha == 0.0 else ("Semantic only" if alpha == 1.0 else f"Hybrid ({alpha})")
@@ -154,12 +146,10 @@ class HybridWeaviateRetriever:
             retrieval_limit = max(limit, int(retrieval_config.get("limit", limit)))
             rerank_property = retrieval_config.get("rerank_property", "text")
             
-            # Reranking: prioridade é override > env var > config YAML
             if self.rerank_override is not None:
                 rerank_enabled = self.rerank_override
                 logger.info(f"[RETRIEVAL] Rerank override ativo: {rerank_enabled}")
             else:
-                # Verifica variável de ambiente (permite desabilitar via docker-compose)
                 env_rerank = os.getenv("RERANK_ENABLED")
                 if env_rerank is not None:
                     rerank_enabled = env_rerank.lower() in ("true", "1", "yes")
@@ -167,8 +157,6 @@ class HybridWeaviateRetriever:
                 else:
                     rerank_enabled = retrieval_config.get("rerank_enabled", False)
             
-            # Se reranking está habilitado, define quantos chunks retornar após reranking
-            # Se não especificado, usa o limit original
             if rerank_enabled:
                 final_limit = retrieval_config.get("rerank_top_k", limit)
                 logger.info(
@@ -178,7 +166,6 @@ class HybridWeaviateRetriever:
             else:
                 final_limit = limit
             
-            # Para PUSH/EMAIL com title/body, constrói query melhorada
             if channel in ("PUSH", "EMAIL") and query_title and query_body:
                 enhanced_query = f"{query_title} {query_body}"
                 logger.info(
@@ -189,7 +176,6 @@ class HybridWeaviateRetriever:
                 query_embedding = self._get_embedding(embedding_input)
                 search_query = enhanced_query
             else:
-                # Busca normal para SMS e outros canais
                 logger.info(
                     f"[RETRIEVAL] Retrieving {retrieval_limit} chunks, selecting top {limit} by hybrid score"
                 )
@@ -197,11 +183,6 @@ class HybridWeaviateRetriever:
                 query_embedding = self._get_embedding(embedding_input)
                 search_query = query
             
-            # Weaviate v1.29 + client v4: near_vector/bm25 endpoints falham
-            # silenciosamente com Rerank + filters via gRPC.  Solução segura:
-            # usar sempre hybrid com alpha ajustado nos extremos.
-            #   alpha=1.0 → 0.99 (quase puro vetor, BM25 residual ~1%)
-            #   alpha=0.0 → 0.01 (quase puro BM25, vetor residual ~1%)
             effective_alpha = alpha
             if alpha == 1.0:
                 effective_alpha = 0.99
@@ -226,7 +207,6 @@ class HybridWeaviateRetriever:
                                      "page_number", "channel"]
             }
             
-            # Adiciona reranking se habilitado
             if rerank_enabled:
                 query_kwargs["rerank"] = Rerank(
                     prop=rerank_property,
@@ -271,7 +251,6 @@ class HybridWeaviateRetriever:
             if response.objects:
                 objects_to_process = response.objects[:final_limit]
                 
-                # Log detalhado dos chunks retornados
                 if rerank_enabled:
                     logger.info(f"[RETRIEVAL] Chunks após reranking (top {final_limit} de {total_retrieved}):")
                 else:
@@ -290,7 +269,6 @@ class HybridWeaviateRetriever:
                     if obj.metadata:
                         hybrid_score = getattr(obj.metadata, "score", None)
                         rerank_score = getattr(obj.metadata, "rerank_score", None)
-                        # Prioriza rerank_score se disponível, senão usa hybrid_score
                         score = rerank_score if rerank_score is not None else hybrid_score
                     
                     file_name = props.get("file_name", props.get("source_file", "unknown"))
@@ -343,7 +321,6 @@ class HybridWeaviateRetriever:
             return []
     
     def close(self):
-        """Close Weaviate connection."""
         if hasattr(self, 'client') and self.client:
             self.client.close()
 

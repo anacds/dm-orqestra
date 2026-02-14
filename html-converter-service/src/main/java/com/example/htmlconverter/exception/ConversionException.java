@@ -1,8 +1,5 @@
 package com.example.htmlconverter.exception;
 
-/**
- * Exception thrown when HTML to image conversion fails.
- */
 public class ConversionException extends RuntimeException {
 
     public ConversionException(String message) {

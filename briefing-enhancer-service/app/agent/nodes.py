@@ -33,13 +33,6 @@ def _build_previous_fields_summary(history: list[FieldEnhancement] | None) -> st
 
 def fetch_field_info(state: EnhancementGraphState, db: Session) -> Dict:
     """Fetch field configuration from database and prepare context.
-    
-    Args:
-        state: Current graph state
-        db: Database session
-    
-    Returns:
-        Dictionary with field_info, previous_fields_summary, and enhancement_history
     """
     field_name = state["field_name"]
     
@@ -79,13 +72,6 @@ def fetch_field_info(state: EnhancementGraphState, db: Session) -> Dict:
 
 def enhance_text(state: EnhancementGraphState, structured_llm: Runnable[Any, EnhancedTextResponse]) -> Dict:
     """Enhance text using LLM agent with field-specific guidelines.
-    
-    Args:
-        state: Current graph state with field info and text
-        structured_llm: LangChain agent for text enhancement
-    
-    Returns:
-        Dictionary with enhanced_text, explanation, and updated enhancement_history
     """
     field_info = state.get("field_info", {})
     original_text = state["text"]

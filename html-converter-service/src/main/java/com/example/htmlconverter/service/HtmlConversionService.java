@@ -10,15 +10,10 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Entities;
 import org.springframework.stereotype.Service;
 import org.xhtmlrenderer.pdf.ITextRenderer;
-
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 
-/**
- * Main service that orchestrates the HTML to image conversion process.
- * 
- * Flow: HTML → Decode → PDF → Image → Scale → Base64
- */
+
 @Service
 @Slf4j
 @RequiredArgsConstructor
@@ -27,12 +22,6 @@ public class HtmlConversionService {
     private final HtmlDecoderService htmlDecoderService;
     private final ImageProcessingService imageProcessingService;
 
-    /**
-     * Converts HTML content to a Base64 encoded image.
-     * 
-     * @param request The conversion request containing HTML and options
-     * @return ConversionResponse with the Base64 image and metadata
-     */
     public ConversionResponse convert(ConversionRequest request) {
         log.info("Starting HTML to image conversion");
         
@@ -59,7 +48,6 @@ public class HtmlConversionService {
             String formatName = request.getImageFormat().name();
             String base64Image = imageProcessingService.convertToBase64(scaledImage, formatName);
             
-            // Build response
             ConversionResponse response = ConversionResponse.builder()
                 .base64Image(base64Image)
                 .imageFormat(formatName)
@@ -95,45 +83,28 @@ public class HtmlConversionService {
         return outputStream.toByteArray();
     }
 
-    /**
-     * Converts any HTML (including HTML5) to valid XHTML for Flying Saucer.
-     * 
-     * Uses jsoup to:
-     * - Parse and clean malformed HTML
-     * - Convert to XHTML syntax (self-closing tags, lowercase, etc.)
-     * - Add proper XML declaration and DOCTYPE
-     */
     private String ensureWellFormedHtml(String htmlContent) {
         String trimmed = htmlContent.trim();
         
-        // If it's just a fragment (no html/body), wrap it first
         String lowerTrimmed = trimmed.toLowerCase();
         if (!lowerTrimmed.contains("<html") && !lowerTrimmed.contains("<body")) {
             htmlContent = wrapFragment(trimmed);
         }
         
-        // Parse with jsoup (handles malformed HTML gracefully)
         Document doc = Jsoup.parse(htmlContent);
         
-        // Configure for XHTML output
         doc.outputSettings()
             .syntax(Document.OutputSettings.Syntax.xml)  // XHTML syntax
             .escapeMode(Entities.EscapeMode.xhtml)       // XHTML entities
             .charset("UTF-8");
         
-        // Get the HTML content (jsoup adds proper structure)
         String xhtml = doc.html();
-        
-        // Add XML declaration and XHTML DOCTYPE
         String result = buildXhtmlDocument(xhtml);
         
         log.debug("HTML converted to XHTML ({} chars)", result.length());
         return result;
     }
 
-    /**
-     * Wraps an HTML fragment in a basic HTML structure.
-     */
     private String wrapFragment(String content) {
         return """
             <html>
@@ -150,22 +121,17 @@ public class HtmlConversionService {
             """.formatted(content);
     }
 
-    /**
-     * Builds a complete XHTML document with proper declarations.
-     */
+
     private String buildXhtmlDocument(String htmlContent) {
-        // Remove any existing DOCTYPE or XML declaration that jsoup might have added
         String content = htmlContent
             .replaceFirst("(?i)<!DOCTYPE[^>]*>", "")
             .replaceFirst("<\\?xml[^>]*\\?>", "")
             .trim();
         
-        // Ensure <html> has xmlns attribute
         if (!content.contains("xmlns=")) {
             content = content.replaceFirst("(?i)<html([^>]*)>", "<html$1 xmlns=\"http://www.w3.org/1999/xhtml\">");
         }
         
-        // Build complete XHTML document
         return """
             <?xml version="1.0" encoding="UTF-8"?>
             <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" 

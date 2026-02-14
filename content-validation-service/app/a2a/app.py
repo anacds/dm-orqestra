@@ -1,11 +1,7 @@
-"""Build A2A FastAPI sub-app for Content Validation Service."""
-
 import logging
-
 from a2a.server.apps.rest.fastapi_app import A2ARESTFastAPIApplication
 from a2a.server.request_handlers.default_request_handler import DefaultRequestHandler
 from a2a.server.tasks.inmemory_task_store import InMemoryTaskStore
-
 from app.a2a.card import build_agent_card
 from app.a2a.executor import ContentValidationAgentExecutor
 

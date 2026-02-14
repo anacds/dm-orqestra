@@ -5,6 +5,7 @@ import uuid
 from typing import Any, Optional
 import httpx
 from langchain_core.tools import tool
+from langsmith import traceable
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 from mcp.client.sse import sse_client
@@ -45,17 +46,7 @@ async def retrieve_piece_content(
         commercial_space,
     )
 
-    async with streamable_http_client(url) as (read_stream, write_stream, _):
-        async with ClientSession(read_stream, write_stream) as session:
-            await session.initialize()
-            result = await session.call_tool("retrieve_piece_content", arguments=arguments)
-
-    if getattr(result, "is_error", False):
-        err_msg = _format_mcp_error(result)
-        logger.warning("retrieve_piece_content MCP error: %s", err_msg)
-        raise RuntimeError(err_msg)
-
-    data = _parse_mcp_result(result)
+    data = await _mcp_call_campaigns("retrieve_piece_content", url, arguments)
     return {
         "contentType": data.get("contentType") or data.get("content_type", "application/octet-stream"),
         "content": data.get("content", ""),
@@ -90,6 +81,58 @@ def _parse_mcp_result(result: Any) -> dict[str, Any]:
                 return {"content": text, "contentType": "text/plain"}
 
     return {}
+
+
+# ---------------------------------------------------------------------------
+# Helpers com @traceable — geram spans no LangSmith para chamadas externas
+# ---------------------------------------------------------------------------
+
+@traceable(run_type="tool", name="MCP: campaigns-service")
+async def _mcp_call_campaigns(tool_name: str, url: str, arguments: dict) -> dict:
+    """Chamada MCP ao campaigns-service (streamable HTTP)."""
+    async with streamable_http_client(url) as (read_stream, write_stream, _):
+        async with ClientSession(read_stream, write_stream) as session:
+            await session.initialize()
+            result = await session.call_tool(tool_name, arguments=arguments)
+    if getattr(result, "is_error", False):
+        err_msg = _format_mcp_error(result)
+        raise RuntimeError(err_msg)
+    return _parse_mcp_result(result)
+
+
+@traceable(run_type="tool", name="MCP: branding-service")
+async def _mcp_call_branding(tool_name: str, url: str, arguments: dict) -> dict:
+    """Chamada MCP ao branding-service (streamable HTTP)."""
+    async with streamable_http_client(url) as (read_stream, write_stream, _):
+        async with ClientSession(read_stream, write_stream) as session:
+            await session.initialize()
+            result = await session.call_tool(tool_name, arguments=arguments)
+    if getattr(result, "is_error", False):
+        err_msg = _format_mcp_error(result)
+        raise RuntimeError(err_msg)
+    return _parse_mcp_result(result)
+
+
+@traceable(run_type="tool", name="MCP: html-converter-service")
+async def _mcp_call_html_converter(tool_name: str, url: str, arguments: dict) -> dict:
+    """Chamada MCP ao html-converter-service (SSE)."""
+    async with sse_client(url) as (read_stream, write_stream):
+        async with ClientSession(read_stream, write_stream) as session:
+            await session.initialize()
+            result = await session.call_tool(tool_name, arguments=arguments)
+    if getattr(result, "is_error", False):
+        err_msg = _format_mcp_error(result)
+        raise RuntimeError(err_msg)
+    return _parse_mcp_result(result)
+
+
+@traceable(run_type="tool", name="A2A: legal-service")
+async def _a2a_call_legal(url: str, payload: dict, timeout: float) -> dict:
+    """Chamada A2A ao legal-service (HTTP POST)."""
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        resp = await client.post(url, json=payload)
+        resp.raise_for_status()
+        return resp.json()
 
 
 def _build_legal_content(channel: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -165,10 +208,7 @@ async def validate_legal_compliance(
 
     logger.info("validate_legal_compliance: channel=%s, task=%s", channel, task)
 
-    async with httpx.AsyncClient(timeout=settings.A2A_TIMEOUT) as client:
-        resp = await client.post(url, json=payload)
-        resp.raise_for_status()
-        data = resp.json()
+    data = await _a2a_call_legal(url, payload, settings.A2A_TIMEOUT)
 
     out = _parse_a2a_response(data)
     if not out:
@@ -220,17 +260,7 @@ async def validate_brand_compliance(
 
     logger.info("validate_brand_compliance: html_length=%d", len(html))
 
-    async with streamable_http_client(url) as (read_stream, write_stream, _):
-        async with ClientSession(read_stream, write_stream) as session:
-            await session.initialize()
-            result = await session.call_tool("validate_email_brand", arguments=arguments)
-
-    if getattr(result, "is_error", False):
-        err_msg = _format_mcp_error(result)
-        logger.warning("validate_brand_compliance MCP error: %s", err_msg)
-        raise RuntimeError(err_msg)
-
-    data = _parse_mcp_result(result)
+    data = await _mcp_call_branding("validate_email_brand", url, arguments)
     return {
         "compliant": data.get("compliant", False),
         "score": data.get("score", 0),
@@ -266,17 +296,7 @@ async def validate_image_brand_compliance(
 
     logger.info("validate_image_brand_compliance: image_length=%d", len(image))
 
-    async with streamable_http_client(url) as (read_stream, write_stream, _):
-        async with ClientSession(read_stream, write_stream) as session:
-            await session.initialize()
-            result = await session.call_tool("validate_image_brand", arguments=arguments)
-
-    if getattr(result, "is_error", False):
-        err_msg = _format_mcp_error(result)
-        logger.warning("validate_image_brand_compliance MCP error: %s", err_msg)
-        raise RuntimeError(err_msg)
-
-    data = _parse_mcp_result(result)
+    data = await _mcp_call_branding("validate_image_brand", url, arguments)
     return {
         "compliant": data.get("compliant", False),
         "score": data.get("score", 0),
@@ -310,18 +330,7 @@ async def fetch_channel_specs(
 
     logger.info("fetch_channel_specs: channel=%s, commercial_space=%s", channel, commercial_space)
 
-    async with streamable_http_client(url) as (read_stream, write_stream, _):
-        async with ClientSession(read_stream, write_stream) as session:
-            await session.initialize()
-            result = await session.call_tool("get_channel_specs", arguments=arguments)
-
-    if getattr(result, "is_error", False):
-        err_msg = _format_mcp_error(result)
-        logger.warning("fetch_channel_specs MCP error: %s", err_msg)
-        raise RuntimeError(err_msg)
-
-    data = _parse_mcp_result(result)
-    return data
+    return await _mcp_call_campaigns("get_channel_specs", url, arguments)
 
 
 @tool
@@ -364,18 +373,8 @@ async def convert_html_to_image(
         image_format,
     )
 
-    async with sse_client(url) as (read_stream, write_stream):
-        async with ClientSession(read_stream, write_stream) as session:
-            await session.initialize()
-            result = await session.call_tool("convert_html_to_image", arguments=arguments)
+    data = await _mcp_call_html_converter("convert_html_to_image", url, arguments)
 
-    if getattr(result, "is_error", False):
-        err_msg = _format_mcp_error(result)
-        logger.warning("convert_html_to_image MCP error: %s", err_msg)
-        raise RuntimeError(err_msg)
-
-    data = _parse_mcp_result(result)
-    
     if not data.get("success", False):
         error = data.get("error", "Unknown error")
         logger.warning("convert_html_to_image failed: %s", error)

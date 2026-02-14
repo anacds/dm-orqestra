@@ -1,33 +1,28 @@
 # Auth Service
 
-Microservice responsável por autenticação e gerenciamento de usuários.
+Autenticação e gerenciamento de usuários. Emite e valida tokens JWT (access + refresh).
 
-## Funcionalidades
-
-- Registro de usuários
-- Login e autenticação JWT
-- Refresh tokens
-- Logout
-- Auditoria de tentativas de login
-- Rate limiting
+Porta: 8002
 
 ## Endpoints
 
-- `POST /api/auth/register` - Registrar novo usuário
-- `POST /api/auth/login` - Login (retorna JWT)
-- `POST /api/auth/refresh` - Renovar access token
-- `POST /api/auth/logout` - Revogar refresh token
-- `GET /api/auth/me` - Obter informações do usuário atual
-- `GET /api/auth/users/{user_id}` - Obter informações de um usuário específico
-- `GET /api/health` - Health check do serviço
-- `GET /` - Informações básicas do serviço
+| Método | Rota | Descrição |
+|---|---|---|
+| POST | `/api/auth/register` | Registrar usuário |
+| POST | `/api/auth/login` | Login (retorna access + refresh token) |
+| POST | `/api/auth/refresh` | Renovar access token |
+| GET | `/api/auth/me` | Dados do usuário autenticado |
+| GET | `/api/auth/users/{id}` | Buscar usuário por ID |
+| POST | `/api/auth/logout` | Logout (invalida refresh token) |
 
-## Porta
+## Execução manual
 
-8002
+```bash
+pip install -r requirements.txt
+alembic upgrade head
+uvicorn main:app --host 0.0.0.0 --port 8002
+```
 
-## Banco de Dados
+## Variáveis de ambiente
 
-- Database: `auth_service`
-- Tabelas: `users`, `refresh_tokens`, `login_audits`
-
+Ver `env.example`.

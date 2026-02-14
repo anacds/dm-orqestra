@@ -6,7 +6,6 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
-
 import weaviate
 from weaviate.classes.config import Configure, Property, DataType
 from weaviate.classes.data import DataObject
@@ -79,7 +78,6 @@ class WeaviateIndexer:
         """Cria a collection com o schema definido."""
         create_kwargs = {
             "name": self.class_name,
-            # IMPORTANTE: Vetores são fornecidos externamente (OpenAI embeddings)
             "vectorizer_config": Configure.Vectorizer.none(),
             "properties": [
                 Property(name="text", data_type=DataType.TEXT),
@@ -251,7 +249,6 @@ def create_weaviate_indexer(
         class_name: Nome da collection no Weaviate (default: LegalDocuments)
         vectorizer: Vectorizer a usar (None = vetores externos)
     """
-    # Usa class_name do env se não fornecido
     if class_name is None:
         class_name = os.getenv("WEAVIATE_CLASS_NAME", "LegalDocuments")
     

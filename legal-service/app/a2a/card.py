@@ -1,17 +1,11 @@
-"""A2A Agent Card for the Legal Validation agent."""
-
 from a2a.types import AgentCapabilities, AgentCard, AgentSkill
-
 from app.core.config import settings
-
 
 def _a2a_url() -> str:
     base = (settings.A2A_BASE_URL or "").rstrip("/")
     return f"{base}/a2a" if base else "http://localhost:8005/a2a"
 
-
 def build_agent_card() -> AgentCard:
-    """Build the public Agent Card for legal validation (A2A discovery)."""
     skill = AgentSkill(
         id="validate-communication",
         name="Validar comunicação",

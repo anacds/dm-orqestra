@@ -4,16 +4,14 @@ from typing import List, Literal, Optional, Union
 
 
 class ValidateRequestMetadata(BaseModel):
-    """Metadados opcionais da requisição de validação."""
     transaction_id: Optional[str] = Field(None, description="ID da transação no sistema origem")
     timestamp: Optional[str] = Field(None, description="ISO 8601 da requisição")
     source_system: Optional[str] = Field(None, description="Sistema de origem (ex: CRM_FRONTEND)")
 
-
 _DATA_URL_PATTERN = re.compile(
     r"^data:image/(png|jpeg|jpg|webp|gif);base64,[A-Za-z0-9+/=]+$"
 )
-_APP_IMAGE_MAX_BYTES = 1024 * 1024  # 1 MB (base64 payload)
+_APP_IMAGE_MAX_BYTES = 1024 * 1024  # 1MB
 
 
 class SMSContent(BaseModel):
@@ -26,18 +24,12 @@ class PUSHContent(BaseModel):
     title: str = Field(..., description="Título da notificação push", min_length=1)
     body: str = Field(..., description="Corpo da notificação push", min_length=1)
 
-
-# Aumentado para suportar emails maiores (antes era 50_000)
 EMAIL_HTML_MAX_LENGTH = 100_000
 
 
 class EmailContent(BaseModel):
     """Conteúdo para EMAIL: pode ser HTML ou imagem (convertido via html-converter-service)."""
-    
-    # --- CÓDIGO LEGADO: apenas html era aceito ---
-    # html: str = Field(..., description="Corpo HTML do e-mail", min_length=1, max_length=EMAIL_HTML_MAX_LENGTH)
-    # --- FIM CÓDIGO LEGADO ---
-    
+
     html: Optional[str] = Field(
         None,
         description="Corpo HTML do e-mail",

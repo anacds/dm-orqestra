@@ -5,6 +5,8 @@ from openai import OpenAI
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_MODEL = "text-embedding-3-small"
+
 
 def _parse_timeout() -> float:
     raw = os.getenv("EMBEDDING_REQUEST_TIMEOUT", "60")
@@ -17,61 +19,29 @@ def _parse_timeout() -> float:
 class EmbeddingService:
     def __init__(
         self,
-        provider: str = "openai",
         model: Optional[str] = None,
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
         request_timeout: Optional[float] = None,
     ):
-        self.provider = provider.lower()
-        self.model = model or self._get_default_model()
+        self.model = model or DEFAULT_MODEL
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         self.request_timeout = (
             request_timeout if request_timeout is not None else _parse_timeout()
         )
 
-        env_base_url = os.getenv("OPENAI_BASE_URL", "")
-        if env_base_url:
-            env_base_url = env_base_url.strip()
+        resolved_base_url = base_url or os.getenv("OPENAI_BASE_URL", "").strip() or None
 
-        final_base_url = base_url if base_url else (env_base_url if env_base_url else None)
-        if final_base_url:
-            final_base_url = final_base_url.strip()
-            if not final_base_url:
-                final_base_url = None
-
-        self.base_url = final_base_url
-
-        if self.provider == "openai":
-            client_kwargs = {"api_key": self.api_key, "timeout": self.request_timeout}
-            if self.base_url:
-                client_kwargs["base_url"] = self.base_url
-            self.client = OpenAI(**client_kwargs)
-        elif self.provider in ["ollama", "local"]:
-            if not self.base_url:
-                self.base_url = "http://localhost:11434"
-            self.client = OpenAI(
-                api_key="ollama",
-                base_url=self.base_url,
-                timeout=self.request_timeout,
-            )
-        else:
-            raise ValueError(f"Unsupported provider: {provider}")
+        client_kwargs = {"api_key": self.api_key, "timeout": self.request_timeout}
+        if resolved_base_url:
+            client_kwargs["base_url"] = resolved_base_url
+        self.client = OpenAI(**client_kwargs)
 
         logger.info(
-            "EmbeddingService initialized (provider=%s, model=%s, request_timeout=%ss)",
-            self.provider,
+            "EmbeddingService initialized (model=%s, request_timeout=%ss)",
             self.model,
             self.request_timeout,
         )
-
-    def _get_default_model(self) -> str:
-        defaults = {
-            "openai": "text-embedding-3-small",
-            "ollama": "nomic-embed-text",
-            "local": "nomic-embed-text",
-        }
-        return defaults.get(self.provider, "text-embedding-3-small")
 
     def embed(self, text: str) -> List[float]:
         return self.embed_batch([text])[0]
@@ -85,20 +55,18 @@ class EmbeddingService:
             batch_num = i // batch_size + 1
 
             try:
-                if self.provider in ["openai", "ollama", "local"]:
-                    response = self.client.embeddings.create(
-                        model=self.model,
-                        input=batch,
-                    )
-                    batch_embeddings = [item.embedding for item in response.data]
-                else:
-                    raise ValueError(f"Unsupported provider: {self.provider}")
-
+                response = self.client.embeddings.create(
+                    model=self.model,
+                    input=batch,
+                )
+                batch_embeddings = [item.embedding for item in response.data]
                 all_embeddings.extend(batch_embeddings)
 
                 logger.debug(
-                    f"Generated embeddings for batch {batch_num}/{num_batches} "
-                    f"({len(batch)} texts)"
+                    "Generated embeddings for batch %s/%s (%s texts)",
+                    batch_num,
+                    num_batches,
+                    len(batch),
                 )
 
             except Exception as e:
@@ -113,23 +81,19 @@ class EmbeddingService:
                 )
                 raise
 
-        logger.info(f"Generated {len(all_embeddings)} embeddings total")
+        logger.info("Generated %s embeddings total", len(all_embeddings))
         return all_embeddings
 
 
 def create_embedding_service(
-    provider: Optional[str] = None,
     model: Optional[str] = None,
     request_timeout: Optional[float] = None,
 ) -> EmbeddingService:
-    provider = provider or os.getenv("EMBEDDING_PROVIDER", "openai")
     model = model or os.getenv("EMBEDDING_MODEL")
     if request_timeout is None:
         request_timeout = _parse_timeout()
 
     return EmbeddingService(
-        provider=provider,
         model=model,
         request_timeout=request_timeout,
     )
-

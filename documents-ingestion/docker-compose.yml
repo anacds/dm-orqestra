@@ -30,7 +30,6 @@ x-ingestion-common: &ingestion-common
   build: .
   environment:
     - WEAVIATE_URL=http://host.docker.internal:8080
-    - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-openai}
     - EMBEDDING_MODEL=${EMBEDDING_MODEL:-text-embedding-3-small}
     - OPENAI_API_KEY=${OPENAI_API_KEY}
     - DOCUMENTS_DIR=${DOCUMENTS_DIR:-doc-juridico}
@@ -51,7 +50,6 @@ services:
     container_name: doc-ingestion-section
     environment:
       - WEAVIATE_URL=http://host.docker.internal:8080
-      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-openai}
       - EMBEDDING_MODEL=${EMBEDDING_MODEL:-text-embedding-3-small}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - DOCUMENTS_DIR=${DOCUMENTS_DIR:-doc-juridico}
@@ -67,7 +65,6 @@ services:
     container_name: doc-ingestion-semantic
     environment:
       - WEAVIATE_URL=http://host.docker.internal:8080
-      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-openai}
       - EMBEDDING_MODEL=${EMBEDDING_MODEL:-text-embedding-3-small}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - DOCUMENTS_DIR=${DOCUMENTS_DIR:-doc-juridico}

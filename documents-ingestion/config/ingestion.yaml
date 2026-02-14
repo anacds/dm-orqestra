@@ -1,29 +1,14 @@
-# =============================================================================
-# CONFIGURAÇÃO DE INGESTÃO - Documents Ingestion Service
-# =============================================================================
-#
-# Este arquivo define as estratégias de chunking e suas configurações.
-# Cada estratégia resulta em uma collection diferente no Weaviate.
-#
-# Uso:
-#   CHUNKER_TYPE=section docker compose up ingestion
-#   CHUNKER_TYPE=semantic docker compose up ingestion
-# =============================================================================
-
-# Configurações padrão
 defaults:
-  embedding_provider: "openai"
   embedding_model: "text-embedding-3-small"
   min_chunk_size: 100
   max_chunk_size: 800
 
-# Estratégias de chunking disponíveis
 strategies:
   # -------------------------------------------------------------------------
   # SECTION: Chunking baseado em seções numeradas do documento
   # -------------------------------------------------------------------------
   # Preserva a estrutura do documento, cada seção vira um chunk.
-  # Ideal para documentos com estrutura bem definida (guidelines, políticas).
+  # Ideal para documentos com separação de seções bem definidas.
   # -------------------------------------------------------------------------
   section:
     description: "Chunking por seção do documento (estrutura)"
@@ -36,7 +21,6 @@ strategies:
   # SEMANTIC: Chunking baseado em similaridade semântica
   # -------------------------------------------------------------------------
   # Usa embeddings para identificar pontos de quebra semântica.
-  # Pode criar chunks mais coesos semanticamente, mas perde estrutura.
   # -------------------------------------------------------------------------
   semantic:
     description: "Chunking semântico (baseado em significado)"
@@ -48,8 +32,6 @@ strategies:
       breakpoint_threshold_type: "percentile"
       breakpoint_threshold_amount: 75.0
 
-# Mapeamento de collection -> estratégia (para referência)
-# Usado pelo legal-service para saber qual collection corresponde a qual estratégia
 collection_mapping:
   LegalDocuments: "section"
   LegalDocumentsSemanticChunks: "semantic"
