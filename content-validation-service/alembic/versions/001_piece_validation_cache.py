@@ -24,6 +24,7 @@ def upgrade() -> None:
         sa.Column("campaign_id", sa.String(), nullable=False),
         sa.Column("channel", sa.String(), nullable=False),
         sa.Column("content_hash", sa.String(), nullable=False),
+        sa.Column("llm_model", sa.String(), nullable=True),
         sa.Column("response_json", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.PrimaryKeyConstraint("id"),

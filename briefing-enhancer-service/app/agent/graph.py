@@ -260,7 +260,8 @@ async def run_enhancement_graph(
         ENHANCEMENT_DURATION.labels(field_name=field_name, provider=provider).observe(_elapsed)
         return {
             "enhanced_text": "",
-            "explanation": explanation
+            "explanation": explanation,
+            "llm_model": model_name,
         }
     
     ENHANCEMENT_TOTAL.labels(field_name=field_name, provider=provider, status="success").inc()
@@ -268,7 +269,8 @@ async def run_enhancement_graph(
 
     return {
         "enhanced_text": enhanced_text or text,
-        "explanation": explanation
+        "explanation": explanation,
+        "llm_model": model_name,
     }
 
 

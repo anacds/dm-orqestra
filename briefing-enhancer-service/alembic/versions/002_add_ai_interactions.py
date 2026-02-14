@@ -27,6 +27,7 @@ def upgrade() -> None:
         sa.Column('input_text', sa.Text(), nullable=False),
         sa.Column('output_text', sa.Text(), nullable=False),
         sa.Column('explanation', sa.Text(), nullable=False),
+        sa.Column('llm_model', sa.String(), nullable=True),
         sa.Column('session_id', sa.String(), nullable=True),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
         sa.PrimaryKeyConstraint('id')

@@ -14,6 +14,7 @@ class AIInteraction(Base):
     input_text = Column(Text, nullable=False)
     output_text = Column(Text, nullable=False)
     explanation = Column(Text, nullable=False)
+    llm_model = Column(String, nullable=True)
     session_id = Column(String, nullable=True, index=True)
     user_decision = Column(String(20), nullable=True, index=True)
     decision_at = Column(DateTime(timezone=True), nullable=True)

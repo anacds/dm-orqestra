@@ -105,7 +105,8 @@ class AIService:
             input_text=request_data.text,
             output_text=result["enhanced_text"],
             explanation=result["explanation"],
-            session_id=request_data.session_id
+            llm_model=result.get("llm_model"),
+            session_id=request_data.session_id,
         )
         db.add(interaction)
         db.commit()

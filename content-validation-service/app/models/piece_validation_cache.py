@@ -19,6 +19,7 @@ class PieceValidationAudit(Base):
     campaign_id = Column(String, nullable=False, index=True)
     channel = Column(String, nullable=False, index=True)  # SMS | PUSH | EMAIL | APP
     content_hash = Column(String, nullable=False, index=True)
+    llm_model = Column(String, nullable=True)
     response_json = Column(JSONB, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
