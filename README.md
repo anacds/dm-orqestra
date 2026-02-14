@@ -131,14 +131,35 @@ Isso inicia todos os containers, executa as migrations (Alembic) e carrega os da
 | Metabase | http://localhost:3002 |
 | Prometheus | http://localhost:9090 |
 
-### Usuário padrão
+### Usuários para testes
 
-O seed cria um usuário para testes:
-
+**Analista de negócios**
 ```
 Email: ana@email.com
 Senha: 123
 ```
+
+
+**Analista de criação**
+```
+Email: maria@email.com
+Senha: 123
+```
+
+
+**Gestor de marketing**
+```
+Email: eric@email.com
+Senha: 123
+```
+
+
+**Analista de campanhas**
+```
+Email: jose@email.com
+Senha: 123
+```
+
 
 ## Infraestrutura
 
