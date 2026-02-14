@@ -1,5 +1,4 @@
 # LangChain & LangGraph
-langchain>=0.3.0
 langchain-openai>=0.2.0
 langchain-core>=0.3.0
 langgraph>=0.2.0
@@ -29,9 +28,6 @@ psycopg2-binary>=2.9.10
 # Utilities
 python-dotenv>=1.0.0
 redis>=5.0.0
-
-# Logging
-structlog>=24.1.0
 
 # Observability
 prometheus-client>=0.21.0

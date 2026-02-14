@@ -230,7 +230,7 @@ services:
     restart: unless-stopped
 
   localstack:
-    image: localstack/localstack:latest
+    image: localstack/localstack:s3-latest
     ports:
       - "4566:4566"
     environment:

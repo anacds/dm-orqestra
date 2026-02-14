@@ -361,6 +361,19 @@ SELECT
 FROM legal_validation_audits
 GROUP BY llm_model ORDER BY "Modelo"
 """, "bar"),
+
+    _q("Rejeições por Moderação de Conteúdo", "Briefing Enhancer", C3, """
+SELECT
+  field_name AS "Campo",
+  user_id AS "Usuário",
+  LEFT(input_text, 120) AS "Texto enviado",
+  LEFT(explanation, 150) AS "Motivo",
+  created_at AS "Data"
+FROM audit_interactions
+WHERE explanation ILIKE '%%moderação%%'
+ORDER BY created_at DESC
+LIMIT 50
+""", "table", full_width=True),
 ]
 
 
@@ -447,6 +460,7 @@ DASHBOARD_DEFS = [
             "Taxa de Aceitação por Campo",
             "Peças Com vs. Sem Validação IA",
             "Validações por Modelo LLM",
+            "Rejeições por Moderação de Conteúdo",
         ],
     },
 ]

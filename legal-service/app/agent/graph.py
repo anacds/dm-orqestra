@@ -74,53 +74,66 @@ class LegalAgent:
             _lower = name.lower()
             return any(tag in _lower for tag in ("gpt-5", "o1", "o3", "o4"))
 
+        fallback_model = defaults.get("fallback_model", "gpt-5-nano")
+
+        def _build_openai_llm(model: str) -> object:
+            """Cria instância ChatOpenAI para provider OpenAI."""
+            if not openai_api_key:
+                raise ValueError(
+                    "Nenhuma API key disponível: OPENAI_API_KEY não está definida."
+                )
+            if _is_reasoning_model(model):
+                llm = ChatOpenAI(
+                    model=model,
+                    api_key=openai_api_key,
+                    base_url="https://api.openai.com/v1",
+                    timeout=timeout,
+                    max_retries=max_retries,
+                    model_kwargs={"max_completion_tokens": max(max_tokens, 16000)},
+                )
+                logger.info(
+                    f"Modelo de raciocínio '{model}' "
+                    f"com max_completion_tokens={max(max_tokens, 16000)}"
+                )
+                return llm
+            return ChatOpenAI(
+                model=model,
+                api_key=openai_api_key,
+                base_url="https://api.openai.com/v1",
+                temperature=llm_temperature,
+                max_tokens=max_tokens,
+                timeout=timeout,
+                max_retries=max_retries,
+            )
+
         for ch, cfg in channels_config.items():
             prov = (cfg or {}).get("provider", "maritaca")
             model_name = (cfg or {}).get("model", "sabiazinho-4")
             key = (prov, model_name)
             if key not in llm_by_provider:
                 if prov == "maritaca":
-                    if not maritaca_api_key:
-                        raise ValueError(
-                            f"Canal {ch} usa provider=maritaca mas MARITACA_API_KEY não está definida."
-                        )
-                    llm_by_provider[key] = ChatOpenAI(
-                        model=model_name,
-                        api_key=maritaca_api_key,
-                        base_url=maritaca_base_url,
-                        temperature=llm_temperature,
-                        max_tokens=max_tokens,
-                        timeout=timeout,
-                        max_retries=max_retries,
-                    )
-                elif prov == "openai":
-                    if not openai_api_key:
-                        raise ValueError(
-                            f"Canal {ch} usa provider=openai mas OPENAI_API_KEY não está definida."
-                        )
-                    if _is_reasoning_model(model_name):
+                    if maritaca_api_key:
                         llm_by_provider[key] = ChatOpenAI(
                             model=model_name,
-                            api_key=openai_api_key,
-                            base_url="https://api.openai.com/v1",
-                            timeout=timeout,
-                            max_retries=max_retries,
-                            model_kwargs={"max_completion_tokens": max(max_tokens, 16000)},
-                        )
-                        logger.info(
-                            f"Canal {ch}: modelo de raciocínio '{model_name}' "
-                            f"com max_completion_tokens={max(max_tokens, 16000)}"
-                        )
-                    else:
-                        llm_by_provider[key] = ChatOpenAI(
-                            model=model_name,
-                            api_key=openai_api_key,
-                            base_url="https://api.openai.com/v1",
+                            api_key=maritaca_api_key,
+                            base_url=maritaca_base_url,
                             temperature=llm_temperature,
                             max_tokens=max_tokens,
                             timeout=timeout,
                             max_retries=max_retries,
                         )
+                    else:
+                        # Fallback: MARITACA_API_KEY ausente → usar OpenAI
+                        fb_key = ("openai", fallback_model)
+                        if fb_key not in llm_by_provider:
+                            llm_by_provider[fb_key] = _build_openai_llm(fallback_model)
+                        llm_by_provider[key] = llm_by_provider[fb_key]
+                        logger.warning(
+                            f"Canal {ch}: MARITACA_API_KEY ausente, "
+                            f"usando fallback OpenAI ({fallback_model})"
+                        )
+                elif prov == "openai":
+                    llm_by_provider[key] = _build_openai_llm(model_name)
                 else:
                     raise ValueError(f"Provider não suportado: {prov} (canal {ch})")
             channel_to_llm[ch] = llm_by_provider[key]

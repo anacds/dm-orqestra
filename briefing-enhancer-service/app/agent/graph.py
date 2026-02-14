@@ -125,11 +125,11 @@ async def run_enhancement_graph(
             base_url=base_url,
             timeout=timeout,
             max_retries=max_retries,
-            model_kwargs={"max_completion_tokens": max(max_tokens, 8000)},
+            model_kwargs={"max_completion_tokens": max(max_tokens, 8000), "reasoning_effort": "low"},
         )
         logger.info(
             f"Reasoning model detected: '{model_name}' — "
-            f"using max_completion_tokens={max(max_tokens, 8000)}, no temperature"
+            f"using max_completion_tokens={max(max_tokens, 8000)}, reasoning_effort=low, no temperature"
         )
     else:
         chat_model = ChatOpenAI(

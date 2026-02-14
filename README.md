@@ -2,6 +2,7 @@
 
 Plataforma de gerenciamento de campanhas de CRM com validação automatizada de conteúdo. Combina microserviços REST, agentes baseados em LangGraph, comunicação via MCP (Model Context Protocol) e A2A (Agent-to-Agent Protocol).
 
+# Acesse a documentação (PDF)
 > [!IMPORTANT]
 > **Documentação completa:** [`dm_orqestra-ana-silva.pdf`](dm-orqestra-ana-silva.pdf).
 > Consulte a documentação em anexo para explicações sobre a Arquitetura do projeto, funcionalidades, detalhes da implementação, justificativas detalhadas e melhorias futuras.
@@ -77,19 +78,30 @@ graph TD
     style OBS fill:none,stroke:#636e72
 ```
 
-## Serviços
+## Docker Compose — todos os services
 
-| Serviço | Porta | O que faz |
-|---|---|---|
-| **API Gateway** | 8000 | Proxy reverso com autenticação JWT e rate limiting |
-| **Auth Service** | 8002 | Registro, login, tokens JWT (access + refresh) |
-| **Campaigns Service** | 8003 | CRUD de campanhas, peças criativas, upload S3. Expõe MCP tools |
-| **Briefing Enhancer** | 8001 | Aprimora objetivos de campanha via LLM (LangGraph) |
-| **Content Validation** | 8004 | Orquestra validação de peças: formato, specs, branding (MCP) e compliance (A2A) |
-| **Legal Service** | 8005 | Validação jurídica via RAG (Weaviate + LangGraph). Expõe A2A |
-| **Branding Service** | 8012 | Validação determinística de marca (cores, fontes, logo). Expõe MCP tools |
-| **HTML Converter** | 8011 | Converte HTML de email em imagem (Spring Boot). Expõe MCP tool |
-| **Frontend** | 3000 | Interface React + TypeScript + Vite + Tailwind |
+| Service | Porta | Tipo | O que faz |
+|---|---|---|---|
+| `frontend` | 3000 | Aplicação | Interface React + TypeScript + Vite + Tailwind |
+| `api-gateway` | 8000 | Aplicação | Proxy reverso com autenticação JWT e rate limiting |
+| `auth-service` | 8002 | Aplicação | Registro, login, tokens JWT (access + refresh) |
+| `campaigns-service` | 8003 | Aplicação | CRUD de campanhas, peças criativas, upload S3. Expõe MCP tools |
+| `briefing-enhancer-service` | 8001 | Aplicação | Aprimora objetivos de campanha via LLM (LangGraph) |
+| `content-validation-service` | 8004 | Aplicação | Orquestra validação de peças: formato, specs, branding (MCP) e compliance (A2A) |
+| `legal-service` | 8005 | Aplicação | Validação jurídica via RAG (Weaviate + LangGraph). Expõe A2A |
+| `branding-service` | 8012 | Aplicação | Validação determinística de marca (cores, fontes, logo). Expõe MCP tools |
+| `html-converter-service` | 8011 | Aplicação | Converte HTML de email em imagem (Spring Boot). Expõe MCP tool |
+| `db` | 5432 | Infraestrutura | PostgreSQL 16 — banco principal (um database por serviço) |
+| `redis` | 6379 | Infraestrutura | Cache de validações e enhancements (DB 0, 1, 2) |
+| `weaviate` | 8080 | Infraestrutura | Vector database para RAG do Legal Service |
+| `localstack` | 4566 | Infraestrutura | S3 local para armazenamento de peças criativas |
+| `documents-ingestion` | — | Pipeline offline | Chunking e embedding de PDFs jurídicos. Gera os JSONs carregados pelo weaviate-init. O sistema já sobe com os documentos carregados, então não é necessário executar documents-ingestion. |
+| `weaviate-init` | — | Init job | Cria coleção e carrega documentos jurídicos pré-processados no Weaviate |
+| `metabase-db-init` | — | Init job | Cria o database `metabase` no PostgreSQL |
+| `metabase-init` | — | Init job | Provisiona dashboards, conexões e queries SQL no Metabase |
+| `prometheus` | 9090 | Observabilidade | Coleta métricas de todos os serviços |
+| `grafana` | 3001 | Observabilidade | Dashboards de métricas em tempo real (admin / orqestra) |
+| `metabase` | 3002 | Observabilidade | Dashboards analíticos sobre dados de negócio (admin@orqestra.com / Orqestra2026!) |
 
 ### Protocolos de comunicação
 
@@ -100,8 +112,8 @@ graph TD
 ## Pré-requisitos
 
 - Docker e Docker Compose
+- Chave da Maritaca AI (`MARITACA_API_KEY`) - Recomendado, apesar do fallback ser OpenAI
 - Chave da OpenAI (`OPENAI_API_KEY`)
-- Recomendado: chave da Maritaca AI (`MARITACA_API_KEY`)
 
 ## Execução
 
@@ -162,15 +174,6 @@ Email: jose@email.com
 Senha: 123
 ```
 
-
-## Infraestrutura
-
-| Componente | Porta | Uso |
-|---|---|---|
-| PostgreSQL | 5432 | Banco principal (um database por serviço) |
-| Redis | 6379 | Cache de validações e enhancements (DB 0, 1, 2) |
-| Weaviate | 8080 | Vector database para RAG do Legal Service |
-| LocalStack (S3) | 4566 | Armazenamento de peças criativas (email HTML, imagens app) |
 
 ## Comandos úteis
 
