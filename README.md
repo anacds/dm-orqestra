@@ -3,7 +3,7 @@
 Plataforma de gerenciamento de campanhas de CRM com validação automatizada de conteúdo. Combina microserviços REST, agentes baseados em LangGraph, comunicação via MCP (Model Context Protocol) e A2A (Agent-to-Agent Protocol).
 
 > [!IMPORTANT]
-> **Documentação completa:** [`dm_orqestra-ana-silva.pdf`](./dm_orqestra-ana-silva.pdf) (44 páginas)
+> **Documentação completa:** [`dm_orqestra-ana-silva.pdf`](./dm_orqestra-ana-silva).
 > Consulte a documentação em anexo para explicações sobre a Arquitetura do projeto, funcionalidades, detalhes da implementação, justificativas detalhadas e melhorias futuras.
 
 ## Arquitetura
