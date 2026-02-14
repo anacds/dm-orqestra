@@ -101,7 +101,7 @@ graph TD
 
 - Docker e Docker Compose
 - Chave da OpenAI (`OPENAI_API_KEY`)
-- Recomendado: chave da Maritaca (`MARITACA_API_KEY`) para a configuração de LLM com melhor accuracy
+- Recomendado: chave da Maritaca AI (`MARITACA_API_KEY`)
 
 ## Execução
 
@@ -173,7 +173,10 @@ Senha: 123
 ## Comandos úteis
 
 ```bash
-# Ver logs de um serviço
+# Build e subir todos os serviços
+docker compose up --build
+
+# Ver logs de um serviço específico
 docker compose logs -f legal-service
 
 # Parar tudo
