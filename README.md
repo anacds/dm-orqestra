@@ -128,7 +128,7 @@ Isso inicia todos os containers, executa as migrations (Alembic) e carrega os da
 | Frontend | http://localhost:3000 |
 | API Gateway (Swagger) | http://localhost:8000/docs |
 | Grafana | http://localhost:3001 (admin / orqestra) |
-| Metabase | http://localhost:3002 |
+| Metabase | http://localhost:3002 (admin@orqestra.com / Orqestra2026!) |
 | Prometheus | http://localhost:9090 |
 
 > **Nota:** O Metabase pode levar de 1 a 3 minutos para ficar disponível na primeira execução. Enquanto não estiver pronto, `http://localhost:3002` retornará erro de conexão.
