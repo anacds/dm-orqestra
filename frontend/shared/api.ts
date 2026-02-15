@@ -178,6 +178,7 @@ export interface EnhanceObjectiveRequest {
   campaign_id?: string;
   session_id?: string;
   campaign_name?: string;
+  other_fields?: Record<string, string>;
 }
 
 export interface EnhanceObjectiveResponse {

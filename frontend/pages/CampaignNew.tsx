@@ -424,13 +424,23 @@ export default function CampaignNew() {
     setIsEnhanceDialogOpen(true);
     setEnhancementResult(null);
 
+    // Monta contexto dos outros campos com valores reais do formulário
+    const enhanceableFields = ["businessObjective", "expectedResult", "targetAudienceDescription", "exclusionCriteria"] as const;
+    const otherFields: Record<string, string> = {};
+    for (const f of enhanceableFields) {
+      if (f !== field && formData[f]?.trim()) {
+        otherFields[f] = formData[f].trim();
+      }
+    }
+
     try {
       const result = await campaignsAPI.enhanceObjective(
         textToEnhance, 
         field,
-        createdCampaignId || undefined, // campaign_id if available
-        sessionIdRef.current, // session_id
-        formData.name.trim() || undefined // campaign_name
+        createdCampaignId || undefined,
+        sessionIdRef.current,
+        formData.name.trim() || undefined,
+        Object.keys(otherFields).length > 0 ? otherFields : undefined
       );
       setEnhancementResult(result);
       setCurrentInteractionId(result.interactionId); // Store interaction ID for decision tracking

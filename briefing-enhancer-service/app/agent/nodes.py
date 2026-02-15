@@ -14,13 +14,31 @@ from app.core.metrics import MODERATION_REJECTIONS
 
 logger = logging.getLogger(__name__)
 
-def _build_previous_fields_summary(history: list[FieldEnhancement] | None) -> str | None:
-    """Build summary of previously enhanced fields for context consistency."""
+def _build_previous_fields_summary(
+    history: list[FieldEnhancement] | None,
+    other_fields: dict[str, str] | None = None,
+) -> str | None:
+    """Build summary of previously enhanced fields for context consistency.
+    
+    Prioriza other_fields (valores reais do formulário) sobre
+    enhancement_history (sugestões da IA), garantindo que o contexto
+    reflita o que o usuário de fato preencheu.
+    """
+    # Se o frontend enviou os valores reais, usa eles
+    if other_fields:
+        summary_parts = []
+        for field_name, text in other_fields.items():
+            if text.strip():
+                truncated = text[:200] + "..." if len(text) > 200 else text
+                summary_parts.append(f"- {field_name}: {truncated}")
+        if summary_parts:
+            return "\n".join(summary_parts)
+
+    # Fallback: usa o histórico do checkpointer (sugestões da IA)
     if not history or len(history) == 0:
         return None
     
     summary_parts = []
-    
     for enhancement in history:
         field_name = enhancement.get("field_name", "unknown")
         enhanced_text = enhancement.get("enhanced_text", "")
@@ -39,6 +57,7 @@ def fetch_field_info(state: EnhancementGraphState, db: Session) -> Dict:
     logger.info(f"Fetching field info for field: {field_name}")
 
     history = state.get("enhancement_history") or []
+    other_fields = state.get("other_fields")
     field = db.query(EnhanceableField).filter(EnhanceableField.field_name == field_name).first()
     
     if not field:
@@ -56,9 +75,10 @@ def fetch_field_info(state: EnhancementGraphState, db: Session) -> Dict:
             "improvement_guidelines": field.improvement_guidelines or ""
         }
     
-    previous_summary = _build_previous_fields_summary(history)
+    previous_summary = _build_previous_fields_summary(history, other_fields)
     if previous_summary:
-        logger.info(f"Found {len(history)} previous field enhancements in session history")
+        source = "formulário (other_fields)" if other_fields else f"{len(history)} enhancement_history"
+        logger.info(f"Context from {source} for field '{field_name}'")
     
     campaign_name = state.get("campaign_name")
     

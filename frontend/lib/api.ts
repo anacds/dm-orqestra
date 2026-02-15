@@ -197,7 +197,7 @@ export const campaignsAPI = {
 
   submitForReview: async (
     campaignId: string,
-    pieceReviews: { channel: string; pieceId: string; commercialSpace?: string }[]
+    pieceReviews: { channel: string; pieceId: string; commercialSpace?: string; iaVerdict?: string; iaAnalysisText?: string }[]
   ): Promise<Campaign> => {
     return await fetchAPI<CampaignResponse>(`/campaigns/${campaignId}/submit-for-review`, {
       method: "POST",
@@ -258,7 +258,8 @@ export const campaignsAPI = {
     fieldName: string,
     campaignId?: string,
     sessionId?: string,
-    campaignName?: string
+    campaignName?: string,
+    otherFields?: Record<string, string>
   ): Promise<EnhanceObjectiveResponse> => {
     return await fetchAPI<EnhanceObjectiveResponse>("/enhance-objective", {
       method: "POST",
@@ -268,6 +269,7 @@ export const campaignsAPI = {
         campaign_id: campaignId,
         session_id: sessionId,
         campaign_name: campaignName,
+        other_fields: otherFields,
       } as EnhanceObjectiveRequest),
     });
   },

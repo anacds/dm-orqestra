@@ -72,7 +72,8 @@ async def run_enhancement_graph(
     db: Session,
     thread_id: str | None = None,
     use_checkpointing: bool = True,
-    campaign_name: str | None = None
+    campaign_name: str | None = None,
+    other_fields: dict[str, str] | None = None
 ) -> dict:
     """Run the enhancement graph to improve text.
     
@@ -185,6 +186,7 @@ async def run_enhancement_graph(
             "field_name": field_name,
             "text": text,
             "campaign_name": campaign_name,
+            "other_fields": other_fields,
         }
         config = {
             "configurable": {"thread_id": thread_id},
@@ -237,7 +239,8 @@ async def run_enhancement_graph(
             "explanation": None,
             "enhancement_history": None,
             "previous_fields_summary": None,
-            "campaign_name": campaign_name
+            "campaign_name": campaign_name,
+            "other_fields": other_fields,
         }
         no_cp_config = {
             "metadata": {

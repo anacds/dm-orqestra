@@ -16,4 +16,5 @@ class EnhancementGraphState(TypedDict, total=False):
     enhancement_history: Optional[List[FieldEnhancement]]
     previous_fields_summary: Optional[str]
     campaign_name: Optional[str]
+    other_fields: Optional[Dict[str, str]]
 

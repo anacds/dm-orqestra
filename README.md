@@ -121,10 +121,10 @@ graph TD
 ### 1. Configurar variáveis de ambiente
 
 ```bash
-cp .env.example .env
+cp env.example .env
 ```
 
-Edite o `.env` com suas chaves. Apenas `OPENAI_API_KEY` é obrigatória. Veja `.env.example` para detalhes sobre cada variável.
+Edite o `.env` com suas chaves. Veja `env.example` para detalhes sobre cada variável.
 
 ### 2. Subir os serviços
 

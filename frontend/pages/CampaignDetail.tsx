@@ -249,7 +249,7 @@ export default function CampaignDetail() {
   });
 
   const submitForReviewMutation = useMutation({
-    mutationFn: (pieceReviews: { channel: string; pieceId: string; commercialSpace?: string }[]) =>
+    mutationFn: (pieceReviews: { channel: string; pieceId: string; commercialSpace?: string; iaVerdict?: string; iaAnalysisText?: string }[]) =>
       campaignsAPI.submitForReview(id!, pieceReviews),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["campaign", id] });
@@ -692,9 +692,9 @@ export default function CampaignDetail() {
     return "SMS";
   };
 
-  const buildPieceReviewsForSubmit = (): { channel: string; pieceId: string; commercialSpace?: string }[] => {
+  const buildPieceReviewsForSubmit = (): { channel: string; pieceId: string; commercialSpace?: string; iaVerdict?: string; iaAnalysisText?: string }[] => {
     if (!campaign?.creativePieces?.length) return [];
-    const out: { channel: string; pieceId: string; commercialSpace?: string }[] = [];
+    const out: { channel: string; pieceId: string; commercialSpace?: string; iaVerdict?: string; iaAnalysisText?: string }[] = [];
     const smsPiece = campaign.creativePieces.find(p => p.pieceType === "SMS");
     const pushPiece = campaign.creativePieces.find(p => p.pieceType === "Push");
     const emailPiece = campaign.creativePieces.find(p => p.pieceType === "E-mail");
@@ -712,7 +712,11 @@ export default function CampaignDetail() {
       try {
         const urls = JSON.parse(appPiece.fileUrls) as Record<string, string>;
         Object.keys(urls).forEach(space => {
-          out.push({ channel: "APP", pieceId: appPiece!.id, commercialSpace: space });
+          // Envia o verdict específico de cada espaço comercial
+          const analysis = appAnalysis[space];
+          const verdict = analysis ? (analysis.is_valid === "valid" ? "approved" : "rejected") : undefined;
+          const analysisText = analysis?.analysis_text;
+          out.push({ channel: "APP", pieceId: appPiece!.id, commercialSpace: space, iaVerdict: verdict, iaAnalysisText: analysisText });
         });
       } catch {
         /* ignore */

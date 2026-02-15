@@ -89,7 +89,8 @@ class AIService:
                 db=db,
                 thread_id=thread_id,
                 use_checkpointing=True,
-                campaign_name=request_data.campaign_name
+                campaign_name=request_data.campaign_name,
+                other_fields=request_data.other_fields
             )
         except Exception as e:
             logger.error(

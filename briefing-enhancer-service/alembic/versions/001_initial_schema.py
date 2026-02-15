@@ -33,11 +33,11 @@ def upgrade() -> None:
         INSERT INTO enhanceable_fields (field_name, display_name, expectations, improvement_guidelines) VALUES
         ('businessObjective', 'Objetivo de Negócio', 
          'O objetivo de negócio deve ser claro e alinhado com as metas estratégicas da empresa. Deve descrever o que se pretende alcançar com a campanha e como os clientes serão tocados, evitando termos vagos ou genéricos.',
-         'Aprimore tornando o objetivo mais específico, eliminando ambiguidades e garantindo que seja acionável. Evite objetivos muito amplos que não possam ser medidos.'),
+         'Aprimore tornando o objetivo mais claro e conciso, eliminando ambiguidades e garantindo que seja acionável.'),
         
         ('expectedResult', 'Resultado Esperado / KPI Principal',
          'O resultado esperado deve ser mensurável e relacionado diretamente ao objetivo de negócio. Deve incluir métricas claras (porcentagens, valores, prazos) e ser realista.',
-         'Aprimore especificando placeholders para métricas concretas e prazos claros, garantindo que o resultado seja mensurável e diretamente relacionado ao objetivo de negócio definido.'),
+         'Aprimore preservando os números informados no texto original e especificando placeholders para números ausentes, garantindo que o resultado seja mensurável e diretamente relacionado ao objetivo de negócio definido. Não invente números.'),
         
         ('targetAudienceDescription', 'Descrição do Público-Alvo',
          'A descrição do público-alvo deve ser específica e detalhada, incluindo características demográficas, psicográficas, comportamentais e de necessidade. Deve ser suficientemente segmentada para permitir estratégias eficazes.',

@@ -30,6 +30,11 @@ class EnhanceObjectiveRequest(BaseModel):
         description="Campaign name/title. Optional, but helps provide context for enhancement.",
         example="Campanha de Retenção Q1 2024"
     )
+    other_fields: Optional[dict[str, str]] = Field(
+        None,
+        description="Current values of other briefing fields as filled by the user. Used to provide real context for consistency between fields.",
+        example={"businessObjective": "Aumentar vendas em 15% no Q2"}
+    )
     
     model_config = {
         "json_schema_extra": {
