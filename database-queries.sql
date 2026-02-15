@@ -1,7 +1,6 @@
 -- ************************************************************
 -- 1. AUTH SERVICE
 -- ************************************************************
-\c auth_service
 
 -- Usuarios cadastrados e seus papeis
 SELECT id, email, full_name, role, is_active, created_at
@@ -24,7 +23,6 @@ LIMIT 10;
 -- ************************************************************
 -- 2. CAMPAIGNS SERVICE
 -- ************************************************************
-\c campaigns_service
 
 -- Campanhas e seus status atuais
 SELECT id, name, status, category, priority,
@@ -81,7 +79,6 @@ ORDER BY cm.timestamp DESC;
 -- ************************************************************
 -- 3. BRIEFING ENHANCER SERVICE
 -- ************************************************************
-\c briefing_enhancer
 
 -- Interacoes com a IA: texto original, sugestao e decisao do usuario
 SELECT ai.field_name,
@@ -112,7 +109,6 @@ ORDER BY field_name;
 -- ************************************************************
 -- 4. CONTENT VALIDATION SERVICE
 -- ************************************************************
-\c content_validation
 
 -- Auditoria de validacoes de pecas
 SELECT campaign_id, channel, content_hash, llm_model,
@@ -136,7 +132,6 @@ ORDER BY channel, decisao;
 -- ************************************************************
 -- 5. LEGAL SERVICE
 -- ************************************************************
-\c legal_service
 
 -- Auditoria de validacoes juridicas
 SELECT channel, decision, requires_human_review,
