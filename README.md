@@ -114,7 +114,7 @@ graph TD
 - Docker e Docker Compose - Obrigatório
 - Chave da Maritaca AI (`MARITACA_API_KEY`) - Recomendado, mas se não for informado, um modelo da OpenAI será utilizado como fallback.
 - Chave da OpenAI (`OPENAI_API_KEY`) - Obrigatório
-- Chave da Cohere (`COHERE_APIKEY`) - Opcional se desejar usar rerank (desabilitado por padrão) ou executar a ingestão de documentos documents-ingestion (não é necessário pois a base vetorial já é carregada na subida).
+- Chave da Cohere (`COHERE_APIKEY`) - Opcional se desejar usar rerank (desabilitado por padrão).
 
 ## Execução
 

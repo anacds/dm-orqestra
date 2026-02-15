@@ -1,1 +1,0 @@
-# campaigns-mcp-server
