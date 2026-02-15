@@ -28,7 +28,6 @@ build
 *.swp
 *.swo
 *~
-.cursor
 
 .DS_Store
 Thumbs.db
