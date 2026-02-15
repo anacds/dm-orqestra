@@ -15,6 +15,7 @@ COPY config ./config
 COPY main.py .
 COPY alembic.ini .
 COPY alembic ./alembic
+COPY tests ./tests
 COPY entrypoint.sh .
 
 RUN chmod +x entrypoint.sh

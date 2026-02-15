@@ -17,6 +17,7 @@ COPY app ./app
 COPY main.py .
 COPY alembic.ini .
 COPY alembic ./alembic
+COPY tests ./tests
 
 # Copy entrypoint script
 COPY entrypoint.sh /entrypoint.sh

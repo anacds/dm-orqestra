@@ -175,6 +175,31 @@ Senha: 123
 ```
 
 
+## Testes unitários
+
+Os testes rodam dentro dos containers (não executam automaticamente na subida). Para executar:
+
+```bash
+# Rodar testes de um serviço específico
+docker compose exec auth-service pytest tests/ -v
+docker compose exec campaigns-service pytest tests/ -v
+docker compose exec content-validation-service pytest tests/ -v
+docker compose exec legal-service pytest tests/ -v
+docker compose exec branding-service pytest tests/ -v
+
+# Frontend (Vitest)
+docker compose exec frontend pnpm test
+```
+
+| Serviço | O que testa |
+|---|---|
+| auth-service | Hashing de senha (bcrypt), geração/validação JWT, rate limiting |
+| branding-service | Validação de cores (threshold 50%), parsing HTML, detecção de fontes |
+| legal-service | Construção de prompts, parsing de resposta LLM, fallback de provider |
+| content-validation-service | Validação de specs (limites de caracteres, dimensões), construção do veredito |
+| campaigns-service | Transições de status por papel, visibilidade, lógica de aprovação IA + humano |
+| frontend | Utilitários (merge de classes Tailwind) |
+
 ## Comandos úteis
 
 ```bash

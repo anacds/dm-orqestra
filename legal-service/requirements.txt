@@ -36,3 +36,6 @@ prometheus-fastapi-instrumentator>=7.0.0
 # Tracing
 langsmith>=0.1.0
 
+# Testes
+pytest>=8.0.0
+
